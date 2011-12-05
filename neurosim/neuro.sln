@@ -1,0 +1,40 @@
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "cpp_cl", "cpp_cl", "{BD575C4A-7AA8-4545-A610-FB2F5D1F7B04}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "app", "app", "{BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Neuro", "Neuro", "{394E5F36-4F5F-4DDA-89C4-FF19323D3B78}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IntegrationTest", "cpp_cl\app\Neuro\IntegrationTest.vcxproj", "{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}"
+EndProject
+Global
+	GlobalSection(SubversionScc) = preSolution
+		Svn-Managed = True
+		Manager = AnkhSVN - Subversion Support for Visual Studio
+	EndGlobalSection
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Debug|Win32.Build.0 = Debug|Win32
+		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Debug|x64.ActiveCfg = Debug|x64
+		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Debug|x64.Build.0 = Debug|x64
+		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Release|Win32.ActiveCfg = Release|Win32
+		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Release|Win32.Build.0 = Release|Win32
+		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Release|x64.ActiveCfg = Release|x64
+		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21} = {BD575C4A-7AA8-4545-A610-FB2F5D1F7B04}
+		{394E5F36-4F5F-4DDA-89C4-FF19323D3B78} = {BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21}
+		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C} = {394E5F36-4F5F-4DDA-89C4-FF19323D3B78}
+	EndGlobalSection
+EndGlobal
