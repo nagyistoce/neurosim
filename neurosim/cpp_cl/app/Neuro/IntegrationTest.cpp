@@ -11,9 +11,6 @@
 
 
 #include "IntegrationTest.hpp"
-#include <cmath>
-#include <windows.h>
-#include <winbase.h>
 
 
 
@@ -1287,6 +1284,7 @@ IntegrationTest::initializeSortedEvents
   cl_uint maxEventId,
   double eventStdDev,
   double structBufferSizeMargin,
+  double gabaRatio,
   cl_uint totalEvents,
   cl_uint pitch,
   cl_uint wfWorkSize,
@@ -1297,6 +1295,8 @@ IntegrationTest::initializeSortedEvents
 /**************************************************************************************************/
 {
 #define PRINT_initializeSortedEvents  1
+  
+  bool enableGaba = true;
   int result = SDK_SUCCESS;
   cl_uint totalBoundaries = 0, maxBoundariesPerWf = 0, currentWindow = 0, currentId = 0;
   
@@ -1338,8 +1338,9 @@ IntegrationTest::initializeSortedEvents
       {
         /*weight*/
         double weightType = abs(100.0*((double)rand()/((double)RAND_MAX)));
+        enableGaba = abs(100.0*((double)rand()/((double)RAND_MAX))) < 50.0;
         cl_float weight = 6.0f/1.4f;
-        if (weightType < 3.0)
+        if(enableGaba && weightType < gabaRatio)
         {
           weight = -67.0f/1.4f;
         }
@@ -1369,7 +1370,7 @@ IntegrationTest::initializeSortedEvents
       /*weight*/
       double weightType = abs(100.0*((double)rand()/((double)RAND_MAX)));
       cl_float weight = 6.0f/1.4f;
-      if(weightType < 10.0)
+      if(enableGaba && weightType < gabaRatio)
       {
         weight = -67.0f/1.4f;
       }
@@ -1450,6 +1451,7 @@ IntegrationTest::initializeDataForKernelMakeEventPtrs
   
   cl_uint totalEvents = 0, maxNeuronId = 0;
   double eventsPerNeuronDeviation = 30.0;
+  double gabaRatio = 5.0*(!(step%10));
   
   if(mode == 2)
   {
@@ -1495,6 +1497,7 @@ IntegrationTest::initializeDataForKernelMakeEventPtrs
     maxNeuronId,
     eventsPerNeuronDeviation,
     10.0,
+    gabaRatio,
     totalEvents,
     MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
     0,
@@ -1528,6 +1531,7 @@ IntegrationTest::initializeDataForKernelMakeEventPtrs
     maxNeuronId,
     eventsPerNeuronDeviation,
     5.0,
+    gabaRatio,
     totalEvents,
     MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
     wfWorkSize,
@@ -1658,14 +1662,14 @@ IntegrationTest::psInit
     E_ampa = 0,
     E_gaba = -80,
     E = 1.0/C,
-    iMax = 500.0;
+    iMax = 400.0;
 
-  dt_ps = (cl_float)dt;
+  dt_ps = (DATA_TYPE)dt;
   steps_ps = (int)(floor((1.0/dt_ps)+0.5));
-  tol_ps = (cl_float)UPDATE_NEURONS_PS_TOLERANCE;
+  tol_ps = (DATA_TYPE)UPDATE_NEURONS_PS_TOLERANCE;
 
-  E_ps = (cl_float)(E*dt_ps);
-  a_ps = (cl_float)(a*dt_ps);
+  E_ps = (DATA_TYPE)(E*dt_ps);
+  a_ps = (DATA_TYPE)(a*dt_ps);
 
   /*Pointers to neuron variables*/
   neuron_iz_ps   *nrnp_ps, *nrnx_ps;
@@ -1675,22 +1679,22 @@ IntegrationTest::psInit
   int i;
   for(nrnp_ps = nrn_ps, i=0; nrnp_ps < nrnx_ps; nrnp_ps++, i++)
   {
-    nrnp_ps->vr      = (cl_float)vr; 
-    nrnp_ps->k       = (cl_float)k; 
-    nrnp_ps->u_step  = (cl_float)u_step;
-    nrnp_ps->b       = (cl_float)b;
+    nrnp_ps->vr      = (DATA_TYPE)vr; 
+    nrnp_ps->k       = (DATA_TYPE)k; 
+    nrnp_ps->u_step  = (DATA_TYPE)u_step;
+    nrnp_ps->b       = (DATA_TYPE)b;
     
     /*Current initialization: random vs same for all: */
     double iMaxPercent = 0.7;
-    nrnp_ps->I = (cl_float)(iMax*iMaxPercent + 
+    nrnp_ps->I = (DATA_TYPE)(iMax*iMaxPercent + 
       abs((iMax*(1.0-iMaxPercent))*((double)rand()/((double)RAND_MAX))));
 
     /*Voltages are shifted relative to vr: */
-    nrnp_ps->l       = (cl_float)(-k*(vt-vr)); 
-    nrnp_ps->v_reset = (cl_float)(v_reset-vr); 
-    nrnp_ps->v_peak  = (cl_float)(v_peak-vr); 
-    nrnp_ps->E_ampa  = (cl_float)(E_ampa-vr); 
-    nrnp_ps->E_gaba  = (cl_float)(E_gaba-vr);
+    nrnp_ps->l       = (DATA_TYPE)(-k*(vt-vr))*(DATA_TYPE)abs(1.0 - 0.3*((double)rand()/((double)RAND_MAX))); 
+    nrnp_ps->v_reset = (DATA_TYPE)(v_reset-vr)*(DATA_TYPE)abs(1.0 - 0.3*((double)rand()/((double)RAND_MAX)));
+    nrnp_ps->v_peak  = (DATA_TYPE)(v_peak-vr)*(DATA_TYPE)abs(1.0 - 0.3*((double)rand()/((double)RAND_MAX))); 
+    nrnp_ps->E_ampa  = (DATA_TYPE)(E_ampa-vr); 
+    nrnp_ps->E_gaba  = (DATA_TYPE)(E_gaba-vr);
     
     /*Scale time/rate constants such that dt=1 in the equations: */ 
     nrnp_ps->E = E_ps;
@@ -1705,17 +1709,17 @@ IntegrationTest::psInit
   }
   
 	/*Scale time constants to time step size*/
-	tau_ampa_ps = ((cl_float)tau_ampa)/dt_ps;
-	tau_gaba_ps = ((cl_float)tau_gaba)/dt_ps;
+	tau_ampa_ps = ((DATA_TYPE)tau_ampa)/dt_ps;
+	tau_gaba_ps = ((DATA_TYPE)tau_gaba)/dt_ps;
 	co_g_ampa_ps = -1.0f/tau_ampa_ps;
   co_g_gaba_ps = -1.0f/tau_gaba_ps;
 
   for(int p = 1; p < UPDATE_NEURONS_PS_ORDER_LIMIT; p++)
   {
-  	co[0][p] = E_ps/((cl_float)(p+1));/*assumes all E are the same*/
-  	co[1][p] = a_ps/((cl_float)(p+1));/*assumes all a are the same*/
-  	co[2][p] = -1.0f/(tau_ampa_ps*(cl_float)(p+1));
-  	co[3][p] = -1.0f/(tau_gaba_ps*(cl_float)(p+1)); 
+  	co[0][p] = E_ps/((DATA_TYPE)(p+1));/*assumes all E are the same*/
+  	co[1][p] = a_ps/((DATA_TYPE)(p+1));/*assumes all a are the same*/
+  	co[2][p] = -1.0f/(tau_ampa_ps*(DATA_TYPE)(p+1));
+  	co[3][p] = -1.0f/(tau_gaba_ps*(DATA_TYPE)(p+1)); 
 	}
   
   memset(te_ps, 0, UPDATE_NEURONS_TOTAL_NEURONS*sizeof(DATA_TYPE));
@@ -1731,7 +1735,8 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
 (
   bool resetEvents,
   bool resetParameters,
-  bool resetVariables
+  bool resetVariables,
+  cl_uint step
 )
 /**************************************************************************************************/
 {
@@ -1748,12 +1753,14 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
   if(resetEvents)
   {
     memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
+    double gabaRatio = 3.0*(!(step%10));
     result = initializeSortedEvents
     (
       2,
       (UPDATE_NEURONS_TOTAL_NEURONS-1),
       30.0,
       5.0,
+      gabaRatio,
       UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE,
       UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
       0,
@@ -3149,10 +3156,26 @@ IntegrationTest::runCLKernels()
     }
 #endif
 #if UPDATE_NEURONS_ENABLE_V00
-    if(initializeDataForKernelUpdateNeurons(0, 1, 1) != SDK_SUCCESS)
+    if(initializeDataForKernelUpdateNeurons(0, 1, 1, 0) != SDK_SUCCESS)
     {
       std::cout << "Failed initializeDataForKernelUpdateNeurons" << std::endl; 
     }
+#if (LOG_MODEL_VARIABLES)
+    //traceFile std::ofstream(LOG_MODEL_VARIABLES_FILE_NAME , std::ofstream::out | std::ofstream::app);
+    traceFile = std::ofstream(LOG_MODEL_VARIABLES_FILE_NAME);
+    dataToTraceFile = std::stringstream("", std::ios::out | std::ios::app);
+
+    if(!traceFile.is_open())
+    {
+      std::cerr << "ERROR, runCLKernels: Unable to open trace file";
+      return SDK_FAILURE;
+    }
+
+    time_t rawtime;
+    time ( &rawtime );
+    dataToTraceFile << ctime (&rawtime);
+    dataToTraceFile << LOG_MODEL_VARIABLES_FILE_HEADER << std::endl;
+#endif
 #endif
 
 #if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) || SCAN_ENABLE_V01 ||\
@@ -4146,6 +4169,7 @@ IntegrationTest::runCLKernels()
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V01)
     /*Use milder mode if UPDATE_NEURONS_ENABLE_V00*/
     cl_uint mode = (currentTimeStep!=0)*(1 + !UPDATE_NEURONS_ENABLE_V00);
+    mode = 0;
     if(initializeDataForKernelMakeEventPtrs(mode, currentTimeStep-1) != SDK_SUCCESS)
     {
       std::cout 
@@ -4216,11 +4240,6 @@ IntegrationTest::runCLKernels()
 #endif
 /**************************************************************************************************/
 #if SORT_VERIFY_ENABLE && \
-    !(GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
-     GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
-  #error(SORT_VERIFY_ENABLE is true, but not all required for it stages are enabled)
-#endif
-#if SORT_VERIFY_ENABLE && \
     (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
      GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
@@ -4238,7 +4257,7 @@ IntegrationTest::runCLKernels()
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && EXPAND_EVENTS_ENABLE)
     bool restVarsAndParams = (currentTimeStep==0); /*TODO: fix, doesnt work with !(currentTimeStep%17);*/
     if(initializeDataForKernelUpdateNeurons(!(MAKE_EVENT_PTRS_ENABLE), 
-      restVarsAndParams, restVarsAndParams) != SDK_SUCCESS)
+      restVarsAndParams, restVarsAndParams, currentTimeStep) != SDK_SUCCESS)
     {
       std::cout 
       << "Failed initializeDataForKernelUpdateNeurons" << std::endl; 
@@ -4298,7 +4317,7 @@ IntegrationTest::runCLKernels()
       dataSpikePackets);
     ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
       modelVariables);
-    if(verifyKernelUpdateNeurons() != SDK_SUCCESS)
+    if(verifyKernelUpdateNeurons(currentTimeStep) != SDK_SUCCESS)
     {
       std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
       verified = false; 
@@ -6329,7 +6348,7 @@ IntegrationTest::stepIzPs
     result = SDK_FAILURE;
   }
   
-	if(ps_order == ps_order_limit)
+	if(ps_order >= ps_order_limit)
   {
 #if PRINT_stepIzPs
     std::cerr << "ERROR, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
@@ -6348,30 +6367,7 @@ IntegrationTest::stepIzPs
 		yp[0][0] = v - nrnp->v_peak; /*shifted for root finding*/
 		dt_part = -yp[0][0]/yp[0][1];	/*First step*/
     dx_old = 100.0f;
-#if (UPDATE_NEURONS_DEBUG_ENABLE)
-cl_uint count1612 = 0;
-if(nrn_ind == 1612)
-{
-std::cout << "DEBUG: " << ps_order << ", " << ps_order_limit << ", " << *icount << "\n";
-}
-#endif
-#if (UPDATE_NEURONS_DEBUG_ENABLE)
-if(nrn_ind == 1612)
-{
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&vnew)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&(nrnp->v_peak))));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&v)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&yp[0][0])));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&yp[0][1])));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&dt_part)));
-}
-#endif
+
     /*Up to nr_order_limit NR iterations */
     for (i = 0; i<nr_order_limit; i++)
     {
@@ -6427,28 +6423,6 @@ dataUpdateNeuronsDebugHost[
 
     te[nrn_ind]=start+dt_part;
 
-#if (UPDATE_NEURONS_DEBUG_ENABLE)
-if(nrn_ind == 1612)
-{
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&(i))));
-DATA_TYPE dt_part_err=dt_full/2;
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&(dt_part_err))));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&dt_part)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&(te[nrn_ind]))));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&v)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&u)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&g_ampa)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&g_gaba)));
-}
-#endif
 		/*Evaluate u, g_ampa, g_gaba at corrected spike time*/
 		ps_update(yp,1,ps_order,dt_part,&u);
 		ps_update(yp,2,ps_order,dt_part,&g_ampa);
@@ -6460,24 +6434,7 @@ dataUpdateNeuronsDebugHost[
     yp[4][0] = chi;
 
 		dt_part = dt_full-dt_part; fp[99] = dt_part;
-    
-#if UPDATE_NEURONS_DEBUG_ENABLE
-if(nrn_ind == 1612)
-{
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&dt_part)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&v)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&u)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&g_ampa)));
-dataUpdateNeuronsDebugHost[
-  count1612++] = (*((cl_uint *)(&g_gaba)));
-  std::cout << "Debug: " << v << ", " << u << ", " << g_ampa << ", " << g_gaba;
-}
-#endif
-    
+
     int diverged = 0;
     
     /*new integrated step function*/  
@@ -6505,7 +6462,7 @@ dataUpdateNeuronsDebugHost[
       result = SDK_FAILURE;
     }
     
-    if(ps_order == ps_order_limit)
+    if(ps_order >= ps_order_limit)
     {
 #if PRINT_stepIzPs
       std::cerr << "ERROR, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
@@ -6774,7 +6731,7 @@ modelParametersBuffer
 
 
 int 
-IntegrationTest::verifyKernelUpdateNeurons()
+IntegrationTest::verifyKernelUpdateNeurons(cl_uint step)
 /**************************************************************************************************/
 {
   int result = SDK_SUCCESS;
@@ -6784,7 +6741,15 @@ IntegrationTest::verifyKernelUpdateNeurons()
   bool ignoreSolverFailures = true;
 
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
-  //TODO: fetch, decode, clear error flags
+  if((!ignoreSolverFailures && dataUpdateNeuronsError[0] != 0) || 
+     (ignoreSolverFailures && 
+     ((UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK&dataUpdateNeuronsError[0]) != 0))
+  ){
+    std::cout << "verifyKernelUpdateNeurons: received error code from the device: ";
+    PRINT_HEX(4, dataUpdateNeuronsError[0]);
+    std::cout << std::endl;
+    return SDK_FAILURE;
+  }
 #endif
   
   result = injectEvents
@@ -6872,6 +6837,13 @@ IntegrationTest::verifyKernelUpdateNeurons()
       result = SDK_FAILURE;
       if(breakOnFailure){break;}
     }
+    
+#if (LOG_MODEL_VARIABLES)
+    if(i == LOG_MODEL_VARIABLES_NEURON_ID)
+    {
+      dataToTraceFile LOG_MODEL_VARIABLES_FILE_BODY(LOG_MODEL_VARIABLES_NEURON_ID);
+    }
+#endif
     /*
     cl_uint underTestType2 = dataMakeEventPtrsStruct[i*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1];
     if(underTestType2 != 0)
@@ -6883,7 +6855,7 @@ IntegrationTest::verifyKernelUpdateNeurons()
     }
     */
   }
-  
+
   /*Verify spikes*/
   if(result != SDK_FAILURE)
   {
@@ -7468,7 +7440,10 @@ IntegrationTest::cleanup()
       free(modelVariables);
   if(constantCoefficients)
       free(constantCoefficients);
-      
+#if (LOG_MODEL_VARIABLES)
+  traceFile << dataToTraceFile.str();
+  traceFile.close();
+#endif
   psClean();
 #endif
 /**************************************************************************************************/

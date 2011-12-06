@@ -286,12 +286,24 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 /*Functional verification of each kernel*/
 #define KERNEL_VERIFY_ENABLE                                  1
 /*Enable high-level verification of sort results*/
-#define SORT_VERIFY_ENABLE                                    0
+#define SORT_VERIFY_ENABLE                                    1
 #define EVENT_TIME_SLOTS                                      16
 #define TOTAL_NEURON_BITS                                     16
 #define WF_SIZE_WI                                            64
 #define DATA_TYPE                                             float
-
+/*Size of spike packet buffer (spikes)*/
+#define SPIKE_DATA_BUFFER_SIZE                                127
+/*Logging options*/
+#define LOG_MODEL_VARIABLES                                   0
+#define LOG_MODEL_VARIABLES_NEURON_ID                         0
+#define LOG_MODEL_VARIABLES_FILE_NAME                         "c:/Users/dima/Documents/dev_neuro/samples/opencl/cpp_cl/app/Neuro/log/model_variable_trace.csv"
+#define LOG_MODEL_VARIABLES_FILE_HEADER                       "v,u,g_ampa,g_gaba,v_peak,I"
+#define LOG_MODEL_VARIABLES_FILE_BODY(i)                      << nrn_ps[i].v << "," \
+                                                              << nrn_ps[i].u << "," \
+                                                              << nrn_ps[i].g_ampa << "," \
+                                                              << nrn_ps[i].g_gaba << "," \
+                                                              << nrn_ps[i].v_peak << "," \
+                                                              << nrn_ps[i].I << std::endl
 /*Simulation parameters*/
 #define SIMULATION_STEP_SIZE                                  1
 #define SIMULATION_TIME_STEPS                                 5*EVENT_TIME_SLOTS
@@ -309,9 +321,9 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
               for enabled stages depending on the stage combination
             - all bits are set: complete integration test
 */
-#define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
 //#define ENABLE_MASK                                           BIN_16(0000,0001,0000,0000)
 //#define ENABLE_MASK                                           BIN_16(0000,0001,1000,0000)
+#define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
 #define EXPAND_EVENTS_ENABLE                                  (ENABLE_MASK&32768)
 #define SCAN_ENABLE_V00                                       (ENABLE_MASK&16384)
 #define GROUP_EVENTS_ENABLE_V00                               (ENABLE_MASK&8192)
@@ -326,8 +338,12 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 /*
                                       General Restrictions
 */
-
-
+#if SORT_VERIFY_ENABLE && \
+    !(GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
+     GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
+  #undef SORT_VERIFY_ENABLE
+  #define SORT_VERIFY_ENABLE  0
+#endif
 
 
 /*
@@ -368,7 +384,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define EXPAND_EVENTS_WG_SIZE_WI                           (EXPAND_EVENTS_WG_SIZE_WF*EXPAND_EVENTS_WF_SIZE_WI)
   #define EXPAND_EVENTS_GRID_SIZE_WG                         (EXPAND_EVENTS_SPIKE_PACKETS/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG)
   /*Spike data structure parameters (data in)*/
-  #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE               63
+  #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE               SPIKE_DATA_BUFFER_SIZE
   #define EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE             2
   #define EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS           2
   #define EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS              (EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + \
@@ -827,7 +843,13 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   /*CONTROL: enable error logging at kernel level*/
   #define UPDATE_NEURONS_ERROR_TRACK_ENABLE                       0
   #define UPDATE_NEURONS_ERROR_BUFFER_SIZE_WORDS                  1
+  #define UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK            0x00000012
   #define UPDATE_NEURONS_ERROR_CODE_1                             0x1
+  #define UPDATE_NEURONS_ERROR_CODE_2                             0x2
+  #define UPDATE_NEURONS_ERROR_CODE_3                             0x4
+  #define UPDATE_NEURONS_ERROR_CODE_4                             0x8
+  #define UPDATE_NEURONS_ERROR_CODE_5                             0x16
+  #define UPDATE_NEURONS_ERROR_CODE_6                             0x32
   /*Kernel file and name*/
   #define UPDATE_NEURONS_KERNEL_FILE_NAME                         "Kernel_UpdateNeurons.cl"
   #define UPDATE_NEURONS_KERNEL_NAME                              "update_neurons"
@@ -849,7 +871,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_MODEL_VARIABLES                          4
   #define UPDATE_NEURONS_MODEL_PARAMETERS                         9
   /*Spike data structure parameters*/
-  #define UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE                   63
+  #define UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE                   SPIKE_DATA_BUFFER_SIZE
   #define UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE                 2
   #define UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS               2
   #define UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS                  (UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + \
@@ -876,7 +898,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_NR_TOLERANCE                             (1.0e-7) /*normally no more than UPDATE_NEURONS_PS_TOLERANCE*/
   #define UPDATE_NEURONS_PS_ORDER_LIMIT                           64
   #define UPDATE_NEURONS_NR_ORDER_LIMIT                           20
-  #define UPDATE_NEURONS_INJECT_CURRENT_STEPS                     SIMULATION_TIME_STEPS
+  #define UPDATE_NEURONS_INJECT_CURRENT_STEPS                     SIMULATION_TIME_STEPS//SIMULATION_TIME_STEPS
   /*Possible values:  const double dt_vals[16] = {(double)1/4,(double)1/6,(double)1/8,(double)1/10,
                                                   (double)1/20,(double)1/40,(double)1/60,
                                                   (double)1/80,(double)1/100,(double)1/200,
