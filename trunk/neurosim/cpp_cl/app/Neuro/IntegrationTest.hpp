@@ -16,6 +16,7 @@
 #include "integ_util.h"
 #include <CL/cl.hpp>
 #include <stdio.h>
+#include <time.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
@@ -27,10 +28,20 @@
 #include <set>
 #include <vector>
 #include <limits>
+#include <iostream>
+#include <fstream>
+#include <cmath>
+#include <windows.h>
+#include <winbase.h>
+
+
 
 using std::map;
 using std::set;
 using std::vector;
+using std::ofstream;
+
+
 
 struct memStatistics {
   /*map{kernel_name -> map{alloc_name -> alloc_size}}*/
@@ -78,6 +89,11 @@ class IntegrationTest : public SDKSample
     DATA_TYPE        dt_ps;
     DATA_TYPE        tol_ps;
     int              steps_ps;
+    
+#if (LOG_MODEL_VARIABLES)
+    std::ofstream traceFile;
+    std::stringstream dataToTraceFile;
+#endif
 
 /**************************************************************************************************/
 #if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) || SCAN_ENABLE_V01 ||\
@@ -900,6 +916,7 @@ public:
       cl_uint maxEventId,
       double eventStdDev,
       double structBufferSizeMargin,
+      double gabaRatio,
       cl_uint totalEvents,
       cl_uint pitch,
       cl_uint wfWorkSize,
@@ -937,7 +954,8 @@ public:
     (
       bool resetEvents,
       bool resetParameters,
-      bool resetVariables
+      bool resetVariables,
+      cl_uint step
     );
     
     int 
@@ -1001,7 +1019,7 @@ public:
       double  nrTolerance
     );
     
-    int verifyKernelUpdateNeurons();
+    int verifyKernelUpdateNeurons(cl_uint step);
 
     template<typename T>
     void swap2(T& a, T& b)
