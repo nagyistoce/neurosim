@@ -36,14 +36,16 @@ void expand_events
 #endif
   __global      uint          *gm_spikes,
   __global      uint          *gm_events,//TODO: split
-  __global      uint          *gm_synapses,//TODO: compact and split
-  __global      uint          *gm_synapse_counters,
+  __global      uint          *gm_synapse_targets,
+  __global      DATA_TYPE     *gm_synapse_delays,
+  __global      uint          *gm_synapse_weights,
+  __global      uint          *gm_synapse_pointer,
                 uint          step
 ){
   uint wi_id = get_local_id(0);
   uint wg_id = get_group_id(0);
   
-  __local uint lmSpikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS]; /*TODO: can this be placed in constant? Is it beneficial?*/
+  __local uint lmSpikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + 2*EXPAND_EVENTS_WG_SIZE_WF];
   __local uint lmTimeSlotCounters[EXPAND_EVENTS_TIME_SLOTS];
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
   __local uint lmTargetNeuronHistogram[EXPAND_EVENTS_TIME_SLOTS*EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS];
@@ -112,6 +114,7 @@ void expand_events
 #endif
 
   uint  tgt_wf_id = wi_id/EXPAND_EVENTS_WF_SIZE_WI;
+  uint  tgt_inwrp_id = wi_id%EXPAND_EVENTS_WF_SIZE_WI;
   
   barrier(CLK_LOCAL_MEM_FENCE);
   uint  total_spikes =  lmSpikes[0];
@@ -121,31 +124,34 @@ void expand_events
   {
     uint  spiked_nrn = lmSpikes[EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + 
       EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * j];
-    uint  tgt_max_cnt = gm_synapse_counters[spiked_nrn];
-    uint  tgt_inwrp_id = wi_id%EXPAND_EVENTS_WF_SIZE_WI;
+    
+    /*Get synapse pointer and synapse count*/
+    if(tgt_inwrp_id < 2)
+    {
+      lmSpikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + 2*tgt_wf_id + tgt_inwrp_id] = 
+        gm_synapse_pointer[spiked_nrn + tgt_inwrp_id];
+    }
+    uint  synapsePointer = lmSpikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + 2*tgt_wf_id];
+    uint  tgt_max_cnt = lmSpikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + 2*tgt_wf_id + 1] - 
+      synapsePointer;
 
     /*Each WF retrieves all targets of the source nrn: */
     for(uint tgt = tgt_inwrp_id; tgt < tgt_max_cnt; tgt += EXPAND_EVENTS_WF_SIZE_WI)
     {
-      /*Get delay*/
-      uint delay = gm_synapses[spiked_nrn * 
-        (EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS) + 
-        EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS * tgt + 2];
-      uint target_neuron = gm_synapses[spiked_nrn * 
-        (EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS) + 
-        EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS * tgt];
-      uint weight = gm_synapses[spiked_nrn * 
-        (EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS) + 
-        EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS * tgt + 1];
+      /*Get synapse data*/
+      uint synapseOffset  = (synapsePointer + tgt);
+      uint target_neuron  = gm_synapse_targets[synapseOffset];
+      uint weight         = gm_synapse_weights[synapseOffset];
+      DATA_TYPE delay     = gm_synapse_delays[synapseOffset];
 
-      float spike_time = as_float(lmSpikes[EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + 
+      DATA_TYPE spike_time = as_float(lmSpikes[EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + 
         EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * j + 1]);
 
       /*Add delay to spike time, account for time step transition by decrementing 
        (step was incremented right before this kernel)*/
-      float event_time = spike_time + as_float(delay); event_time = event_time - 1.0f;
+      DATA_TYPE event_time = spike_time + delay; event_time = event_time - 1.0f;
       /*Make it relative to its time slot*/
-      float event_time_binned = event_time - (int)event_time;
+      DATA_TYPE event_time_binned = event_time - (int)event_time;
       /*Events with 0.0 time bounce back to the previous time slot*/
       /*TODO: get rid of it, possibly needs changes in update phase*/
       if(event_time_binned == 0.0f){event_time_binned = 1.0f;}

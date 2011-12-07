@@ -271,6 +271,12 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
     }\
   }
   
+#define SET_RANDOM_SEED\
+  {\
+    time_t t = time(NULL);\
+    srand(*((unsigned int *)(&t)));\
+  }
+  
 /*Target Platform Vendor*/
 #define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."
 
@@ -308,6 +314,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define SIMULATION_STEP_SIZE                                  1
 #define SIMULATION_TIME_STEPS                                 5*EVENT_TIME_SLOTS
 
+
 /*Reference simulation parameters*/
 /*Synaptic event queue size limit per nrn: */
 #define REFERENCE_EVENT_QUEUE_SIZE                            1000
@@ -321,8 +328,8 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
               for enabled stages depending on the stage combination
             - all bits are set: complete integration test
 */
-//#define ENABLE_MASK                                           BIN_16(0000,0001,0000,0000)
-//#define ENABLE_MASK                                           BIN_16(0000,0001,1000,0000)
+
+//#define ENABLE_MASK                                           BIN_16(1000,0000,0000,0000)
 #define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
 #define EXPAND_EVENTS_ENABLE                                  (ENABLE_MASK&32768)
 #define SCAN_ENABLE_V00                                       (ENABLE_MASK&16384)
@@ -366,50 +373,52 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 ***************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
   /*Verification, Testing*/
-  #define EXPAND_EVENTS_VERIFY_ENABLE                        KERNEL_VERIFY_ENABLE
-  #define EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT              17
+  #define EXPAND_EVENTS_VERIFY_ENABLE                         KERNEL_VERIFY_ENABLE
+  #define EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT               17
   /*Debugging*/
-  #define EXPAND_EVENTS_DEBUG_ENABLE                         0
-  #define EXPAND_EVENTS_DEBUG_BUFFER_SIZE_WORDS              (EXPAND_EVENTS_TIME_SLOTS*EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG)//(1024*1024)
+  #define EXPAND_EVENTS_DEBUG_ENABLE                          0
+  #define EXPAND_EVENTS_DEBUG_BUFFER_SIZE_WORDS               (EXPAND_EVENTS_TIME_SLOTS*EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG)//(1024*1024)
   /*Error tracking and codes*/
-  #define EXPAND_EVENTS_ERROR_TRY_CATCH_ENABLE               ERROR_TRY_CATCH_ENABLE /*Options: 0, 1*/
-  #define EXPAND_EVENTS_ERROR_TRACK_ENABLE                   1
-  #define EXPAND_EVENTS_ERROR_BUFFER_SIZE_WORDS              1
-  #define EXPAND_EVENTS_ERROR_CODE_1                         0x1 /*EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE overflow*/
+  #define EXPAND_EVENTS_ERROR_TRY_CATCH_ENABLE                ERROR_TRY_CATCH_ENABLE /*Options: 0, 1*/
+  #define EXPAND_EVENTS_ERROR_TRACK_ENABLE                    1
+  #define EXPAND_EVENTS_ERROR_BUFFER_SIZE_WORDS               1
+  #define EXPAND_EVENTS_ERROR_CODE_1                          0x1 /*EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE overflow*/
   /*Kernel parameters*/
-  #define EXPAND_EVENTS_KERNEL_FILE_NAME                     "Kernel_ExpandEvents.cl"
-  #define EXPAND_EVENTS_KERNEL_NAME                          "expand_events"
-  #define EXPAND_EVENTS_WF_SIZE_WI                           WF_SIZE_WI /*Options: 64*/
-  #define EXPAND_EVENTS_WG_SIZE_WF                           4
-  #define EXPAND_EVENTS_WG_SIZE_WI                           (EXPAND_EVENTS_WG_SIZE_WF*EXPAND_EVENTS_WF_SIZE_WI)
-  #define EXPAND_EVENTS_GRID_SIZE_WG                         (EXPAND_EVENTS_SPIKE_PACKETS/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG)
+  #define EXPAND_EVENTS_KERNEL_FILE_NAME                      "Kernel_ExpandEvents.cl"
+  #define EXPAND_EVENTS_KERNEL_NAME                           "expand_events"
+  #define EXPAND_EVENTS_WF_SIZE_WI                            WF_SIZE_WI /*Options: 64*/
+  #define EXPAND_EVENTS_WG_SIZE_WF                            4
+  #define EXPAND_EVENTS_WG_SIZE_WI                            (EXPAND_EVENTS_WG_SIZE_WF*EXPAND_EVENTS_WF_SIZE_WI)
+  #define EXPAND_EVENTS_GRID_SIZE_WG                          (EXPAND_EVENTS_SPIKE_PACKETS/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG)
   /*Spike data structure parameters (data in)*/
-  #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE               SPIKE_DATA_BUFFER_SIZE
-  #define EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE             2
-  #define EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS           2
+  #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE                SPIKE_DATA_BUFFER_SIZE
+  #define EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE              2
+  #define EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS            2
   #define EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS              (EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + \
-                                                            EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE * EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS)
-  #define EXPAND_EVENTS_SPIKE_PACKETS                        128
-  #define EXPAND_EVENTS_SPIKE_PACKETS_PER_WG                 1 /*For cases > 1 "unrolled loop" version can be implemented*/
+                                                              EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE * EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS)
+  #define EXPAND_EVENTS_SPIKE_PACKETS                         128
+  #define EXPAND_EVENTS_SPIKE_PACKETS_PER_WG                  1 /*For cases > 1 "unrolled loop" version can be implemented*/
   /*Synaptic data structure parameters*/
-  #define EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE               512 /*1000, max number of synapses per neuron*/
-  #define EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS        3 /*Size of a single synapse, 32-bit words*/
+  #define EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE                512 /*1000, max number of synapses per neuron*/
+  #define EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE                 (EXPAND_EVENTS_TOTAL_NEURONS+1)
+  
+  
   /*Histogram of target neurons*/
-  #define EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM              1
-  #define EXPAND_EVENTS_HISTOGRAM_BIT_SHIFT                  0 /*Options, LSB: 0; MSB:(EXPAND_EVENTS_TOTAL_NEURON_BITS-EXPAND_EVENTS_HISTOGRAM_BIN_BITS)*/
-  #define EXPAND_EVENTS_HISTOGRAM_BIN_BITS                   4 /*Options: 4-8. Must be aligned with EXPAND_EVENTS_HISTOGRAM_BIN_MASK*/
-  #define EXPAND_EVENTS_HISTOGRAM_BIN_MASK                   0xF /*Must be aligned with EXPAND_EVENTS_HISTOGRAM_BIN_BITS*/
-  #define EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS                 (1<<EXPAND_EVENTS_HISTOGRAM_BIN_BITS)
+  #define EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM               1
+  #define EXPAND_EVENTS_HISTOGRAM_BIT_SHIFT                   0 /*Options, LSB: 0; MSB:(EXPAND_EVENTS_TOTAL_NEURON_BITS-EXPAND_EVENTS_HISTOGRAM_BIN_BITS)*/
+  #define EXPAND_EVENTS_HISTOGRAM_BIN_BITS                    4 /*Options: 4-8. Must be aligned with EXPAND_EVENTS_HISTOGRAM_BIN_MASK*/
+  #define EXPAND_EVENTS_HISTOGRAM_BIN_MASK                    0xF /*Must be aligned with EXPAND_EVENTS_HISTOGRAM_BIN_BITS*/
+  #define EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS                  (1<<EXPAND_EVENTS_HISTOGRAM_BIN_BITS)
   /*Time slot (bin) buffer parameters (data out)*/
-  #define EXPAND_EVENTS_TIME_SLOTS                           EVENT_TIME_SLOTS /*Options: 16*/
-  #define EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS               EXPAND_EVENTS_GRID_SIZE_WG
-  #define EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS           3
-  #define EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE  (21*1024)
+  #define EXPAND_EVENTS_TIME_SLOTS                            EVENT_TIME_SLOTS /*Options: 16*/
+  #define EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS                EXPAND_EVENTS_GRID_SIZE_WG
+  #define EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS            3
+  #define EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE   (21*1024)
   /*NN parameters*/
-  #define EXPAND_EVENTS_TOTAL_NEURON_BITS                    TOTAL_NEURON_BITS /*16*/
-  #define EXPAND_EVENTS_TOTAL_NEURONS                        (1<<EXPAND_EVENTS_TOTAL_NEURON_BITS)
-  #define EXPAND_EVENTS_MAX_DELAY                           (EXPAND_EVENTS_TIME_SLOTS-SIMULATION_STEP_SIZE)
-  #define EXPAND_EVENTS_MIN_DELAY                           1.0f
+  #define EXPAND_EVENTS_TOTAL_NEURON_BITS                     TOTAL_NEURON_BITS /*16*/
+  #define EXPAND_EVENTS_TOTAL_NEURONS                         (1<<EXPAND_EVENTS_TOTAL_NEURON_BITS)
+  #define EXPAND_EVENTS_MAX_DELAY                             (EXPAND_EVENTS_TIME_SLOTS-SIMULATION_STEP_SIZE)
+  #define EXPAND_EVENTS_MIN_DELAY                             1.0f
 #endif
 
 
@@ -770,7 +779,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define MAKE_EVENT_PTRS_TEST_MAX_NEURON_ID                       (MAKE_EVENT_PTRS_TOTAL_NEURONS-1)
   
   /*CONTROL: LM allocation for computing event counts per WF*/
-  #define MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE                   512
+  #define MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE                   1024
   
   /*Small post-process kernel to glue WF results together*/
   #define GLUE_EVENT_PTRS_KERNEL_FILE_NAME                          "Kernel_MakeEventPointers.cl"

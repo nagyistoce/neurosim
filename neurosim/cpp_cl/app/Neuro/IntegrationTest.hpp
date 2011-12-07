@@ -78,6 +78,7 @@ class IntegrationTest : public SDKSample
     
     /*Model variables and parameters*/
     neuron_iz_ps     *nrn_ps;
+    int              *ne;
     DATA_TYPE        *te_ps;
     DATA_TYPE        **co;
     DATA_TYPE        tau_ampa_ps;
@@ -189,19 +190,28 @@ class IntegrationTest : public SDKSample
 #endif
 
     cl_uint dataUnsortedEventsVerifySize;
-    cl_uint dataSynapseCountsSize;
-    cl_uint dataSynapseSize;
-    
     cl_uint dataUnsortedEventsVerifySizeBytes;
-    cl_uint dataSynapseCountsSizeBytes;
-    cl_uint dataSynapseSizeBytes;
-
     cl_uint* dataUnsortedEventsVerify;
-    cl_uint* dataSynapseCounts;
-    cl_uint* dataSynapse;
-
-    cl::Buffer dataSynapseCountsBuffer;
-    cl::Buffer dataSynapseBuffer;
+    
+    cl_uint dataSynapsePointerSize;
+    cl_uint dataSynapsePointerSizeBytes;
+    cl_uint* dataSynapsePointer;
+    cl::Buffer dataSynapsePointerBuffer;
+    
+    cl_uint dataSynapseTargetsSize;
+    cl_uint dataSynapseTargetsSizeBytes;
+    cl_uint* dataSynapseTargets;
+    cl::Buffer dataSynapseTargetsBuffer;
+    
+    cl_uint dataSynapseDelaysSize;
+    cl_uint dataSynapseDelaysSizeBytes;
+    cl_float* dataSynapseDelays;
+    cl::Buffer dataSynapseDelaysBuffer;
+    
+    cl_uint dataSynapseWeightsSize;
+    cl_uint dataSynapseWeightsSizeBytes;
+    cl_float* dataSynapseWeights;
+    cl::Buffer dataSynapseWeightsBuffer;
 
     size_t blockSizeX_KernelExpandEvents;
     size_t blockSizeY_KernelExpandEvents;
@@ -426,8 +436,10 @@ public:
 /* *** */
 #if EXPAND_EVENTS_ENABLE
         dataUnsortedEventsVerify(NULL),
-        dataSynapseCounts(NULL),
-        dataSynapse(NULL),
+        dataSynapsePointer(NULL),
+        dataSynapseTargets(NULL),
+        dataSynapseDelays(NULL),
+        dataSynapseWeights(NULL),
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
         dataExpandEventsDebugHost(NULL),
         dataExpandEventsDebugDevice(NULL),
@@ -594,8 +606,10 @@ public:
 /* *** */
 #if EXPAND_EVENTS_ENABLE
         dataUnsortedEventsVerify(NULL),
-        dataSynapseCounts(NULL),
-        dataSynapse(NULL),
+        dataSynapsePointer(NULL),
+        dataSynapseTargets(NULL),
+        dataSynapseDelays(NULL),
+        dataSynapseWeights(NULL),
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
         dataExpandEventsDebugHost(NULL),
         dataExpandEventsDebugDevice(NULL),
@@ -961,13 +975,16 @@ public:
     int 
     propagateSpikes
     (
-      bool variableDelaysEnalbe,
-      neuron_iz_ps *nrn,
-      int *ne,
-      DATA_TYPE *te,
-      synapse **syn_src,
-      int totalNeurons,
-      int eventQueueSize
+      bool          variableDelaysEnalbe,
+      unsigned int  totalNeurons,
+      unsigned int  eventQueueSize,
+      neuron_iz_ps  *nrn,
+      int           *ne,
+      DATA_TYPE     *te,
+      unsigned int  *synapsePointer,
+      unsigned int  *synapseTargets,
+      DATA_TYPE     *synapseDelays,
+      DATA_TYPE     *synapseWeights
     );
     
     int 
@@ -1019,7 +1036,15 @@ public:
       double  nrTolerance
     );
     
-    int verifyKernelUpdateNeurons(cl_uint step);
+    int
+    verifyKernelUpdateNeurons
+    (
+      cl_uint       step,
+      unsigned int  *synapsePointer,
+      unsigned int  *synapseTargets,
+      DATA_TYPE     *synapseDelays,
+      DATA_TYPE     *synapseWeights
+    );
 
     template<typename T>
     void swap2(T& a, T& b)

@@ -297,17 +297,31 @@ IntegrationTest::allocateHostData()
 #if EXPAND_EVENTS_ENABLE
   {
   /* allocate memory for synaptic counters */
-  CALLOC(dataSynapseCounts, cl_uint, EXPAND_EVENTS_TOTAL_NEURONS);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSynapseCounts);
+  CALLOC(dataSynapsePointer, cl_uint, EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE);
+  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSynapsePointer);
+  
+  /*init synaptic pointer*/
+  double synapseSizeDeviationRatio = 0.5;
+  dataSynapsePointer[0] = 0;
+  for(cl_uint i = 1; i < EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE; i++)
+  {
+    dataSynapsePointer[i] = dataSynapsePointer[i-1] + 
+      cl_uint(((double)EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE)*((1.0-synapseSizeDeviationRatio)+
+      abs((synapseSizeDeviationRatio*((double)rand()/((double)RAND_MAX))))));
+  }
 
   /* allocate memory for synaptic data */
-  size = 
-    EXPAND_EVENTS_TOTAL_NEURONS * 
-    (EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS);
+  size = dataSynapsePointer[EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE-1];
     
-  CALLOC(dataSynapse, cl_uint, size);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSynapse);
+  CALLOC(dataSynapseTargets, cl_uint, size);
+  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSynapseTargets);
   
+  CALLOC(dataSynapseDelays, cl_float, size);
+  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSynapseDelays);
+  
+  CALLOC(dataSynapseWeights, cl_float, size);
+  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSynapseWeights);
+
   /* allocate memory for synaptic events for verification*/
   size = 
     EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS * (
@@ -426,6 +440,7 @@ IntegrationTest::allocateHostData()
   REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, constantCoefficients);
   
   /*Neuron variables and parameter for verification*/
+  ne = (int *)malloc(UPDATE_NEURONS_TOTAL_NEURONS*sizeof(int));
   te_ps = (DATA_TYPE *)malloc(UPDATE_NEURONS_TOTAL_NEURONS*sizeof(DATA_TYPE));
   nrn_ps = (neuron_iz_ps *)malloc(UPDATE_NEURONS_TOTAL_NEURONS*sizeof(neuron_iz_ps));
   co = (DATA_TYPE **)malloc(4*sizeof(DATA_TYPE *));
@@ -447,11 +462,14 @@ IntegrationTest::initializeExpandEventsData()
 
   memset(dataUnsortedEvents, 0, dataUnsortedEventsSizeBytes);
   memset(dataSpikePackets, 0, dataSpikePacketsSizeBytes);
-  memset(dataSynapseCounts, 0, dataSynapseCountsSizeBytes);
-  memset(dataSynapse, 0, dataSynapseSizeBytes);
+  memset(dataSynapseTargets, 0, dataSynapseTargetsSizeBytes);
+  memset(dataSynapseDelays, 0, dataSynapseDelaysSizeBytes);
+  memset(dataSynapseWeights, 0, dataSynapseWeightsSizeBytes);
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
   memset(dataHistogram, 0, dataHistogramSizeBytes);
 #endif
+
+  SET_RANDOM_SEED;
 
   /* init spike data */
   for(cl_uint packet = 0; packet < EXPAND_EVENTS_SPIKE_PACKETS; packet++)
@@ -477,39 +495,40 @@ IntegrationTest::initializeExpandEventsData()
     }
   }
 
+  SET_RANDOM_SEED;
+  
   /*init synaptic data*/
-  cl_float percent_inhibitory = 10.0;
-  for(cl_uint i = 0; i < EXPAND_EVENTS_TOTAL_NEURONS; i++)
+  double gabaRatio = 5.0;
+  for(cl_uint i = 0; i < EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE-1; i++)
   {
-    dataSynapseCounts[i] = 
-      cl_uint(abs((EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE-1)*((double)rand()/((double)RAND_MAX))));
-      
-    cl_uint count_inhibitory = cl_uint(dataSynapseCounts[i]*(percent_inhibitory/100.0));
-    
-    for(cl_uint j = 0; j < dataSynapseCounts[i]; j++)
+    cl_uint ptrStart = dataSynapsePointer[i];
+    cl_uint ptrEnd = dataSynapsePointer[i+1];
+    cl_uint synapseCount = ptrEnd - ptrStart;
+
+    for(cl_uint j = 0; j < synapseCount; j++)
     {
+      cl_uint offset = (ptrStart + j);
+      if(offset > dataSynapseTargetsSize)
+      {
+        std::cerr << "ERROR, initializeExpandEventsData: synapse pointer is outside of "
+          << "synapse data range for neuronID " << i << ": " << offset << " > " 
+          << dataSynapseTargetsSize << std::endl;
+        return SDK_FAILURE;
+      }
       /*target neuron*/
-      dataSynapse[i*(EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * 
-        EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS) + 
-        EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS * j] = 
+      dataSynapseTargets[offset] = 
         cl_uint(abs((EXPAND_EVENTS_TOTAL_NEURONS-1)*((double)rand()/((double)RAND_MAX))));
       /*weight*/
+      double weightType = abs(100.0*((double)rand()/((double)RAND_MAX)));
       cl_float weight = 6.0f/1.4f;
-      if (count_inhibitory != 0)
+      if(weightType < gabaRatio)
       {
-        count_inhibitory--;
         weight = -67.0f/1.4f;
       }
-      *((cl_float *)(&dataSynapse[i*(EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * 
-        EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS) + 
-        EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS * j + 1])) = 
-        cl_float(weight*((double)rand()/((double)RAND_MAX)));
+      dataSynapseWeights[offset] = cl_float(weight*((double)rand()/((double)RAND_MAX)));
       /*delay*/
-      *((cl_float *)(&dataSynapse[i*(EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * 
-        EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS) + 
-        EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS * j + 2])) = 
-          cl_float(EXPAND_EVENTS_MIN_DELAY + abs((EXPAND_EVENTS_MAX_DELAY-EXPAND_EVENTS_MIN_DELAY)*
-          ((double)rand()/((double)RAND_MAX))));
+      dataSynapseDelays[offset] = cl_float(EXPAND_EVENTS_MIN_DELAY + 
+        abs((EXPAND_EVENTS_MAX_DELAY-EXPAND_EVENTS_MIN_DELAY)*((double)rand()/((double)RAND_MAX))));
     }
   }
 
@@ -1723,6 +1742,9 @@ IntegrationTest::psInit
 	}
   
   memset(te_ps, 0, UPDATE_NEURONS_TOTAL_NEURONS*sizeof(DATA_TYPE));
+  
+  /*Initialize delay time counter: */
+  for(unsigned int i=0; i < UPDATE_NEURONS_TOTAL_NEURONS; i++){ne[i] = -1;}
 
 #endif
 }
@@ -2946,8 +2968,10 @@ IntegrationTest::setupCL()
 #if (EXPAND_EVENTS_ERROR_TRACK_ENABLE)
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataExpandEventsErrorBuffer, dataExpandEventsErrorSizeBytes);
 #endif
-    CREATE_BUFFER(CL_MEM_READ_ONLY, dataSynapseBuffer, dataSynapseSizeBytes);
-    CREATE_BUFFER(CL_MEM_READ_ONLY, dataSynapseCountsBuffer, dataSynapseCountsSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_ONLY, dataSynapseTargetsBuffer, dataSynapseTargetsSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_ONLY, dataSynapseDelaysBuffer, dataSynapseDelaysSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_ONLY, dataSynapseWeightsBuffer, dataSynapseWeightsSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_ONLY, dataSynapsePointerBuffer, dataSynapsePointerSizeBytes);
     
     createKernel
     (
@@ -3237,9 +3261,11 @@ IntegrationTest::runCLKernels()
 #if (EXPAND_EVENTS_ERROR_TRACK_ENABLE)
   ENQUEUE_WRITE_BUFFER(CL_FALSE, dataExpandEventsErrorBuffer, dataExpandEventsErrorSizeBytes, dataExpandEventsError);
 #endif
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSynapseBuffer, dataSynapseSizeBytes, dataSynapse);
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSynapseCountsBuffer, dataSynapseCountsSizeBytes, 
-    dataSynapseCounts);
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSynapseTargetsBuffer, dataSynapseTargetsSizeBytes, dataSynapseTargets);
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSynapseDelaysBuffer, dataSynapseDelaysSizeBytes, dataSynapseDelays);
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSynapseWeightsBuffer, dataSynapseWeightsSizeBytes, dataSynapseWeights);
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSynapsePointerBuffer, dataSynapsePointerSizeBytes, 
+    dataSynapsePointer);
   }
 #endif
 
@@ -3307,8 +3333,10 @@ IntegrationTest::runCLKernels()
 #endif
   SET_KERNEL_ARG(kernelExpandEvents, dataSpikePacketsBuffer, argNumExpandEvents++);
   SET_KERNEL_ARG(kernelExpandEvents, dataUnsortedEventsBuffer, argNumExpandEvents++);
-  SET_KERNEL_ARG(kernelExpandEvents, dataSynapseBuffer, argNumExpandEvents++);
-  SET_KERNEL_ARG(kernelExpandEvents, dataSynapseCountsBuffer, argNumExpandEvents++);
+  SET_KERNEL_ARG(kernelExpandEvents, dataSynapseTargetsBuffer, argNumExpandEvents++);
+  SET_KERNEL_ARG(kernelExpandEvents, dataSynapseDelaysBuffer, argNumExpandEvents++);
+  SET_KERNEL_ARG(kernelExpandEvents, dataSynapseWeightsBuffer, argNumExpandEvents++);
+  SET_KERNEL_ARG(kernelExpandEvents, dataSynapsePointerBuffer, argNumExpandEvents++);
   }
 #endif
 
@@ -3537,9 +3565,11 @@ IntegrationTest::runCLKernels()
     }
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
       dataSpikePackets);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSynapseBuffer, dataSynapseSizeBytes, dataSynapse);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSynapseCountsBuffer, dataSynapseCountsSizeBytes, 
-      dataSynapseCounts);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSynapseTargetsBuffer, dataSynapseTargetsSizeBytes, dataSynapseTargets);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSynapseDelaysBuffer, dataSynapseDelaysSizeBytes, dataSynapseDelays);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSynapseWeightsBuffer, dataSynapseWeightsSizeBytes, dataSynapseWeights);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSynapsePointerBuffer, dataSynapsePointerSizeBytes, 
+      dataSynapsePointer);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUnsortedEventsBuffer, dataUnsortedEventsSizeBytes, 
       dataUnsortedEvents);
 #if EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM
@@ -3561,9 +3591,11 @@ IntegrationTest::runCLKernels()
 #endif
     ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
       dataSpikePackets);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapseBuffer, dataSynapseSizeBytes, dataSynapse);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapseCountsBuffer, dataSynapseCountsSizeBytes, 
-      dataSynapseCounts);
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapseTargetsBuffer, dataSynapseTargetsSizeBytes, dataSynapseTargets);
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapseDelaysBuffer, dataSynapseDelaysSizeBytes, dataSynapseDelays);
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapseWeightsBuffer, dataSynapseWeightsSizeBytes, dataSynapseWeights);
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapsePointerBuffer, dataSynapsePointerSizeBytes, 
+      dataSynapsePointer);
 #endif
     SET_KERNEL_ARG(kernelExpandEvents, expandEventsTimeStep, argNumExpandEvents);
     status = commandQueue.enqueueNDRangeKernel(kernelExpandEvents, cl::NullRange, 
@@ -4317,12 +4349,28 @@ IntegrationTest::runCLKernels()
       dataSpikePackets);
     ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
       modelVariables);
-    if(verifyKernelUpdateNeurons(currentTimeStep) != SDK_SUCCESS)
+#if 0//EXPAND_EVENTS_ENABLE
+    if(verifyKernelUpdateNeurons
+      (
+        currentTimeStep,
+        dataSynapsePointer,
+        dataSynapseTargets,
+        dataSynapseDelays,
+        dataSynapseWeights
+      ) != SDK_SUCCESS)
     {
       std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
       verified = false; 
       break;
     }
+#else
+    if(verifyKernelUpdateNeurons(currentTimeStep, NULL, NULL, NULL, NULL) != SDK_SUCCESS)
+    {
+      std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
+      verified = false; 
+      break;
+    }
+#endif
 #if (UPDATE_NEURONS_DEBUG_ENABLE)
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsDebugHostBuffer, 
       dataUpdateNeuronsDebugHostSizeBytes, dataUpdateNeuronsDebugHost);
@@ -4551,25 +4599,19 @@ IntegrationTest::verifyKernelExpandEvents(cl_uint timeStep)
       cl_float spike_time = *((cl_float *)(&dataSpikePackets[packet_index + 
         EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1]));
         
-      cl_uint synapse_count = dataSynapseCounts[spiked_neuron];
+      cl_uint synapsePointer = dataSynapsePointer[spiked_neuron];
+      cl_uint synapse_count = dataSynapsePointer[spiked_neuron + 1] - synapsePointer;
       
       /*Iterate through synapses of spiked neuron*/
       for(cl_uint j = 0; j < synapse_count; j++)
       {
+        cl_uint synapseOffset = (synapsePointer + j);
         /*target neuron*/
-        cl_uint target_neuron = dataSynapse[spiked_neuron*(EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * 
-          EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS) + 
-          EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS * j];
+        cl_uint target_neuron = dataSynapseTargets[synapseOffset];
         /*weight*/
-        cl_float weight = *((cl_float *)(&dataSynapse[spiked_neuron*
-          (EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * 
-          EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS) + 
-          EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS * j + 1]));
+        cl_float weight = dataSynapseWeights[synapseOffset];
         /*delay*/
-        cl_float delay = *((cl_float *)(&dataSynapse[spiked_neuron*
-          (EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE * 
-          EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS) + 
-          EXPAND_EVENTS_SYNAPTIC_DATA_UNIT_SIZE_WORDS * j + 2]));
+        cl_float delay = dataSynapseDelays[synapseOffset];
         /*Add delay to spike time, decrement*/
         cl_float event_time = spike_time + delay; event_time = event_time - 1.0f;
         /*Make it relative to its time slot*/
@@ -6181,42 +6223,50 @@ IntegrationTest::injectEvents
 int 
 IntegrationTest::propagateSpikes
 (
-  bool variableDelaysEnalbe,
-  neuron_iz_ps *nrn,
-  int *ne,
-  DATA_TYPE *te,
-  synapse **syn_src,
-  int totalNeurons,
-  int eventQueueSize
+  bool          variableDelaysEnalbe,
+  unsigned int  totalNeurons,
+  unsigned int  eventQueueSize,
+  neuron_iz_ps  *nrn,
+  int           *ne,
+  DATA_TYPE     *te,
+  unsigned int  *synapsePointer,
+  unsigned int  *synapseTargets,
+  DATA_TYPE     *synapseDelays,
+  DATA_TYPE     *synapseWeights
 )
 /**************************************************************************************************/
 {
   int result = SDK_SUCCESS;
-  synapse *synp; 
-  int i,j,k,n_in;
-  DATA_TYPE t_event;
 
   if(!variableDelaysEnalbe)
   {
     /*Clear input buffers*/
-    for(i = 0; i < totalNeurons; i++){nrn[i].n_in = 0;}
+    for(unsigned int i = 0; i < totalNeurons; i++){nrn[i].n_in = 0;}
   }
   
-  for(i = 0; i < totalNeurons; i++)
+  /*Iterate over source neurons*/
+  for(unsigned int i = 0; i < totalNeurons; i++)
   {
+    /*Detect if source neuron spiked*/
     if(--ne[i] == 0)
     {
-      for(synp = syn_src[i]; (synp->n) < (unsigned int)totalNeurons; synp++)
+      unsigned int ptrStart = synapsePointer[i];
+      unsigned int ptrEnd = synapsePointer[i+1];
+
+      /*Iterate over target neurons of this source neuron*/
+      for(unsigned int s = ptrStart; s < ptrEnd; s++)
       {
-        k = synp->n;
-        n_in = nrn[k].n_in;
+        /*Get target neuron and its event count*/
+        unsigned int k = dataSynapseTargets[s];
+        unsigned int n_in = nrn[k].n_in;
+        DATA_TYPE t_event = 0.0;
         
         if(n_in<eventQueueSize)
         {
-	        j=n_in; 
+	        unsigned int j=n_in; 
           if(variableDelaysEnalbe)
           {
-            t_event = te[i] + synp->d;
+            t_event = te[i] + synapseDelays[s];
           }
           else
           {
@@ -6231,13 +6281,13 @@ IntegrationTest::propagateSpikes
 	        }
           
           nrn[k].in_t[j] = t_event;
-          nrn[k].in_w[j] = synp->w;
+          nrn[k].in_w[j] = synapseWeights[s];
           nrn[k].n_in++;
         }
         else
         {
-          PRINTF("propagateSpikes, Input overflow detected: %d >= %d\n",
-            n_in, eventQueueSize);
+          std::cerr << "ERROR, propagateSpikes, detected event queue overflow for nID " 
+            << k << ": " << n_in << " >= " << eventQueueSize << std::endl;
           result = SDK_FAILURE;
           break;
         }
@@ -6249,9 +6299,9 @@ IntegrationTest::propagateSpikes
   if(result == SDK_SUCCESS && variableDelaysEnalbe)
   {
     /*Decrement synaptic events: */
-    for(i = 0; i < totalNeurons; i++)
+    for(unsigned int i = 0; i < totalNeurons; i++)
     {
-      for(j = 0; j < nrn[i].n_in; j++)
+      for(int j = 0; j < nrn[i].n_in; j++)
       {
         nrn[i].in_t[j] = nrn[i].in_t[j] - 1.0f;
       }
@@ -6513,16 +6563,12 @@ IntegrationTest::updateStep
   neuron_iz_ps   *nrnp_ps, *nrnx_ps;
 
   /*Runtime storage for variables: */
-  int *ne = (int *)malloc(totalNeurons*sizeof(int));
   DATA_TYPE **yp, *yold, *ynew;
   yold = (DATA_TYPE *)malloc(5*sizeof(DATA_TYPE));  
   ynew = (DATA_TYPE *)malloc(5*sizeof(DATA_TYPE));
   yp = (DATA_TYPE **)malloc(5*sizeof(DATA_TYPE *));  
 	for(int i=0;i<5;i++)
     {yp[i] = (DATA_TYPE *)malloc((psOrderLimit+1)*sizeof(DATA_TYPE));}
-
-  /*Initialize delay time counter: */
-  for(cl_uint i=0; i < totalNeurons; i++){ne[i] = -1;}
 
 	int ip[100];
   ip[1]     = steps_ps;
@@ -6706,7 +6752,7 @@ IntegrationTest::updateStep
             << std::endl;
 #endif
 
-  free(yold); free(ynew); free(ne);
+  free(yold); free(ynew);
 	for(int i=0;i<5;i++){free(yp[i]);} free(yp);
 
   return result;
@@ -6716,22 +6762,15 @@ IntegrationTest::updateStep
 
 
 
-  /*
-dataGroupEventsTikBuffer
-dataSpikePacketsBuffer
-dataMakeEventPtrsStructBuffer
-
-dataUpdateNeuronsDebugHostBuffer
-dataUpdateNeuronsDebugDeviceBuffer
-
-constantCoefficientsBuffer
-modelVariablesBuffer
-modelParametersBuffer
-  */
-
-
 int 
-IntegrationTest::verifyKernelUpdateNeurons(cl_uint step)
+IntegrationTest::verifyKernelUpdateNeurons
+(
+  cl_uint       step,
+  unsigned int  *synapsePointer,
+  unsigned int  *synapseTargets,
+  DATA_TYPE     *synapseDelays,
+  DATA_TYPE     *synapseWeights
+)
 /**************************************************************************************************/
 {
   int result = SDK_SUCCESS;
@@ -6752,34 +6791,42 @@ IntegrationTest::verifyKernelUpdateNeurons(cl_uint step)
   }
 #endif
   
-  result = injectEvents
-  (
-    true,
-    true,
-    UPDATE_NEURONS_TOTAL_NEURONS,
-    REFERENCE_EVENT_QUEUE_SIZE,
-    UPDATE_NEURONS_STRUCT_ELEMENT_SIZE,
-    UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
-    dataGroupEventsTik,
-    dataMakeEventPtrsStruct,
-    nrn_ps
-  );
-  if(result != SDK_SUCCESS){return result;}
+  if((synapsePointer != NULL) && (synapseTargets != NULL) && (synapseDelays != NULL) &&
+    (synapseWeights != NULL))
+  {
+    result = propagateSpikes
+    (
+      true,
+      UPDATE_NEURONS_TOTAL_NEURONS,
+      REFERENCE_EVENT_QUEUE_SIZE,
+      nrn_ps,
+      ne,
+      te_ps,
+      synapsePointer,
+      synapseTargets,
+      synapseDelays,
+      synapseWeights
+    );
+    if(result != SDK_SUCCESS){return result;}
+  }
+  else
+  {
+    result = injectEvents
+    (
+      true,
+      true,
+      UPDATE_NEURONS_TOTAL_NEURONS,
+      REFERENCE_EVENT_QUEUE_SIZE,
+      UPDATE_NEURONS_STRUCT_ELEMENT_SIZE,
+      UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+      dataGroupEventsTik,
+      dataMakeEventPtrsStruct,
+      nrn_ps
+    );
+    if(result != SDK_SUCCESS){return result;}
+  }
   
   memset(te_ps, 0, UPDATE_NEURONS_TOTAL_NEURONS*sizeof(DATA_TYPE));
-  
-  /*
-  result = propagateSpikes
-  (
-    FLIXIBLE_DELAYS_ENABLE,
-    nrn_ps,
-    ne,
-    te_ps,
-    syn_src,
-    totalNeurons,
-    REFERENCE_EVENT_QUEUE_SIZE,
-  );
-  */
   
   result = updateStep
   (
@@ -7281,7 +7328,7 @@ void
 IntegrationTest::psClean()
 /**************************************************************************************************/
 {
-  for(int i=0;i<4;i++){free(co[i]);} free(co); free(nrn_ps); free(te_ps);
+  for(int i=0;i<4;i++){free(co[i]);} free(co); free(nrn_ps); free(te_ps); free(ne);
 }
 /**************************************************************************************************/
 
@@ -7343,10 +7390,14 @@ IntegrationTest::cleanup()
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
-  if(dataSynapseCounts)
-      free(dataSynapseCounts);
-  if(dataSynapse)
-      free(dataSynapse);
+  if(dataSynapsePointer)
+      free(dataSynapsePointer);
+  if(dataSynapseTargets)
+      free(dataSynapseTargets);
+  if(dataSynapseDelays)
+      free(dataSynapseDelays);
+  if(dataSynapseWeights)
+      free(dataSynapseWeights);
   if(dataUnsortedEventsVerify)
       free(dataUnsortedEventsVerify);
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
