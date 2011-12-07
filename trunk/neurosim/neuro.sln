@@ -8,6 +8,26 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Neuro", "Neuro", "{394E5F36
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IntegrationTest", "cpp_cl\app\Neuro\IntegrationTest.vcxproj", "{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SDKUtil", "SDKUtil", "{8C3F942D-B735-402F-96F8-1DFD935BF30E}"
+	ProjectSection(SolutionItems) = preProject
+		SDKUtil\SDKApplication.cpp = SDKUtil\SDKApplication.cpp
+		SDKUtil\SDKBitMap.cpp = SDKUtil\SDKBitMap.cpp
+		SDKUtil\SDKCommandArgs.cpp = SDKUtil\SDKCommandArgs.cpp
+		SDKUtil\SDKCommon.cpp = SDKUtil\SDKCommon.cpp
+		SDKUtil\SDKFile.cpp = SDKUtil\SDKFile.cpp
+		SDKUtil\SDKThread.cpp = SDKUtil\SDKThread.cpp
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{81F78FC6-BFD5-4C9B-9742-20CA77ADCABC}"
+	ProjectSection(SolutionItems) = preProject
+		SDKUtil\include\SDKApplication.hpp = SDKUtil\include\SDKApplication.hpp
+		SDKUtil\include\SDKBitMap.hpp = SDKUtil\include\SDKBitMap.hpp
+		SDKUtil\include\SDKCommandArgs.hpp = SDKUtil\include\SDKCommandArgs.hpp
+		SDKUtil\include\SDKCommon.hpp = SDKUtil\include\SDKCommon.hpp
+		SDKUtil\include\SDKFile.hpp = SDKUtil\include\SDKFile.hpp
+		SDKUtil\include\SDKThread.hpp = SDKUtil\include\SDKThread.hpp
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SubversionScc) = preSolution
 		Svn-Managed = True
@@ -36,5 +56,6 @@ Global
 		{BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21} = {BD575C4A-7AA8-4545-A610-FB2F5D1F7B04}
 		{394E5F36-4F5F-4DDA-89C4-FF19323D3B78} = {BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21}
 		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C} = {394E5F36-4F5F-4DDA-89C4-FF19323D3B78}
+		{81F78FC6-BFD5-4C9B-9742-20CA77ADCABC} = {8C3F942D-B735-402F-96F8-1DFD935BF30E}
 	EndGlobalSection
 EndGlobal
