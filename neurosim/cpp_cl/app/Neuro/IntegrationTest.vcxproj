@@ -30,6 +30,7 @@
     <ClCompile Include="iz_util.c" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="ClassDiagram1.cd" />
     <None Include="Kernel_ExpandEvents.cl" />
     <None Include="Kernel_GroupEvents.cl" />
     <None Include="Kernel_MakeEventPointers.cl" />
