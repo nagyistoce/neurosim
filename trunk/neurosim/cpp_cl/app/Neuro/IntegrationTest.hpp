@@ -91,9 +91,16 @@ class IntegrationTest : public SDKSample
     DATA_TYPE        tol_ps;
     int              steps_ps;
     
+    std::string startTimeStamp;
+    
 #if (LOG_MODEL_VARIABLES)
     std::ofstream traceFile;
     std::stringstream dataToTraceFile;
+#endif
+
+#if (LOG_SIMULATION)
+    std::ofstream simulationLogFile;
+    std::stringstream dataToSimulationLogFile;
 #endif
 
 /**************************************************************************************************/
@@ -113,10 +120,25 @@ class IntegrationTest : public SDKSample
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE || GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V02 || \
     GROUP_EVENTS_ENABLE_V03
-    cl_uint dataUnsortedEventsSize;
-    cl_uint dataUnsortedEventsSizeBytes;
-    cl_uint* dataUnsortedEvents;
-    cl::Buffer dataUnsortedEventsBuffer;
+    cl_uint dataUnsortedEventTargetsSize;
+    cl_uint dataUnsortedEventTargetsSizeBytes;
+    cl_uint* dataUnsortedEventTargets;
+    cl::Buffer dataUnsortedEventTargetsBuffer;
+    
+    cl_uint dataUnsortedEventDelaysSize;
+    cl_uint dataUnsortedEventDelaysSizeBytes;
+    cl_uint* dataUnsortedEventDelays;
+    cl::Buffer dataUnsortedEventDelaysBuffer;
+    
+    cl_uint dataUnsortedEventWeightsSize;
+    cl_uint dataUnsortedEventWeightsSizeBytes;
+    cl_uint* dataUnsortedEventWeights;
+    cl::Buffer dataUnsortedEventWeightsBuffer;
+    
+    cl_uint dataUnsortedEventCountsSize;
+    cl_uint dataUnsortedEventCountsSizeBytes;
+    cl_uint* dataUnsortedEventCounts;
+    cl::Buffer dataUnsortedEventCountsBuffer;
 #endif
 /**************************************************************************************************/
 #if ((EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM) || SCAN_ENABLE_V00\
@@ -189,9 +211,21 @@ class IntegrationTest : public SDKSample
     cl_uint lmTargetNeuronHistogramSizeBytes;
 #endif
 
-    cl_uint dataUnsortedEventsVerifySize;
-    cl_uint dataUnsortedEventsVerifySizeBytes;
-    cl_uint* dataUnsortedEventsVerify;
+    cl_uint dataUnsortedEventsTargetsVerifySize;
+    cl_uint dataUnsortedEventsTargetsVerifySizeBytes;
+    cl_uint* dataUnsortedEventsTargetsVerify;
+    
+    cl_uint dataUnsortedEventsDelaysVerifySize;
+    cl_uint dataUnsortedEventsDelaysVerifySizeBytes;
+    cl_uint* dataUnsortedEventsDelaysVerify;
+    
+    cl_uint dataUnsortedEventsWeightsVerifySize;
+    cl_uint dataUnsortedEventsWeightsVerifySizeBytes;
+    cl_uint* dataUnsortedEventsWeightsVerify;
+    
+    cl_uint dataUnsortedEventCountsVerifySize;
+    cl_uint dataUnsortedEventCountsVerifySizeBytes;
+    cl_uint* dataUnsortedEventCountsVerify;
     
     cl_uint dataSynapsePointerSize;
     cl_uint dataSynapsePointerSizeBytes;
@@ -421,7 +455,10 @@ public:
 /* *** */
 #if EXPAND_EVENTS_ENABLE || GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V02 || \
     GROUP_EVENTS_ENABLE_V03
-        dataUnsortedEvents(NULL),
+        dataUnsortedEventTargets(NULL),
+        dataUnsortedEventDelays(NULL),
+        dataUnsortedEventWeights(NULL),
+        dataUnsortedEventCounts(NULL),
 #endif
 /* *** */
 #if ((EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM) || SCAN_ENABLE_V00\
@@ -435,7 +472,10 @@ public:
 #endif
 /* *** */
 #if EXPAND_EVENTS_ENABLE
-        dataUnsortedEventsVerify(NULL),
+        dataUnsortedEventsTargetsVerify(NULL),
+        dataUnsortedEventsDelaysVerify(NULL),
+        dataUnsortedEventsWeightsVerify(NULL),
+        dataUnsortedEventCountsVerify(NULL),
         dataSynapsePointer(NULL),
         dataSynapseTargets(NULL),
         dataSynapseDelays(NULL),
@@ -591,7 +631,10 @@ public:
 /* *** */
 #if EXPAND_EVENTS_ENABLE || GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V02 || \
     GROUP_EVENTS_ENABLE_V03
-        dataUnsortedEvents(NULL),
+        dataUnsortedEventTargets(NULL),
+        dataUnsortedEventDelays(NULL),
+        dataUnsortedEventWeights(NULL),
+        dataUnsortedEventCounts(NULL),
 #endif
 /* *** */
 #if ((EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM) || SCAN_ENABLE_V00\
@@ -605,7 +648,10 @@ public:
 #endif
 /* *** */
 #if EXPAND_EVENTS_ENABLE
-        dataUnsortedEventsVerify(NULL),
+        dataUnsortedEventsTargetsVerify(NULL),
+        dataUnsortedEventsDelaysVerify(NULL),
+        dataUnsortedEventsWeightsVerify(NULL),
+        dataUnsortedEventCountsVerify(NULL),
         dataSynapsePointer(NULL),
         dataSynapseTargets(NULL),
         dataSynapseDelays(NULL),
@@ -842,7 +888,10 @@ public:
       cl_uint histogramOutBitMask,
       cl_uint histogramOutSize,
       cl_uint keyOffset,
-      cl_uint *dataUnsortedEvents,
+      cl_uint *dataUnsortedEventCounts,
+      cl_uint *dataUnsortedEventTargets,
+      cl_uint *dataUnsortedEventDelays,
+      cl_uint *dataUnsortedEventWeights,
       cl_uint *dataGroupedEvents,
       cl_uint *dataHistogram,
       cl_uint *dataHistogramOut
@@ -853,7 +902,6 @@ public:
     (
       cl_uint totalBuffers,
       cl_uint bufferSize,
-      cl_uint elementSizeWords,
       cl_uint totalNeurons,
       cl_uint maxDelay,
       cl_float minDelay,
@@ -862,7 +910,10 @@ public:
       cl_uint histogramBitShift,
       cl_uint keyOffset,
       cl_float percentInhibitory,
-      cl_uint *dataUnsortedEvents,
+      cl_uint *dataUnsortedEventCounts,
+      cl_uint *dataUnsortedEventTargets,
+      cl_uint *dataUnsortedEventDelays,
+      cl_uint *dataUnsortedEventWeights,
       cl_uint *dataHistogram
     );
     
@@ -890,7 +941,15 @@ public:
       cl_uint *dataGroupedEventsVerify
     );
     
-    int captureUnsortedEvents(cl_uint *unsortedEvents);
+    int 
+    captureUnsortedEvents
+    (
+      cl_uint *unsortedEventCounts,
+      cl_uint *unsortedEventTargets,
+      cl_uint *unsortedEventDelays,
+      cl_uint *unsortedEventWeights
+    );
+    
     int 
     verifySortedEvents
     (
@@ -908,7 +967,7 @@ public:
     int initializeDataForKernelScanHistogramV01();
     int verifyKernelScanHistogramV01();
     
-    int initializeDataForKernelGroupEventsV00(cl_uint keyOffset);
+    int initializeDataForKernelGroupEventsV00();
     int verifyKernelGroupEventsV00(cl_uint keyOffset);
     
     int initializeDataForKernelGroupEventsV01(int step, cl_uint keyOffset);

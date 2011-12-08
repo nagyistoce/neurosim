@@ -35,7 +35,10 @@ void expand_events
   __global      uint          *gm_target_neuron_histogram,
 #endif
   __global      uint          *gm_spikes,
-  __global      uint          *gm_events,//TODO: split
+  __global      uint          *gm_event_counts,
+  __global      uint          *gm_event_targets,
+  __global      uint          *gm_event_delays,
+  __global      uint          *gm_event_weights,
   __global      uint          *gm_synapse_targets,
   __global      DATA_TYPE     *gm_synapse_delays,
   __global      uint          *gm_synapse_weights,
@@ -68,14 +71,15 @@ void expand_events
   {
     lmTimeSlotCounters[i] = 0;
     if(i != ((EXPAND_EVENTS_TIME_SLOTS + (step-1))%EXPAND_EVENTS_TIME_SLOTS))
-      lmTimeSlotCounters[i] = gm_events[EXPAND_EVENTS_TIME_SLOTS * wg_id + i];
+      lmTimeSlotCounters[i] = gm_event_counts[EXPAND_EVENTS_TIME_SLOTS * wg_id + i];
   }
 
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
   /*Load histogram totals for all time slots.*/
 #if (EXPAND_EVENTS_WG_SIZE_WI < (EXPAND_EVENTS_TIME_SLOTS*EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS))
   /*TODO: need only to load EXPAND_EVENTS_TIME_SLOTS-1 bins since one bin is reset*/
-	for(uint i=wi_id; i<(EXPAND_EVENTS_TIME_SLOTS*EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS); i+=EXPAND_EVENTS_WG_SIZE_WI)
+	for(uint i=wi_id; i<(EXPAND_EVENTS_TIME_SLOTS*EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS); 
+    i+=EXPAND_EVENTS_WG_SIZE_WI)
 	{
     /*Offset wg_id, pitch EXPAND_EVENTS_GRID_SIZE_WG: each WI brings a pc from a bin in a time slot 
     for its WG. i/EXPAND_EVENTS_TIME_SLOTS here since each time slot has 
@@ -171,25 +175,19 @@ void expand_events
       }
 #endif
       uint event_global_ptr = 
-        /*Event totals buffers*/
-        EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS * EXPAND_EVENTS_TIME_SLOTS + 
         /*Event data buffers*/
-        wg_id * EXPAND_EVENTS_TIME_SLOTS * 
-        (EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE * 
-        EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS) +
+        wg_id * EXPAND_EVENTS_TIME_SLOTS * EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE +
         /*Current event data buffer*/
-        time_slot * 
-        (EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE * 
-        EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS) +
+        time_slot * EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE +
         /*Current event*/
-        event_local_ptr * EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
+        event_local_ptr;
 
       /*Store the event*/
       /*TODO: protect from overflow, vectorize*/
       uint event_time_uint = as_uint(event_time_binned);
-      gm_events[event_global_ptr] = target_neuron; 
-      gm_events[event_global_ptr+1] = event_time_uint;
-      gm_events[event_global_ptr+2] = weight;
+      gm_event_targets[event_global_ptr] = target_neuron; 
+      gm_event_delays[event_global_ptr] = event_time_uint;
+      gm_event_weights[event_global_ptr] = weight;
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
       /*Compute histogram key for target neuron based on MSBs*/
       uint bin = (event_time_uint>>EXPAND_EVENTS_HISTOGRAM_BIT_SHIFT) & 
@@ -211,7 +209,7 @@ void expand_events
     i < (EXPAND_EVENTS_TIME_SLOTS); 
     i += EXPAND_EVENTS_WG_SIZE_WI
   ){
-    gm_events[EXPAND_EVENTS_TIME_SLOTS*wg_id + i] = lmTimeSlotCounters[i];
+    gm_event_counts[EXPAND_EVENTS_TIME_SLOTS*wg_id + i] = lmTimeSlotCounters[i];
   }
 
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)

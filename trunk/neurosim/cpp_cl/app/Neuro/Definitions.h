@@ -271,10 +271,11 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
     }\
   }
   
-#define SET_RANDOM_SEED\
+#define SET_RANDOM_SEED(seed)\
   {\
     time_t t = time(NULL);\
-    srand(*((unsigned int *)(&t)));\
+    seed = *((unsigned int *)(&t));\
+    srand(seed);\
   }
   
 /*Target Platform Vendor*/
@@ -301,7 +302,9 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define SPIKE_DATA_BUFFER_SIZE                                127
 /*Logging options*/
 #define LOG_MODEL_VARIABLES                                   0
+#define LOG_SIMULATION                                        0
 #define LOG_MODEL_VARIABLES_NEURON_ID                         0
+#define LOG_SIMULATION_FILE_NAME                              "c:/Users/dima/Documents/dev_neuro/samples/opencl/cpp_cl/app/Neuro/log/simulation_log.txt"
 #define LOG_MODEL_VARIABLES_FILE_NAME                         "c:/Users/dima/Documents/dev_neuro/samples/opencl/cpp_cl/app/Neuro/log/model_variable_trace.csv"
 #define LOG_MODEL_VARIABLES_FILE_HEADER                       "v,u,g_ampa,g_gaba,v_peak,I"
 #define LOG_MODEL_VARIABLES_FILE_BODY(i)                      << nrn_ps[i].v << "," \
@@ -310,6 +313,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
                                                               << nrn_ps[i].g_gaba << "," \
                                                               << nrn_ps[i].v_peak << "," \
                                                               << nrn_ps[i].I << std::endl
+
 /*Simulation parameters*/
 #define SIMULATION_STEP_SIZE                                  1
 #define SIMULATION_TIME_STEPS                                 5*EVENT_TIME_SLOTS
@@ -329,7 +333,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
             - all bits are set: complete integration test
 */
 
-//#define ENABLE_MASK                                           BIN_16(1000,0000,0000,0000)
+//#define ENABLE_MASK                                           BIN_16(0000,0000,1000,0000)
 #define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
 #define EXPAND_EVENTS_ENABLE                                  (ENABLE_MASK&32768)
 #define SCAN_ENABLE_V00                                       (ENABLE_MASK&16384)
@@ -905,7 +909,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   {1e-1,1e-2,1e-3,1e-4,1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-11,1e-12,1e-13,1e-14,1e-15,1e-16};*/
   #define UPDATE_NEURONS_PS_TOLERANCE                             (1.0e-7)
   #define UPDATE_NEURONS_NR_TOLERANCE                             (1.0e-7) /*normally no more than UPDATE_NEURONS_PS_TOLERANCE*/
-  #define UPDATE_NEURONS_PS_ORDER_LIMIT                           64
+  #define UPDATE_NEURONS_PS_ORDER_LIMIT                           16
   #define UPDATE_NEURONS_NR_ORDER_LIMIT                           20
   #define UPDATE_NEURONS_INJECT_CURRENT_STEPS                     SIMULATION_TIME_STEPS//SIMULATION_TIME_STEPS
   /*Possible values:  const double dt_vals[16] = {(double)1/4,(double)1/6,(double)1/8,(double)1/10,
