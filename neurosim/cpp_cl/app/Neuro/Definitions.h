@@ -274,36 +274,13 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define SET_RANDOM_SEED(seed)\
   {\
     time_t t = time(NULL);\
-    seed = *((unsigned int *)(&t));\
+    seed = *((unsigned int *)(&t)) + srandCounter;\
+    srandCounter++;\
     srand(seed);\
   }
   
-/*Target Platform Vendor*/
-#define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."
-
-/*Target Device*/
-#define TARGET_DEVICE_NAME                                    "Cayman"
-//#define TARGET_DEVICE_NAME                                    "AMD Engineering Sample"
-
-/*String used to tag statistics relevant to all kernels*/
-#define KERNEL_ALL                                            "All Kernels"
-
-/*Enable error try and catch*/
-#define ERROR_TRY_CATCH_ENABLE                                0
-/*Functional verification of each kernel*/
-#define KERNEL_VERIFY_ENABLE                                  1
-/*Enable high-level verification of sort results*/
-#define SORT_VERIFY_ENABLE                                    1
-#define EVENT_TIME_SLOTS                                      16
-#define TOTAL_NEURON_BITS                                     16
-#define WF_SIZE_WI                                            64
-#define DATA_TYPE                                             float
-/*Size of spike packet buffer (spikes)*/
-#define SPIKE_DATA_BUFFER_SIZE                                127
-/*Logging options*/
-#define LOG_MODEL_VARIABLES                                   0
-#define LOG_SIMULATION                                        0
-#define LOG_MODEL_VARIABLES_NEURON_ID                         0
+/*Logging names and macros*/
+#define LOG_MODEL_VARIABLES_NEURON_ID                         1
 #define LOG_SIMULATION_FILE_NAME                              "c:/Users/dima/Documents/dev_neuro/samples/opencl/cpp_cl/app/Neuro/log/simulation_log.txt"
 #define LOG_MODEL_VARIABLES_FILE_NAME                         "c:/Users/dima/Documents/dev_neuro/samples/opencl/cpp_cl/app/Neuro/log/model_variable_trace.csv"
 #define LOG_MODEL_VARIABLES_FILE_HEADER                       "v,u,g_ampa,g_gaba,v_peak,I"
@@ -313,28 +290,51 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
                                                               << nrn_ps[i].g_gaba << "," \
                                                               << nrn_ps[i].v_peak << "," \
                                                               << nrn_ps[i].I << std::endl
-
-/*Simulation parameters*/
-#define SIMULATION_STEP_SIZE                                  1
-#define SIMULATION_TIME_STEPS                                 5*EVENT_TIME_SLOTS
-
-
-/*Reference simulation parameters*/
-/*Synaptic event queue size limit per nrn: */
-#define REFERENCE_EVENT_QUEUE_SIZE                            1000
-#define FLIXIBLE_DELAYS_ENABLE                                1
-  
+                                                              
+/*Simulation mode*/
+#define SIMULATION_MODE                                       0
+#if SIMULATION_MODE == 0                             /*Simulation mode: verification and unit test*/
+//#define ENABLE_MASK                                           BIN_16(0000,0000,1000,0000)
+#define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
+/*Functional verification of each kernel*/
+#define KERNEL_VERIFY_ENABLE                                  1
+/*Enable high-level verification of sort results*/
+#define SORT_VERIFY_ENABLE                                    1
+/*Enable high-level verification of events on device vs host*/
+#define EVENT_VERIFY_ENABLE                                   1
+/*Log model variables with parameters LOG_MODEL_VARIABLES_* defined above*/
+#define LOG_MODEL_VARIABLES                                   0
+/*Log simulation messages*/
+#define LOG_SIMULATION                                        0
+/*Record error codes from the kernel*/
+#define ERROR_TRACK_ENABLE                                    1
+/*Debug mask, enables each kernel to have debug buffer r/w*/
+#define DEBUG_ENABLE                                          1
+#elif SIMULATION_MODE == 1                                          /*Simulation mode: performance*/
+#define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
+/*Functional verification of each kernel*/
+#define KERNEL_VERIFY_ENABLE                                  0
+/*Enable high-level verification of sort results*/
+#define SORT_VERIFY_ENABLE                                    0
+/*Enable high-level verification of events on device vs host*/
+#define EVENT_VERIFY_ENABLE                                   0
+/*Log model variables with parameters LOG_MODEL_VARIABLES_* defined above*/
+#define LOG_MODEL_VARIABLES                                   0
+/*Log simulation messages*/
+#define LOG_SIMULATION                                        0
+/*Record error codes from the kernel*/
+#define ERROR_TRACK_ENABLE                                    0
+/*Debug mask, enables each kernel to have debug buffer r/w*/
+#define DEBUG_ENABLE                                          0
+#endif
 /*
-  Enable simulation stages
+  Enable simulation stages (use ENABLE_MASK above)
   Options: 
             - any single bit is set: unit test for that stage
             - some contiguios set of bits starting from MSB: either unit tests or integration tests 
               for enabled stages depending on the stage combination
             - all bits are set: complete integration test
 */
-
-//#define ENABLE_MASK                                           BIN_16(0000,0000,1000,0000)
-#define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
 #define EXPAND_EVENTS_ENABLE                                  (ENABLE_MASK&32768)
 #define SCAN_ENABLE_V00                                       (ENABLE_MASK&16384)
 #define GROUP_EVENTS_ENABLE_V00                               (ENABLE_MASK&8192)
@@ -344,6 +344,33 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define GROUP_EVENTS_ENABLE_V03                               (ENABLE_MASK&512)
 #define MAKE_EVENT_PTRS_ENABLE                                (ENABLE_MASK&264)
 #define UPDATE_NEURONS_ENABLE_V00                             (ENABLE_MASK&128)
+
+/*Target Platform Vendor*/
+#define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."
+/*Target Device*/
+#define TARGET_DEVICE_NAME                                    "Cayman"
+//#define TARGET_DEVICE_NAME                                    "AMD Engineering Sample"
+/*String used to tag statistics relevant to all kernels*/
+#define KERNEL_ALL                                            "All Kernels"
+/*Enable error try and catch*/
+#define ERROR_TRY_CATCH_ENABLE                                0
+#define EVENT_TIME_SLOTS                                      16
+#define TOTAL_NEURON_BITS                                     16
+#define WF_SIZE_WI                                            64
+#define DATA_TYPE                                             float
+/*Size of spike packet buffer (spikes)*/
+#define SPIKE_DATA_BUFFER_SIZE                                127
+
+/*Simulation parameters*/
+#define SIMULATION_STEP_SIZE                                  1
+#define SIMULATION_TIME_STEPS                                 5*EVENT_TIME_SLOTS
+
+/*Reference simulation parameters*/
+/*Synaptic event queue size limit per nrn: */
+#define REFERENCE_EVENT_QUEUE_SIZE                            1000
+#define FLIXIBLE_DELAYS_ENABLE                                1
+  
+
 
 
 /*
@@ -355,7 +382,13 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #undef SORT_VERIFY_ENABLE
   #define SORT_VERIFY_ENABLE  0
 #endif
-
+#if EVENT_VERIFY_ENABLE && \
+    !(GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 &&\
+     GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE &&\
+     EXPAND_EVENTS_ENABLE)
+  #undef EVENT_VERIFY_ENABLE
+  #define EVENT_VERIFY_ENABLE  0
+#endif
 
 /*
   Configuration interface for each kernel exists for tuning kernels to desired functionality and
@@ -380,11 +413,11 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define EXPAND_EVENTS_VERIFY_ENABLE                         KERNEL_VERIFY_ENABLE
   #define EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT               17
   /*Debugging*/
-  #define EXPAND_EVENTS_DEBUG_ENABLE                          0
+  #define EXPAND_EVENTS_DEBUG_ENABLE                          (0)&DEBUG_ENABLE
   #define EXPAND_EVENTS_DEBUG_BUFFER_SIZE_WORDS               (EXPAND_EVENTS_TIME_SLOTS*EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG)//(1024*1024)
   /*Error tracking and codes*/
   #define EXPAND_EVENTS_ERROR_TRY_CATCH_ENABLE                ERROR_TRY_CATCH_ENABLE /*Options: 0, 1*/
-  #define EXPAND_EVENTS_ERROR_TRACK_ENABLE                    1
+  #define EXPAND_EVENTS_ERROR_TRACK_ENABLE                    ERROR_TRACK_ENABLE
   #define EXPAND_EVENTS_ERROR_BUFFER_SIZE_WORDS               1
   #define EXPAND_EVENTS_ERROR_CODE_1                          0x1 /*EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE overflow*/
   /*Kernel parameters*/
@@ -439,7 +472,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   /*Verification*/
   #define SCAN_VERIFY_ENABLE                                  KERNEL_VERIFY_ENABLE
   /*Debugging*/
-  #define SCAN_DEBUG_ENABLE                                   0
+  #define SCAN_DEBUG_ENABLE                                   (0)&DEBUG_ENABLE
   #define SCAN_DEBUG_BUFFER_SIZE_WORDS                        (SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE)
   /*Error tracking and codes*/
   #define SCAN_ERROR_TRACK_ENABLE                             0
@@ -522,7 +555,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   /*Verification*/
   #define GROUP_EVENTS_VERIFY_ENABLE                            KERNEL_VERIFY_ENABLE
   /*Debugging*/
-  #define GROUP_EVENTS_DEBUG_ENABLE                             0
+  #define GROUP_EVENTS_DEBUG_ENABLE                             (0)&DEBUG_ENABLE
   #define GROUP_EVENTS_DEBUG_BUFFER_SIZE_WORDS                  (GROUP_EVENTS_TIME_SLOTS*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT*GROUP_EVENTS_HISTOGRAM_BIN_SIZE_OUT)//(1024*128)
   /*Error tracking and codes*/
   #define GROUP_EVENTS_ERROR_TRY_CATCH_ENABLE                   0
@@ -726,12 +759,12 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   
   /*Debugging*/
   /*CONTROL: enable debug buffers*/
-  #define MAKE_EVENT_PTRS_DEBUG_ENABLE                             0
+  #define MAKE_EVENT_PTRS_DEBUG_ENABLE                             (0)&DEBUG_ENABLE
   #define MAKE_EVENT_PTRS_DEBUG_BUFFER_SIZE_WORDS                  (128*MAKE_EVENT_PTRS_WG_SIZE_WI*MAKE_EVENT_PTRS_GRID_SIZE_WG)
   
   /*Error tracking*/
   /*CONTROL: enable error logging at kernel level*/
-  #define MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE                       1
+  #define MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE                       ERROR_TRACK_ENABLE
   #define MAKE_EVENT_PTRS_ERROR_BUFFER_SIZE_WORDS                  1
   #define MAKE_EVENT_PTRS_ERROR_CODE_1                             0x1
   
@@ -850,11 +883,11 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   /*Verification*/
   #define UPDATE_NEURONS_VERIFY_ENABLE                            KERNEL_VERIFY_ENABLE
   /*Debugging*/
-  #define UPDATE_NEURONS_DEBUG_ENABLE                             0
+  #define UPDATE_NEURONS_DEBUG_ENABLE                             (0)&DEBUG_ENABLE
   #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (UPDATE_NEURONS_TOTAL_NEURONS*UPDATE_NEURONS_MODEL_VARIABLES)
   /*Error tracking and codes*/
   /*CONTROL: enable error logging at kernel level*/
-  #define UPDATE_NEURONS_ERROR_TRACK_ENABLE                       0
+  #define UPDATE_NEURONS_ERROR_TRACK_ENABLE                       ERROR_TRACK_ENABLE
   #define UPDATE_NEURONS_ERROR_BUFFER_SIZE_WORDS                  1
   #define UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK            0x00000012
   #define UPDATE_NEURONS_ERROR_CODE_1                             0x1
