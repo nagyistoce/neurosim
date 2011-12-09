@@ -92,6 +92,7 @@ class IntegrationTest : public SDKSample
     int              steps_ps;
     
     std::string startTimeStamp;
+    unsigned int srandSeed, srandCounter;
     
 #if (LOG_MODEL_VARIABLES)
     std::ofstream traceFile;
@@ -1099,10 +1100,25 @@ public:
     verifyKernelUpdateNeurons
     (
       cl_uint       step,
+      unsigned int  *pointerStruct,
+      unsigned int  *sortedEvents,
       unsigned int  *synapsePointer,
       unsigned int  *synapseTargets,
       DATA_TYPE     *synapseDelays,
       DATA_TYPE     *synapseWeights
+    );
+    
+    int 
+    verifyEvents
+    (
+      bool          ignoreWarnings,
+      bool          correctWeightPositionMismatch,
+      unsigned int  totalNeurons,
+      unsigned int  structElementSize,
+      unsigned int  eventsElementSize,
+      unsigned int  *pointerStruct,
+      unsigned int  *sortedEvents,
+      neuron_iz_ps  *nrn
     );
 
     template<typename T>
