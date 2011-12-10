@@ -54,7 +54,9 @@ int gpu_iz_ps_step
   //__global    DATA_TYPE const* restrict cm_coefficients,
   __constant  DATA_TYPE *cm_coefficients,
               DATA_TYPE *cache,
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
               DATA_TYPE I,
+#endif
               DATA_TYPE k,
               DATA_TYPE E_ampa,
               DATA_TYPE E_gaba,
@@ -106,9 +108,13 @@ int gpu_iz_ps_step
     if(p==0)
     {
       vchi = MUL(YP1(0),YP2(0));
-    
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
       YP1(1) = MUL( CONST_CO(cm_coefficients,0,p), (vchi - u + MUL(E_ampa, g_ampa) + 
         MUL(E_gaba, g_gaba) + I) );
+#else
+      YP1(1) = MUL( CONST_CO(cm_coefficients,0,p), (vchi - u + MUL(E_ampa, g_ampa) + 
+        MUL(E_gaba, g_gaba)) );
+#endif
     }
     else
     {
@@ -458,13 +464,15 @@ void update_neurons
     DATA_TYPE u         = gm_model_variables[UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE g_ampa    = gm_model_variables[2*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE g_gaba    = gm_model_variables[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
+    
     /*Load model parameters*/
-    //TODO: get rid of I
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
     DATA_TYPE I = 0.0f;
-    if(step < UPDATE_NEURONS_INJECT_CURRENT_STEPS)
+    if(step < UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP)
     {
       I = gm_model_parameters[neuronId];
     }
+#endif
     DATA_TYPE k         = gm_model_parameters[UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE l         = gm_model_parameters[2*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE b         = gm_model_parameters[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
@@ -510,13 +518,15 @@ void update_neurons
     DATA_TYPE u         = gm_model_variables[UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE g_ampa    = gm_model_variables[2*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE g_gaba    = gm_model_variables[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
+    
     /*Load model parameters*/
-    //TODO: get rid of I
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
     DATA_TYPE I = 0.0f;
-    if(step < UPDATE_NEURONS_INJECT_CURRENT_STEPS)
+    if(step < UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP)
     {
       I = gm_model_parameters[neuronId];
     }
+#endif
     DATA_TYPE k         = gm_model_parameters[UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE l         = gm_model_parameters[2*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE b         = gm_model_parameters[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
@@ -600,7 +610,9 @@ void update_neurons
 #endif
       cm_coefficients, 
       cache,
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
       I,
+#endif
       k,
       E_ampa,
       E_gaba,

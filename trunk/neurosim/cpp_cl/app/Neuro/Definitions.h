@@ -279,6 +279,19 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
     srand(seed);\
   }
   
+#define GET_RANDOM_INT(setValue, max, minPercent, maxPercent)\
+  {\
+    if(minPercent >= maxPercent){setValue = -1;}\
+    if(minPercent >= 100.0){setValue = -1;}\
+    if(maxPercent > 100.0){setValue = -1;}\
+    if(setValue != -1)\
+    {\
+      setValue = cl_uint(((double)(max))*((minPercent/100.0) + \
+        abs(((maxPercent-minPercent)/100.0)*((double)rand()/((double)RAND_MAX)))));\
+    }\
+  }
+
+  
 /*Logging names and macros*/
 #define LOG_MODEL_VARIABLES_NEURON_ID                         1
 #define LOG_SIMULATION_FILE_NAME                              "c:/Users/dima/Documents/dev_neuro/samples/opencl/cpp_cl/app/Neuro/log/simulation_log.txt"
@@ -352,6 +365,11 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 //#define TARGET_DEVICE_NAME                                    "AMD Engineering Sample"
 /*String used to tag statistics relevant to all kernels*/
 #define KERNEL_ALL                                            "All Kernels"
+
+/*Simulation parameters*/
+#define SIMULATION_STEP_SIZE                                  1
+#define SIMULATION_TIME_STEPS                                 (5*EVENT_TIME_SLOTS)
+
 /*Enable error try and catch*/
 #define ERROR_TRY_CATCH_ENABLE                                0
 #define EVENT_TIME_SLOTS                                      16
@@ -360,16 +378,20 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define DATA_TYPE                                             float
 /*Size of spike packet buffer (spikes)*/
 #define SPIKE_DATA_BUFFER_SIZE                                127
-
-/*Simulation parameters*/
-#define SIMULATION_STEP_SIZE                                  1
-#define SIMULATION_TIME_STEPS                                 5*EVENT_TIME_SLOTS
+/*Size of event data buffer*/
+#define EVENT_DATA_BUFFER_SIZE                                (32*1024)
+/*Enable overwriting spike packet data until defined simulation step. Disabled if 0.
+  (useful for initiating gradually increasing spiking activity during initial steps) */
+#define OVERWRITE_SPIKES_UNTILL_STEP                          (2*EVENT_TIME_SLOTS)
+/*Enable injecting current until defined simulation step. Disabled if 0.
+  (useful for initiating abruptly increasin spiking activity during initial steps) */
+#define INJECT_CURRENT_UNTILL_STEP                            0
 
 /*Reference simulation parameters*/
 /*Synaptic event queue size limit per nrn: */
 #define REFERENCE_EVENT_QUEUE_SIZE                            1000
 #define FLIXIBLE_DELAYS_ENABLE                                1
-  
+
 
 
 
@@ -450,7 +472,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define EXPAND_EVENTS_TIME_SLOTS                            EVENT_TIME_SLOTS /*Options: 16*/
   #define EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS                EXPAND_EVENTS_GRID_SIZE_WG
   #define EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS            3
-  #define EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE   (21*1024)
+  #define EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE   EVENT_DATA_BUFFER_SIZE
   /*NN parameters*/
   #define EXPAND_EVENTS_TOTAL_NEURON_BITS                     TOTAL_NEURON_BITS /*16*/
   #define EXPAND_EVENTS_TOTAL_NEURONS                         (1<<EXPAND_EVENTS_TOTAL_NEURON_BITS)
@@ -586,7 +608,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   /*Synaptic event buffer parameters*/
   #define GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS                   128
   #define GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS               3
-  #define GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE           (21*1024)
+  #define GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE           EVENT_DATA_BUFFER_SIZE
   #define GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE           (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS*GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE*10/10) /*Max: GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE x GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS*/
   #define GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG            1
   /*NN parameters*/
@@ -944,7 +966,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_NR_TOLERANCE                             (1.0e-7) /*normally no more than UPDATE_NEURONS_PS_TOLERANCE*/
   #define UPDATE_NEURONS_PS_ORDER_LIMIT                           16
   #define UPDATE_NEURONS_NR_ORDER_LIMIT                           20
-  #define UPDATE_NEURONS_INJECT_CURRENT_STEPS                     SIMULATION_TIME_STEPS//SIMULATION_TIME_STEPS
+  #define UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP                INJECT_CURRENT_UNTILL_STEP
   /*Possible values:  const double dt_vals[16] = {(double)1/4,(double)1/6,(double)1/8,(double)1/10,
                                                   (double)1/20,(double)1/40,(double)1/60,
                                                   (double)1/80,(double)1/100,(double)1/200,
