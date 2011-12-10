@@ -1020,7 +1020,13 @@ public:
     
     int verifyKernelMakeEventPtrs();
     
-    void psInit(cl_uint totalNeurons);
+    void
+    psInit
+    (
+      cl_uint totalNeurons,
+      cl_uint injectCurrentUntilStep
+    );
+
     void psClean();
     
     int 
@@ -1089,7 +1095,8 @@ public:
     (
       bool    ignoreFailures,
       bool    psZeroToleranceEnable,
-      bool    stopInjectCurrent,
+      cl_uint injectCurrentUntilStep,
+      cl_uint currentTimeStep,
       cl_uint totalNeurons,
       cl_uint psOrderLimit,
       cl_uint nrOrderLimit,
@@ -1105,7 +1112,8 @@ public:
       unsigned int  *synapsePointer,
       unsigned int  *synapseTargets,
       DATA_TYPE     *synapseDelays,
-      DATA_TYPE     *synapseWeights
+      DATA_TYPE     *synapseWeights,
+      unsigned int  *spikePackets
     );
     
     int 
@@ -1119,6 +1127,13 @@ public:
       unsigned int  *pointerStruct,
       unsigned int  *sortedEvents,
       neuron_iz_ps  *nrn
+    );
+    
+    int 
+    initializeSpikeData
+    (
+      double spikeBufferMinPercentFill,
+      double spikeBufferMaxPercentFill
     );
 
     template<typename T>
