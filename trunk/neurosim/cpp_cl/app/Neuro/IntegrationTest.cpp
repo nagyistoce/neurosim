@@ -500,13 +500,13 @@ IntegrationTest::initializeSpikeData
     dataSpikePackets[packet_index] = totalSpikes;
     cl_uint packetNeuronsPerSpikeCount = neuronsPerPacket/totalSpikes;
     
-    if(packetNeuronsPerSpikeCount > 1)
+    if(packetNeuronsPerSpikeCount > 2)
     {
       cl_uint currentNeuronIdStart = (neuronsPerPacket*packet);
       for(int i = 0; i < totalSpikes; i++)
       {
         cl_uint spiked_neuron = currentNeuronIdStart +
-          cl_uint(abs(packetNeuronsPerSpikeCount*((double)rand()/((double)RAND_MAX))));
+          cl_uint(abs((packetNeuronsPerSpikeCount-1)*((double)rand()/((double)RAND_MAX))));
           
         cl_float spike_time = 
           cl_float(abs(cl_float(SIMULATION_STEP_SIZE)*((double)rand()/((double)RAND_MAX))));
@@ -578,7 +578,7 @@ IntegrationTest::initializeExpandEventsData()
   LOG("initializeExpandEventsData: set srand seed to " << srandSeed);
   
   /*init synaptic data*/
-  double gabaRatio = 3.0;
+  double gabaRatio = 1.0;
   for(cl_uint i = 0; i < EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE-1; i++)
   {
     cl_uint ptrStart = dataSynapsePointer[i];
@@ -3304,6 +3304,21 @@ IntegrationTest::setupCL()
 
 
 
+double
+IntegrationTest::timeStampNs()
+{
+#ifdef WIN32
+  QueryPerformanceCounter((LARGE_INTEGER *)&current);
+  return ((double)current / (double)performanceFrequency);
+#else
+  struct timespec tp;
+  clock_gettime(CLOCK_MONOTONIC, &tp);
+  return (double) tp.tv_sec * (1000ULL * 1000ULL * 1000ULL) + (double) tp.tv_nsec;
+#endif
+}
+
+
+
 int 
 IntegrationTest::runCLKernels()
 {
@@ -3702,13 +3717,26 @@ IntegrationTest::runCLKernels()
 #endif
 
   bool verified = true;
-  
+#if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0
+  double startAppTime = 0, endAppTime = 0;
+#endif
+
   /*Iterate through steps*/
-  for(currentTimeStep; currentTimeStep < SIMULATION_TIME_STEPS; currentTimeStep++)
+  std::cout << "\nStarting execution" << std::endl;
+  for(currentTimeStep = 0; currentTimeStep < SIMULATION_TIME_STEPS; currentTimeStep++)
   {
+#if SIMULATION_MODE == 0
     currentTimeSlot = currentTimeStep%EVENT_TIME_SLOTS;
     std::cout << "\nExecuting step " << currentTimeStep << "(" << currentTimeSlot << ") out of " 
       << SIMULATION_TIME_STEPS << std::endl;
+#endif
+#if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep == START_PROFILING_AT_STEP)
+    {
+      std::cout << "\nStarting device timing at step " << currentTimeStep << std::endl;
+      startAppTime = timeStampNs();
+    }
+#endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
     {
@@ -3759,10 +3787,10 @@ IntegrationTest::runCLKernels()
     }
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
       dataSpikePackets);
-  }
-  else if(currentTimeStep == OVERWRITE_SPIKES_UNTILL_STEP)
-  {
-    std::cout << "Completed injecting spikes at step " << currentTimeStep << std::endl;
+    if(currentTimeStep == OVERWRITE_SPIKES_UNTILL_STEP-1)
+    {
+      std::cout << "\nCompleted injecting spikes at step " << currentTimeStep << std::endl;
+    }
   }
 #endif
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
@@ -3789,8 +3817,7 @@ IntegrationTest::runCLKernels()
 #endif
     SET_KERNEL_ARG(kernelExpandEvents, expandEventsTimeStep, argNumExpandEvents);
     status = commandQueue.enqueueNDRangeKernel(kernelExpandEvents, cl::NullRange, 
-      globalThreadsExpandEvents,
-      localThreadsExpandEvents, NULL, &ndrEvt);
+      globalThreadsExpandEvents, localThreadsExpandEvents, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
@@ -4230,9 +4257,7 @@ IntegrationTest::runCLKernels()
     (GROUP_EVENTS_TOTAL_NEURON_BITS != EXPAND_EVENTS_TOTAL_NEURON_BITS)
   #error (GROUP_EVENTS_TOTAL_NEURON_BITS != EXPAND_EVENTS_TOTAL_NEURON_BITS)
 #endif
-#if (GROUP_EVENTS_TOTAL_NEURON_BITS%4 != 0)
-  #error (GROUP_EVENTS_TOTAL_NEURON_BITS%4 != 0)
-#endif
+
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V03
     /*
       Sort positive integers (neuron IDs).
@@ -4240,7 +4265,7 @@ IntegrationTest::runCLKernels()
     for
     (
       cl_uint sortStep = 0; 
-      sortStep < (GROUP_EVENTS_TOTAL_NEURON_BITS/GROUP_EVENTS_HISTOGRAM_BIN_BITS); 
+      sortStep < GROUP_EVENTS_NEURON_ID_SORT_ITERATIONS; 
       sortStep++
     )
 #endif
@@ -4299,7 +4324,7 @@ IntegrationTest::runCLKernels()
 #endif
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V03
-    if(sortStep < (GROUP_EVENTS_TOTAL_NEURON_BITS/GROUP_EVENTS_HISTOGRAM_BIN_BITS)-1)
+    if(sortStep < (GROUP_EVENTS_NEURON_ID_SORT_ITERATIONS-1))
 #endif
     {
 /**************************************************************************************************/
@@ -4622,8 +4647,29 @@ IntegrationTest::runCLKernels()
 #endif
 #if UPDATE_NEURONS_VERIFY_ENABLE
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+    memset(dataUpdateNeuronsError, 0, UPDATE_NEURONS_ERROR_BUFFER_SIZE_WORDS*sizeof(cl_uint));
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsErrorBuffer, dataUpdateNeuronsErrorSizeBytes, 
       dataUpdateNeuronsError);
+#endif
+#endif
+/*Profiling: pre-profiling steps require untouched dataMakeEventPtrsStruct for host equivalent*/
+#if (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0)
+#if (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 &&\
+    GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE &&\
+    EXPAND_EVENTS_ENABLE)
+#if OVERWRITE_SPIKES_UNTILL_STEP
+    if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
+    {
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
+        dataMakeEventPtrsStruct);
+    }
+#else
+    if(currentTimeStep < INJECT_CURRENT_UNTILL_STEP)
+    {
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
+        dataMakeEventPtrsStruct);
+    }
+#endif
 #endif
 #endif
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataGroupEventsTikBuffer, argNumUpdateNeuronsV00);
@@ -4634,6 +4680,73 @@ IntegrationTest::runCLKernels()
     {
       return SDK_FAILURE;
     }
+/*Profiling: initiating host equivalent*/
+#if (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0)
+#if (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 &&\
+    GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE &&\
+    EXPAND_EVENTS_ENABLE)
+#if OVERWRITE_SPIKES_UNTILL_STEP
+    if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
+    {
+      ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+        modelVariables);
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+        dataGroupEventsTik);
+      
+      cl_uint size = (UPDATE_NEURONS_SPIKE_PACKETS_V00*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS);
+      cl_uint *dataSpikePacketsToInject = (cl_uint *)calloc(size, sizeof(cl_uint));
+      memcpy(dataSpikePacketsToInject, dataSpikePackets, (size*sizeof(cl_uint)));
+  
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
+        dataSpikePackets);
+        
+      if(verifyKernelUpdateNeurons
+        (
+          currentTimeStep,
+          dataMakeEventPtrsStruct,
+          dataGroupEventsTik,
+          dataSynapsePointer,
+          dataSynapseTargets,
+          dataSynapseDelays,
+          dataSynapseWeights,
+          dataSpikePacketsToInject
+        ) != SDK_SUCCESS)
+      {
+        std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
+        verified = false; 
+      }
+      free(dataSpikePacketsToInject);
+      if(verified == false){break;}
+    }
+#else
+    if(currentTimeStep < INJECT_CURRENT_UNTILL_STEP)
+    {
+      ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+        modelVariables);
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+        dataGroupEventsTik);
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
+        dataSpikePackets);
+      if(verifyKernelUpdateNeurons
+        (
+          currentTimeStep,
+          dataMakeEventPtrsStruct,
+          dataGroupEventsTik,
+          dataSynapsePointer,
+          dataSynapseTargets,
+          dataSynapseDelays,
+          dataSynapseWeights,
+          NULL
+        ) != SDK_SUCCESS)
+      {
+        std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
+        verified = false; 
+        break;
+      }
+    }
+#endif
+#endif
+#endif
 #if UPDATE_NEURONS_VERIFY_ENABLE
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUpdateNeuronsErrorBuffer, dataUpdateNeuronsErrorSizeBytes, 
@@ -4717,9 +4830,8 @@ IntegrationTest::runCLKernels()
     }
 #endif
 /**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-#if (((32/GROUP_EVENTS_HISTOGRAM_BIN_BITS - 1) + \
-      (GROUP_EVENTS_TOTAL_NEURON_BITS/GROUP_EVENTS_HISTOGRAM_BIN_BITS))%2 != 0)
+#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V03
+#if ((GROUP_EVENTS_NEURON_ID_SORT_ITERATIONS%2) == 0)
     /*Restore original buffer pointer for the next step*/
     swap2(dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
     swap2(dataGroupEventsTikBuffer, dataGroupEventsTokBuffer);
@@ -4728,11 +4840,14 @@ IntegrationTest::runCLKernels()
 /**************************************************************************************************/
   }/*for SIMULATION_TIME_STEPS*/
   
+  std::cout << "\nDispatched all kernels" << std::endl;
   status = commandQueue.flush();
   if(!sampleCommon->checkVal(status, CL_SUCCESS, "cl::CommandQueue.flush failed."))
   {
     return SDK_FAILURE;
   }
+  std::cout << "\nEnqueued all kernels" << std::endl;
+  std::cout << "\nWaiting for the command queue to complete..." << std::endl;
   eventStatus = CL_QUEUED;
   while(eventStatus != CL_COMPLETE)
   {
@@ -4741,6 +4856,68 @@ IntegrationTest::runCLKernels()
       "commandQueue, cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS) failed."))
         return SDK_FAILURE;
   }
+  
+#if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0
+  status = commandQueue.finish();
+  endAppTime = timeStampNs();
+  if(!sampleCommon->checkVal(status, CL_SUCCESS, "cl::CommandQueue.finish failed."))
+  {
+    return SDK_FAILURE;
+  }
+  cl_uint profiledSteps = SIMULATION_TIME_STEPS - START_PROFILING_AT_STEP;
+  double appTimeSec = (endAppTime - startAppTime);
+  std::cout << "\nDevice timing: " << profiledSteps << " steps, " << appTimeSec << " sec, " 
+    << appTimeSec/profiledSteps << " sec/step" << std::endl;
+  
+  /*Host equivalent computation*/
+#if (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 &&\
+    GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE &&\
+    EXPAND_EVENTS_ENABLE)
+  {
+    int result = SDK_SUCCESS;
+    double startAppTime = 0, endAppTime = 0;
+    
+    std::cout << "\nStarting host timing at step " << START_PROFILING_AT_STEP << std::endl;
+    
+    startAppTime = timeStampNs();
+    for(cl_uint step = START_PROFILING_AT_STEP; step < SIMULATION_TIME_STEPS; step++)
+    {
+      result = propagateSpikes
+      (
+        UPDATE_NEURONS_TOTAL_NEURONS,
+        REFERENCE_EVENT_QUEUE_SIZE,
+        nrn_ps,
+        ne,
+        te_ps,
+        dataSynapsePointer,
+        dataSynapseTargets,
+        dataSynapseDelays,
+        dataSynapseWeights
+      );
+      if(result != SDK_SUCCESS){break;}
+
+      result = updateStep
+      (
+        IGNORE_SOLVER_EXCEPTIONS,
+        UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE,
+        UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP,
+        step,
+        UPDATE_NEURONS_TOTAL_NEURONS,
+        UPDATE_NEURONS_PS_ORDER_LIMIT,
+        UPDATE_NEURONS_NR_ORDER_LIMIT,
+        UPDATE_NEURONS_NR_TOLERANCE
+      );
+      if(result != SDK_SUCCESS && !IGNORE_SOLVER_EXCEPTIONS){break;}
+    }
+    endAppTime = timeStampNs();
+    
+    cl_uint profiledSteps = SIMULATION_TIME_STEPS - START_PROFILING_AT_STEP;
+    double appTimeSec = (endAppTime - startAppTime);
+    std::cout << "\nHost timing: " << profiledSteps << " steps, " << appTimeSec << " sec, " 
+      << appTimeSec/profiledSteps << " sec/step" << std::endl;
+  }
+#endif
+#endif
   
   if(!verified)  {return SDK_FAILURE;}
 
@@ -4761,7 +4938,7 @@ IntegrationTest::runCLKernels()
 int 
 IntegrationTest::initialize()
 {
-  // Call base class Initialize to get default configuration
+  /*Call base class Initialize to get default configuration*/
   if(!this->SDKSample::initialize())
       return SDK_FAILURE;
   
@@ -4769,6 +4946,10 @@ IntegrationTest::initialize()
   srandCounter = 0;
   
   time_t rawtime; time ( &rawtime ); startTimeStamp = std::string(ctime (&rawtime));
+  
+#ifdef WIN32
+  QueryPerformanceFrequency((LARGE_INTEGER *)&performanceFrequency);
+#endif
       
 #if (LOG_SIMULATION)
   simulationLogFile = std::ofstream(LOG_SIMULATION_FILE_NAME, 
@@ -6545,7 +6726,6 @@ IntegrationTest::injectEvents
 int 
 IntegrationTest::propagateSpikes
 (
-  bool          variableDelaysEnalbe,
   unsigned int  totalNeurons,
   unsigned int  eventQueueSize,
   neuron_iz_ps  *nrn,
@@ -6560,11 +6740,10 @@ IntegrationTest::propagateSpikes
 {
   int result = SDK_SUCCESS;
 
-  if(!variableDelaysEnalbe)
-  {
+#if !FLIXIBLE_DELAYS_ENABLE
     /*Clear input buffers*/
     for(unsigned int i = 0; i < totalNeurons; i++){nrn[i].n_in = 0;}
-  }
+#endif
   
   /*Iterate over source neurons*/
   for(unsigned int i = 0; i < totalNeurons; i++)
@@ -6586,14 +6765,11 @@ IntegrationTest::propagateSpikes
         if(n_in<eventQueueSize)
         {
 	        unsigned int j=n_in; 
-          if(variableDelaysEnalbe)
-          {
-            t_event = te[i] + synapseDelays[s];
-          }
-          else
-          {
-            t_event = te[i];
-          }
+#if FLIXIBLE_DELAYS_ENABLE
+          t_event = te[i] + synapseDelays[s];
+#else
+          t_event = te[i];
+#endif
           /*Use insertion sort to maintain ordered synaptic events*/
           while ((j > 0) && (nrn[k].in_t[j-1] > t_event))
           {
@@ -6618,7 +6794,8 @@ IntegrationTest::propagateSpikes
     }
   }
   
-  if(result == SDK_SUCCESS && variableDelaysEnalbe)
+#if FLIXIBLE_DELAYS_ENABLE
+  if(result == SDK_SUCCESS)
   {
     /*Decrement synaptic events: */
     for(unsigned int i = 0; i < totalNeurons; i++)
@@ -6629,7 +6806,8 @@ IntegrationTest::propagateSpikes
       }
     }
   }
-  
+#endif
+
   return result;
 }
 /**************************************************************************************************/
@@ -6791,6 +6969,7 @@ IntegrationTest::verifyEvents
         }
       }
     }
+    if(result == SDK_FAILURE){break;}
     
     if(result == SDK_SUCCESS && e != entryCount)
     {
@@ -6822,10 +7001,12 @@ IntegrationTest::stepIzPs
   DATA_TYPE *te, 
   int *ip, 
   DATA_TYPE *fp, 
+#if STATISTICS_ENABLE
   int *fcount,
   unsigned long long int *icount, 
   DATA_TYPE *mu, 
   int *max_order, 
+#endif
   int ps_order_limit,
   int nr_order_limit,
   DATA_TYPE nrTolerance,
@@ -6834,7 +7015,7 @@ IntegrationTest::stepIzPs
 )
 /**************************************************************************************************/
 {
-#define PRINT_stepIzPs  0
+#define PRINT_stepIzPs                                                            ERROR_TRACK_ENABLE
 	int result = SDK_SUCCESS;
   
   DATA_TYPE v,u,g_ampa,g_gaba,chi,E_ampa,E_gaba,t,start,tol;
@@ -6899,10 +7080,12 @@ IntegrationTest::stepIzPs
     result = SDK_FAILURE;
   }
 
+#if STATISTICS_ENABLE
   (*icount)++;
-
 	*mu += ((DATA_TYPE)ps_order - *mu)/(DATA_TYPE)*icount;
 	if(ps_order > *max_order)*max_order = ps_order;
+#endif
+
   vnew=ynew[0]; /*New membrane voltage value*/
 
 	if (vnew >= nrnp->v_peak) /*rare*/
@@ -6950,8 +7133,10 @@ IntegrationTest::stepIzPs
       result = SDK_FAILURE;
     }
     
+#if STATISTICS_ENABLE
 		/*Record spike and schedule events*/
     (*fcount)++;
+#endif
 
     if(variableDelaysEnalbe)
     {
@@ -7012,11 +7197,12 @@ IntegrationTest::stepIzPs
 #endif
       result = SDK_FAILURE;
     }
-    
+
+#if STATISTICS_ENABLE
     (*icount)++; 
-    
 		*mu += ((DATA_TYPE)ps_order- *mu)/(DATA_TYPE)*icount;
 		if(ps_order > *max_order)*max_order = ps_order;
+#endif
 
 		nrnp->v=ynew[0]; nrnp->u=ynew[1]; nrnp->g_ampa=ynew[2]; 
     nrnp->g_gaba=ynew[3];
@@ -7048,12 +7234,17 @@ IntegrationTest::updateStep
 )
 /**************************************************************************************************/
 {
-#define PRINT_updateStep  1
+#define PRINT_updateStep                                                           STATISTICS_ENABLE
   int result = SDK_SUCCESS;
-  int nrn_ind,fcount = 0,substep;
-  int max_order_ps = 0, max_events = 0;
+  int nrn_ind, substep;
+
+#if STATISTICS_ENABLE
+  int fcount = 0, max_order_ps = 0, max_events = 0;
   unsigned long long int icount = 0;
-  DATA_TYPE   mu_order_ps = 0.0, t_ps = 0.0, start_ps, w_ps, fp_ps[100];
+  DATA_TYPE   mu_order_ps = 0.0;
+#endif
+
+  DATA_TYPE t_ps = 0.0, start_ps, w_ps, fp_ps[100];
   neuron_iz_ps   *nrnp_ps, *nrnx_ps;
 
   /*Runtime storage for variables: */
@@ -7096,7 +7287,9 @@ IntegrationTest::updateStep
 
     if(nrnp_ps->n_in)
     {
+#if STATISTICS_ENABLE
       if(max_events < nrnp_ps->n_in){max_events = nrnp_ps->n_in;}
+#endif
       /*one substep per event*/
 #if(FLIXIBLE_DELAYS_ENABLE)
       substep = 0;
@@ -7124,10 +7317,12 @@ IntegrationTest::updateStep
             te_ps,
             ip,
             fp_ps,
+#if STATISTICS_ENABLE
             &fcount,
             &icount,
             &mu_order_ps,
             &max_order_ps,
+#endif
             psOrderLimit,
             nrOrderLimit,
             (DATA_TYPE)nrTolerance,
@@ -7176,7 +7371,7 @@ IntegrationTest::updateStep
       }
       else if(nrnp_ps->n_in < 0)
       {
-        PRINTERR("PS: negative overflow in synaptic event number.");
+        std::cerr << "ERROR updateStep: negative overflow in synaptic event number." << std::endl;
         nrnp_ps->n_in = 0;
         result = SDK_FAILURE;
         if(!ignoreFailures){break;}
@@ -7194,10 +7389,12 @@ IntegrationTest::updateStep
         te_ps,
         ip,
         fp_ps,
+#if STATISTICS_ENABLE
         &fcount,
         &icount,
         &mu_order_ps,
         &max_order_ps,
+#endif
         psOrderLimit,
         nrOrderLimit,
         (DATA_TYPE)nrTolerance,
@@ -7220,10 +7417,12 @@ IntegrationTest::updateStep
         te_ps,
         ip,
         fp_ps,
+#if STATISTICS_ENABLE
         &fcount,
         &icount,
         &mu_order_ps,
         &max_order_ps,
+#endif
         psOrderLimit,
         nrOrderLimit,
         (DATA_TYPE)nrTolerance,
@@ -7234,7 +7433,7 @@ IntegrationTest::updateStep
     }
   }/*For neurons*/
   
-#if PRINT_updateStep
+#if PRINT_updateStep && STATISTICS_ENABLE
   std::cout << "\n Spikes: " 
             << "\n  Total: " << fcount 
             << "\n  Average: " << ((double)fcount/(double)totalNeurons)
@@ -7274,26 +7473,27 @@ IntegrationTest::verifyKernelUpdateNeurons
 #if UPDATE_NEURONS_ENABLE_V00
   
   bool breakOnFailure = 1;
-  bool ignoreSolverFailuresHost = true;
-  bool ignoreSolverFailuresDevice = true;
+  bool ignoreSolverFailuresHost = IGNORE_SOLVER_EXCEPTIONS;
+  bool ignoreSolverFailuresDevice = IGNORE_SOLVER_EXCEPTIONS;
 
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
-  if((!ignoreSolverFailuresDevice && dataUpdateNeuronsError[0] != 0) || 
-     (ignoreSolverFailuresDevice && 
-     ((UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK&dataUpdateNeuronsError[0]) != 0))
-  ){
+  if(dataUpdateNeuronsError[0] != 0)
+  {
     std::cout << "verifyKernelUpdateNeurons: received error code from the device: ";
     PRINT_HEX(4, dataUpdateNeuronsError[0]);
     std::cout << std::endl;
-    return SDK_FAILURE;
+    if((!ignoreSolverFailuresDevice && dataUpdateNeuronsError[0] != 0) || 
+       (ignoreSolverFailuresDevice && 
+       ((UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK&dataUpdateNeuronsError[0]) != 0))
+    ){
+      return SDK_FAILURE;
+    }
   }
 #endif
   
   if((synapsePointer != NULL) && (synapseTargets != NULL) && (synapseDelays != NULL) &&
     (synapseWeights != NULL) && (pointerStruct != NULL) && (sortedEvents != NULL))
   {
-    bool  variableDelaysEnalbe = true;
-    
     if(spikePackets != NULL)
     {
       memset(ne, 0, UPDATE_NEURONS_TOTAL_NEURONS*sizeof(int));
@@ -7329,7 +7529,6 @@ IntegrationTest::verifyKernelUpdateNeurons
     
     result = propagateSpikes
     (
-      variableDelaysEnalbe,
       UPDATE_NEURONS_TOTAL_NEURONS,
       REFERENCE_EVENT_QUEUE_SIZE,
       nrn_ps,
@@ -7342,8 +7541,7 @@ IntegrationTest::verifyKernelUpdateNeurons
     );
     if(result != SDK_SUCCESS){return result;}
     
-#if EVENT_VERIFY_ENABLE
-    if(variableDelaysEnalbe)
+    if((pointerStruct != NULL) && (sortedEvents != NULL) && FLIXIBLE_DELAYS_ENABLE)
     {
       result = verifyEvents
       (
@@ -7358,7 +7556,6 @@ IntegrationTest::verifyKernelUpdateNeurons
       );
       if(result != SDK_SUCCESS){return result;}
     }
-#endif
   }
   else
   {
@@ -8111,7 +8308,6 @@ main(int argc, char *argv[])
     if(test.getPlatformStats() !=  SDK_SUCCESS) {test.cleanup(); return SDK_FAILURE;}
     if(test.setup() !=  SDK_SUCCESS)            {test.cleanup(); return SDK_FAILURE;}
     if(test.run() !=  SDK_SUCCESS)              {test.cleanup(); return SDK_FAILURE;}
-    std::cout << "Passed verification" << std::endl;
     test.cleanup();
     test.printStats();
   }

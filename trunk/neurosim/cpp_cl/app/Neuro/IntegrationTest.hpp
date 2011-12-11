@@ -11,7 +11,6 @@
 #endif
 
 #include "Definitions.h"
-/*Models: */
 #include "iz_util.h"
 #include "integ_util.h"
 #include <CL/cl.hpp>
@@ -93,6 +92,10 @@ class IntegrationTest : public SDKSample
     
     std::string startTimeStamp;
     unsigned int srandSeed, srandCounter;
+    
+#ifdef WIN32
+  __int64 current, performanceFrequency;
+#endif
     
 #if (LOG_MODEL_VARIABLES)
     std::ofstream traceFile;
@@ -1041,7 +1044,6 @@ public:
     int 
     propagateSpikes
     (
-      bool          variableDelaysEnalbe,
       unsigned int  totalNeurons,
       unsigned int  eventQueueSize,
       neuron_iz_ps  *nrn,
@@ -1079,10 +1081,12 @@ public:
       DATA_TYPE *te, 
       int *ip, 
       DATA_TYPE *fp, 
+#if STATISTICS_ENABLE
       int *fcount,
       unsigned long long int *icount, 
       DATA_TYPE *mu, 
       int *max_order, 
+#endif
       int ps_order_limit,
       int nr_order_limit,
       DATA_TYPE nrTolerance,
@@ -1135,6 +1139,8 @@ public:
       double spikeBufferMinPercentFill,
       double spikeBufferMaxPercentFill
     );
+    
+    double timeStampNs();
 
     template<typename T>
     void swap2(T& a, T& b)

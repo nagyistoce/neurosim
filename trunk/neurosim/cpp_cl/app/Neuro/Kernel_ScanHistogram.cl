@@ -45,7 +45,6 @@ scan_histogram
 #endif
   __global      uint          *gm_target_neuron_histogram,
                 uint          step
-  
 ){
   uint wi_id = get_local_id(0);
   uint wg_id = get_group_id(0);
