@@ -117,38 +117,52 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   }
   
 /*Memory size and name registration for statistics*/
+#define REGISTER_TIME(kernel_name, time, increment)\
+  {\
+    map<std::string, double> stats = kernelStats.execTime[#kernel_name];\
+    if(stats.find("Time") ==  stats.end()){stats["Time"] = 0;}\
+    if(stats.find("Count") ==  stats.end()){stats["Count"] = 0;}\
+    stats["Time"] += time;\
+    stats["Count"] += increment;\
+    kernelStats.execTime[#kernel_name] = stats;\
+    set<std::string> kernels = kernelStats.kernelNamesExecTime;\
+    kernels.insert(#kernel_name);\
+    kernelStats.kernelNamesExecTime = kernels;\
+  }
+  
+/*Memory size and name registration for statistics*/
 #define REGISTER_MEMORY(kernel_name, mem_type, mem_name)\
   {\
     switch (mem_type)\
     {\
       case MEM_CONSTANT:\
       {\
-        map<std::string, cl_uint> memSizes = memStats.cmSizes[kernel_name];\
+        map<std::string, cl_uint> memSizes = kernelStats.cmSizes[kernel_name];\
         memSizes[#mem_name] = mem_name ##SizeBytes;\
-        memStats.cmSizes[kernel_name] = memSizes;\
+        kernelStats.cmSizes[kernel_name] = memSizes;\
       }\
         break;\
       case MEM_GLOBAL:\
       {\
-        map<std::string, cl_uint> memSizes = memStats.gmSizes[kernel_name];\
+        map<std::string, cl_uint> memSizes = kernelStats.gmSizes[kernel_name];\
         memSizes[#mem_name] = mem_name ##SizeBytes;\
-        memStats.gmSizes[kernel_name] = memSizes;\
+        kernelStats.gmSizes[kernel_name] = memSizes;\
       }\
         break;\
       case MEM_LOCAL:\
       {\
-        map<std::string, cl_uint> memSizes = memStats.lmSizes[kernel_name];\
+        map<std::string, cl_uint> memSizes = kernelStats.lmSizes[kernel_name];\
         memSizes[#mem_name] = mem_name ##SizeBytes;\
-        memStats.lmSizes[kernel_name] = memSizes;\
+        kernelStats.lmSizes[kernel_name] = memSizes;\
       }\
         break;\
       default:\
         std::cout << "REGISTER_MEMORY: unsupported memory type\n" << std::endl;\
         return SDK_FAILURE;\
     }\
-    set<std::string> kernels = memStats.kernelNames;\
+    set<std::string> kernels = kernelStats.kernelNames;\
     kernels.insert(kernel_name);\
-    memStats.kernelNames = kernels;\
+    kernelStats.kernelNames = kernels;\
   }
 /*Memory types*/
 #define MEM_CONSTANT                                          0
@@ -303,13 +317,16 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
                                                               << nrn_ps[i].g_gaba << "," \
                                                               << nrn_ps[i].v_peak << "," \
                                                               << nrn_ps[i].I << std::endl
-                                                              
+
 /*Simulation mode:
-  0 - Verification and unit test
-  1 - Performance with non-blocking return
-  2 - Application-level time profiling
+  0 - Verification and unit tests. For unit tests set a single bit in ENABLE_MASK
+  1 - A run with non-blocking return (useful for APP Profiler)
+  2 - Application-level time profiling with verification of results between host and device during
+      pre-profiling steps
+  3 - Application-level time profiling without verification and with relaxed math.
+  4 - Kernel-level time profiling without verification and with relaxed math.
 */
-#define SIMULATION_MODE                                       2
+#define SIMULATION_MODE                                       3
 
 #if SIMULATION_MODE == 0                             /*Simulation mode: verification and unit test*/
 //#define ENABLE_MASK                                           BIN_16(1000,0000,0000,0000)
@@ -318,6 +335,8 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define KERNEL_VERIFY_ENABLE                                  1
 /*Enable high-level verification of sort results*/
 #define SORT_VERIFY_ENABLE                                    1
+/*Enable high-level verification of model variables, spikes, events for whole network*/
+#define NETWORK_VERIFY_ENABLE                                 1
 /*Log model variables with parameters LOG_MODEL_VARIABLES_* defined above*/
 #define LOG_MODEL_VARIABLES                                   0
 /*Log simulation messages*/
@@ -326,6 +345,8 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define ERROR_TRACK_ENABLE                                    1
 /*Debug mask, enables each kernel to have debug buffer r/w*/
 #define DEBUG_MASK                                            1
+/*Enable compiler flags that allow device to produce same result as host*/
+#define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                     1
 /*Profiling mode*/
 #define PROFILING_MODE                                        0
 /*Enable gathering statistics*/
@@ -348,15 +369,37 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define DEBUG_MASK                                            0
 /*Enable gathering statistics*/
 #define STATISTICS_ENABLE                                     0
-/*Run simulation for this many steps*/
-#define SIMULATION_TIME_STEPS                                 (20*EVENT_TIME_SLOTS)
 #if SIMULATION_MODE == 1
   /*Profiling mode*/
   #define PROFILING_MODE                                      0
+  /*Enable compiler flags that allow device to produce same result as host*/
+  #define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                   0
+  /*Enable high-level verification of model variables, spikes, events for whole network*/
+  #define NETWORK_VERIFY_ENABLE                               0
 #elif SIMULATION_MODE == 2
   /*Profiling mode*/
   #define PROFILING_MODE                                      1
+  /*Enable compiler flags that allow device to produce same result as host*/
+  #define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                   1
+  /*Enable high-level verification of model variables, spikes, events for whole network*/
+  #define NETWORK_VERIFY_ENABLE                               1
+#elif SIMULATION_MODE == 3
+  /*Profiling mode*/
+  #define PROFILING_MODE                                      1
+  /*Enable compiler flags that allow device to produce same result as host*/
+  #define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                   0
+  /*Enable high-level verification of model variables, spikes, events for whole network*/
+  #define NETWORK_VERIFY_ENABLE                               0
+#elif SIMULATION_MODE == 4
+  /*Profiling mode*/
+  #define PROFILING_MODE                                      2
+  /*Enable compiler flags that allow device to produce same result as host*/
+  #define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                   0
+  /*Enable high-level verification of model variables, spikes, events for whole network*/
+  #define NETWORK_VERIFY_ENABLE                               0
 #endif
+/*Run simulation for this many steps*/
+#define SIMULATION_TIME_STEPS                                 (10*EVENT_TIME_SLOTS)
 #endif
 /*
   Enable simulation stages (use ENABLE_MASK above)
@@ -378,9 +421,12 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 
 /*Target Platform Vendor*/
 #define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."
-/*Target Device*/
+/*Target Device
+  "Cayman"
+  "AMD Engineering Sample"
+  "Tahiti"
+*/
 #define TARGET_DEVICE_NAME                                    "Cayman"
-//#define TARGET_DEVICE_NAME                                    "AMD Engineering Sample"
 /*String used to tag statistics relevant to all kernels*/
 #define KERNEL_ALL                                            "All Kernels"
 
