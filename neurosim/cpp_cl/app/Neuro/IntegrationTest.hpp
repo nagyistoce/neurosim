@@ -28,6 +28,7 @@
 #include <vector>
 #include <limits>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <cmath>
 #include <windows.h>
@@ -42,12 +43,14 @@ using std::ofstream;
 
 
 
-struct memStatistics {
+struct kernelStatistics {
   /*map{kernel_name -> map{alloc_name -> alloc_size}}*/
   map<std::string, map<std::string, cl_uint>> gmSizes;
   map<std::string, map<std::string, cl_uint>> cmSizes;
   map<std::string, map<std::string, cl_uint>> lmSizes;
   set<std::string> kernelNames;
+  map<std::string, map<std::string, double>> execTime;
+  set<std::string> kernelNamesExecTime;
 };
 
 /**
@@ -64,8 +67,8 @@ class IntegrationTest : public SDKSample
     vector<cl::Platform> platforms;    /**< vector of platforms */
 
     cl::CommandQueue commandQueue;          /**< command queue */
-
-    memStatistics memStats;                 /**<Storage for memory stats*/
+    
+    kernelStatistics kernelStats;                 /**<Storage for memory stats*/
     cl_double setupTime;                    /**< time taken to setup OpenCL resources and building kernel */
     cl_double kernelTime;                   /**< time taken to run kernel and read result back */
     int iterations;                         /**< Number of iterations for kernel execution */

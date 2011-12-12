@@ -80,7 +80,6 @@ int gpu_iz_ps_step
   /*Iterations*/
   /*TODO: to avoid warp divegence and keep adaptive error tolerance control
     a warp pipelined architecture might be implemented.*/
-#pragma unroll 1
   for(p=0;p<(UPDATE_NEURONS_PS_ORDER_LIMIT-1);p++)
   {
     /*
@@ -119,7 +118,6 @@ int gpu_iz_ps_step
     else
     {
       vchi = MUL(YP1(0),YP2(p)) + MUL(YP2(0),YP1(p));
-#pragma unroll 1
       for(i=1; i < p; i++){vchi += MUL(YP1(i),YP2(p-i));}
     
       YP1(p+1) = MUL( CONST_CO(cm_coefficients,0,p), (vchi - u + MUL(E_ampa, g_ampa) + 

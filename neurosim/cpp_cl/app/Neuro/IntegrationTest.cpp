@@ -318,7 +318,7 @@ IntegrationTest::allocateHostData()
   REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSynapsePointer);
   
   /*init synaptic pointer*/
-  double synapseSizeDeviationRatio = 0.5;
+  double synapseSizeDeviationRatio = 0.7;
   dataSynapsePointer[0] = 0;
   for(cl_uint i = 1; i < EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE; i++)
   {
@@ -2910,8 +2910,8 @@ IntegrationTest::setupCL()
       
       for
       (
-        kernel_name = memStats.kernelNames.begin();
-        kernel_name != memStats.kernelNames.end(); 
+        kernel_name = kernelStats.kernelNames.begin();
+        kernel_name != kernelStats.kernelNames.end(); 
         ++kernel_name
       ){
         map<std::string, cl_uint>::iterator m;
@@ -2920,7 +2920,7 @@ IntegrationTest::setupCL()
 
         /*Validate GM allocations*/
         print ? std::cout << "  Global Memory (global scope):" << std::endl, true : false;
-        map<std::string, cl_uint> gmSizes = memStats.gmSizes[*kernel_name];
+        map<std::string, cl_uint> gmSizes = kernelStats.gmSizes[*kernel_name];
         cl_ulong gmAllSizeBytes = 0;
         for
         (
@@ -2959,7 +2959,7 @@ IntegrationTest::setupCL()
         
         /*Validate CM allocations*/
         print ? std::cout << "  Constant Memory (global scope):" << std::endl, true : false;
-        map<std::string, cl_uint> cmSizes = memStats.cmSizes[*kernel_name];
+        map<std::string, cl_uint> cmSizes = kernelStats.cmSizes[*kernel_name];
         cl_ulong cmAllSizeBytes = 0;
         for
         (
@@ -2990,7 +2990,7 @@ IntegrationTest::setupCL()
         
         /*Validate LM allocations*/
         print ? std::cout << "  Local Memory (WG scope):" << std::endl, true : false;
-        map<std::string, cl_uint> lmSizes = memStats.lmSizes[*kernel_name];
+        map<std::string, cl_uint> lmSizes = kernelStats.lmSizes[*kernel_name];
         cl_ulong lmAllSizeBytes = 0;
         for
         (
@@ -3282,8 +3282,12 @@ IntegrationTest::setupCL()
       kernelUpdateNeuronsV00,
       UPDATE_NEURONS_KERNEL_FILE_NAME,
       UPDATE_NEURONS_KERNEL_NAME,
+#if COMPILER_FLAGS_NO_OPTIMIZE_ENABLE
       "-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",
-      //"-D UPDATE_NEURONS_DEVICE_V00 -cl-opt-disable",
+#else
+      "-D UPDATE_NEURONS_DEVICE_V00 -cl-denorms-are-zero -cl-mad-enable -cl-no-signed-zeros "
+      "-cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math",
+#endif
       blockSizeX_kernelUpdateNeuronsV00,
       blockSizeY_kernelUpdateNeuronsV00
     );
@@ -3717,7 +3721,7 @@ IntegrationTest::runCLKernels()
 #endif
 
   bool verified = true;
-#if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0
+#if (PROFILING_MODE == 1 || PROFILING_MODE == 2) && (START_PROFILING_AT_STEP > 0)
   double startAppTime = 0, endAppTime = 0;
 #endif
 
@@ -3816,12 +3820,27 @@ IntegrationTest::runCLKernels()
       dataSynapsePointer);
 #endif
     SET_KERNEL_ARG(kernelExpandEvents, expandEventsTimeStep, argNumExpandEvents);
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelExpandEvents, cl::NullRange, 
       globalThreadsExpandEvents, localThreadsExpandEvents, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelExpandEvents, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataExpandEventsDebugHostBuffer, 
       dataExpandEventsDebugHostSizeBytes, dataExpandEventsDebugHost);
@@ -3888,13 +3907,27 @@ IntegrationTest::runCLKernels()
     }
 #endif
     SET_KERNEL_ARG(kernelScanHistogramV00, currentTimeStep, argNumScan00);
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelScanHistogramV00, cl::NullRange, 
-      globalThreadsScanV00,
-      localThreadsScanV00, NULL, &ndrEvt);
+      globalThreadsScanV00, localThreadsScanV00, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelScanHistogramV00, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if (SCAN_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
       dataScanDebugHost);
@@ -3972,12 +4005,27 @@ IntegrationTest::runCLKernels()
 #endif
 #endif
     SET_KERNEL_ARG(kernelGroupEventsV00, currentTimeStep, argNumGrupEventsV00);
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV00, cl::NullRange, 
       globalThreadsGroupEventsV00, localThreadsGroupEventsV00, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelGroupEventsV00, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
@@ -4044,12 +4092,27 @@ IntegrationTest::runCLKernels()
     SET_KERNEL_ARG(kernelScanHistogramV01, dataHistogramGroupEventsTikBuffer, argNumScan01);
     /*TODO: get rid of unnecessary argument with preprocessor*/
     SET_KERNEL_ARG(kernelScanHistogramV01, 0, argNumScan01+1);
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelScanHistogramV01, cl::NullRange, 
       globalThreadsScanV01, localThreadsScanV01, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelScanHistogramV01, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if (SCAN_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_FALSE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
       dataScanDebugHost);
@@ -4118,12 +4181,27 @@ IntegrationTest::runCLKernels()
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV01--;
 #endif
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV01, cl::NullRange, 
       globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelGroupEventsV01, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
@@ -4214,12 +4292,27 @@ IntegrationTest::runCLKernels()
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV02--;
 #endif
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV02, cl::NullRange, 
       globalThreadsGroupEventsV02, localThreadsGroupEventsV02, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelGroupEventsV02, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
@@ -4298,12 +4391,27 @@ IntegrationTest::runCLKernels()
     SET_KERNEL_ARG(kernelScanHistogramV01, dataHistogramGroupEventsTikBuffer, argNumScan01);
     /*TODO: get rid of unnecessary argument with preprocessor*/
     SET_KERNEL_ARG(kernelScanHistogramV01, 0, argNumScan01+1);
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelScanHistogramV01, cl::NullRange, 
       globalThreadsScanV01, localThreadsScanV01, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelScanHistogramV01, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if (SCAN_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_FALSE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
       dataScanDebugHost);
@@ -4373,12 +4481,27 @@ IntegrationTest::runCLKernels()
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV01--;
 #endif
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV01, cl::NullRange, 
       globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelGroupEventsV01, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
@@ -4470,12 +4593,27 @@ IntegrationTest::runCLKernels()
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV03--;
 #endif
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV03, cl::NullRange, 
       globalThreadsGroupEventsV03, localThreadsGroupEventsV03, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelGroupEventsV03, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
@@ -4553,19 +4691,49 @@ IntegrationTest::runCLKernels()
     SET_KERNEL_ARG(kernelMakeEventPtrs, dataHistogramGroupEventsTokBuffer, argNumMakeEventPtrs);
     SET_KERNEL_ARG(kernelMakeEventPtrs, dataGroupEventsTikBuffer, argNumMakeEventPtrs+1);
     SET_KERNEL_ARG(kernelMakeEventPtrs, dataMakeEventPtrsStructBuffer, argNumMakeEventPtrs+2); /*TODO: instead of a new buffer it could be a reuse*/
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelMakeEventPtrs, cl::NullRange, 
       globalThreadsMakeEventPtrs, localThreadsMakeEventPtrs, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelMakeEventPtrs, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelGlueEventPtrs, cl::NullRange, 
       globalThreadsGlueEventPtrs, localThreadsGlueEventPtrs, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelGlueEventPtrs, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 #endif
 #if (MAKE_EVENT_PTRS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsDebugHostBuffer, 
@@ -4674,12 +4842,27 @@ IntegrationTest::runCLKernels()
 #endif
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataGroupEventsTikBuffer, argNumUpdateNeuronsV00);
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, currentTimeStep, argNumUpdateNeuronsV00+1);
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
     status = commandQueue.enqueueNDRangeKernel(kernelUpdateNeuronsV00, cl::NullRange, 
       globalThreadsUpdateNeuronsV00, localThreadsUpdateNeuronsV00, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelUpdateNeuronsV00, (endAppTime-startAppTime), 1.0)
+    }
+#endif
 /*Profiling: initiating host equivalent*/
 #if (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0)
 #if (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 &&\
@@ -4917,8 +5100,30 @@ IntegrationTest::runCLKernels()
       << appTimeSec/profiledSteps << " sec/step" << std::endl;
   }
 #endif
+#elif PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+  set<std::string>::iterator kernel_name;
+  std::cout << "Kernel execution time profile" << std::endl;
+  std::cout << "Kernel Name\t\t\tTotal Time (s)\tCount\tAverage Time (ms)" << std::endl 
+    << std::endl;
+  std::cout << std::fixed;
+  double totalExecTime = 0;
+  for
+  (
+    kernel_name = kernelStats.kernelNamesExecTime.begin();
+    kernel_name != kernelStats.kernelNamesExecTime.end(); 
+    ++kernel_name
+  ){
+    if(kernelStats.execTime.find(*kernel_name) == kernelStats.execTime.end()){continue;}
+    map<std::string, double> execTime = kernelStats.execTime[*kernel_name];
+    std::cout << *kernel_name << "\t\t" << std::setprecision(3) << execTime["Time"] << "\t\t" 
+      << (cl_uint)execTime["Count"] << "\t" << (1000*execTime["Time"]/execTime["Count"]) 
+      << std::endl;
+    totalExecTime += execTime["Time"];
+  }
+  std::cout << "Total time: " << totalExecTime << std::endl;
+  std::cout.setf(std::ios::scientific,std::ios::floatfield);
 #endif
-  
+
   if(!verified)  {return SDK_FAILURE;}
 
 #if (ERROR_TRY_CATCH_ENABLE)
@@ -7492,7 +7697,7 @@ IntegrationTest::verifyKernelUpdateNeurons
 #endif
   
   if((synapsePointer != NULL) && (synapseTargets != NULL) && (synapseDelays != NULL) &&
-    (synapseWeights != NULL) && (pointerStruct != NULL) && (sortedEvents != NULL))
+    (synapseWeights != NULL))
   {
     if(spikePackets != NULL)
     {
@@ -7541,6 +7746,7 @@ IntegrationTest::verifyKernelUpdateNeurons
     );
     if(result != SDK_SUCCESS){return result;}
     
+#if NETWORK_VERIFY_ENABLE
     if((pointerStruct != NULL) && (sortedEvents != NULL) && FLIXIBLE_DELAYS_ENABLE)
     {
       result = verifyEvents
@@ -7556,6 +7762,7 @@ IntegrationTest::verifyKernelUpdateNeurons
       );
       if(result != SDK_SUCCESS){return result;}
     }
+#endif
   }
   else
   {
@@ -7590,6 +7797,7 @@ IntegrationTest::verifyKernelUpdateNeurons
 
   if(result != SDK_SUCCESS && !ignoreSolverFailuresHost){return result;}
 
+#if NETWORK_VERIFY_ENABLE
   for(cl_uint i=0; i<UPDATE_NEURONS_TOTAL_NEURONS; i++)
   {
     DATA_TYPE underTestType1, reference;
@@ -7705,6 +7913,8 @@ IntegrationTest::verifyKernelUpdateNeurons
     free(spikeCheck);
   }
 #endif
+#endif
+
   return result;
 }
 /**************************************************************************************************/
