@@ -329,7 +329,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define SIMULATION_MODE                                       3
 
 #if SIMULATION_MODE == 0                             /*Simulation mode: verification and unit test*/
-//#define ENABLE_MASK                                           BIN_16(1000,0000,0000,0000)
+//#define ENABLE_MASK                                           BIN_16(0000,0000,1000,0000)
 #define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
 /*Functional verification of each kernel*/
 #define KERNEL_VERIFY_ENABLE                                  1
@@ -439,7 +439,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define TOTAL_NEURON_BITS                                     17
 #define WF_SIZE_WI                                            64
 #define DATA_TYPE                                             float
-/*Size of spike packet buffer (spikes)*/
+/*Size of spike packet buffer (spikes) per WF*/
 #define SPIKE_DATA_BUFFER_SIZE                                127
 /*Size of event data buffer*/
 #define EVENT_DATA_BUFFER_SIZE                                (16*1024)
@@ -981,7 +981,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   /*Verification*/
   #define UPDATE_NEURONS_VERIFY_ENABLE                            KERNEL_VERIFY_ENABLE
   /*Debugging*/
-  #define UPDATE_NEURONS_DEBUG_ENABLE                             (0)&DEBUG_MASK
+  #define UPDATE_NEURONS_DEBUG_ENABLE                             (1)&DEBUG_MASK
   #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (UPDATE_NEURONS_TOTAL_NEURONS*UPDATE_NEURONS_MODEL_VARIABLES)
   /*Error tracking and codes*/
   /*CONTROL: enable error logging at kernel level*/
@@ -1019,7 +1019,8 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE                 2
   #define UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS               2
   #define UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS                  (UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + \
-                                                                  UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE * UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
+                                                                  UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE * \
+                                                                  UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
   /*Number of constant coefficient types*/
   #define UPDATE_NEURONS_CONST_COEFFICIENTS                       4
   /*Accessor to constant coefficients*/

@@ -1924,7 +1924,7 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
   if(resetEvents)
   {
     memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
-    double gabaRatio = 3.0*(!(step%10));
+    double gabaRatio = 5.0*(!(step%3));
     result = initializeSortedEvents
     (
       2,
@@ -4995,7 +4995,7 @@ IntegrationTest::runCLKernels()
 #else
     ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
       dataSpikePackets);
-    if(verifyKernelUpdateNeurons(currentTimeStep, NULL, NULL, NULL, NULL, NULL, NULL) != 
+    if(verifyKernelUpdateNeurons(currentTimeStep, NULL, NULL, NULL, NULL, NULL, NULL, NULL) != 
       SDK_SUCCESS)
     {
       std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
@@ -7272,7 +7272,7 @@ IntegrationTest::stepIzPs
 	if(diverged)
   {
 #if PRINT_stepIzPs
-    std::cerr << "ERROR, stepIzPs, PS step diverged for neuron " << nrn_ind << std::endl;
+    std::cerr << "WARNING, stepIzPs, PS step diverged for neuron " << nrn_ind << std::endl;
 #endif
     result = SDK_FAILURE;
   }
@@ -7280,7 +7280,7 @@ IntegrationTest::stepIzPs
 	if(ps_order >= ps_order_limit)
   {
 #if PRINT_stepIzPs
-    std::cerr << "ERROR, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
+    std::cerr << "WARNING, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
 #endif
     result = SDK_FAILURE;
   }
@@ -7322,7 +7322,7 @@ IntegrationTest::stepIzPs
     if(i==nr_order_limit)
     {
 #if PRINT_stepIzPs
-      std::cerr << "ERROR, stepIzPs, failed NR tolerance for neuron ID: " << nrn_ind 
+      std::cerr << "WARNING, stepIzPs, failed NR tolerance for neuron ID: " << nrn_ind 
         << std::endl;
 #endif
       result = SDK_FAILURE;
@@ -7332,7 +7332,7 @@ IntegrationTest::stepIzPs
     {
       dt_part=dt_full/2;
 #if PRINT_stepIzPs
-      std::cerr << "ERROR, stepIzPs, detected NR divergence for neuron ID: " << nrn_ind 
+      std::cerr << "WARNING, stepIzPs, detected NR divergence for neuron ID: " << nrn_ind 
         << std::endl;
 #endif
       result = SDK_FAILURE;
@@ -7390,7 +7390,7 @@ IntegrationTest::stepIzPs
     if(diverged)
     {
 #if PRINT_stepIzPs
-      std::cerr << "ERROR, stepIzPs, PS step diverged for neuron " << nrn_ind << std::endl;
+      std::cerr << "WARNING, stepIzPs, PS step diverged for neuron " << nrn_ind << std::endl;
 #endif
       result = SDK_FAILURE;
     }
@@ -7398,7 +7398,7 @@ IntegrationTest::stepIzPs
     if(ps_order >= ps_order_limit)
     {
 #if PRINT_stepIzPs
-      std::cerr << "ERROR, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
+      std::cerr << "WARNING, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
 #endif
       result = SDK_FAILURE;
     }
@@ -7692,6 +7692,10 @@ IntegrationTest::verifyKernelUpdateNeurons
        ((UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK&dataUpdateNeuronsError[0]) != 0))
     ){
       return SDK_FAILURE;
+    }
+    else
+    {
+      std::cout << "verifyKernelUpdateNeurons: ignoring solver failures\n";
     }
   }
 #endif
