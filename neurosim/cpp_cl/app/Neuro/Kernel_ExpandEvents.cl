@@ -55,7 +55,7 @@ void expand_events
 #endif
 
   /*Load a batch of spike events produced in update phase*/
-  /*TODO: protect from overflow*/
+#if EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS > EXPAND_EVENTS_WG_SIZE_WI
   for
   (
     uint i = wi_id; 
@@ -64,15 +64,29 @@ void expand_events
   ){
     lmSpikes[i] = gm_spikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS * wg_id + i];
   }
-  
+#else
+  if(wi_id < EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS)
+  {
+    lmSpikes[wi_id] = gm_spikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS * wg_id + wi_id];
+  }
+#endif
+
   /*Load event counter from each time slot except the previous one, which has to be reset*/
-  /*TODO: protect from overflow*/
+#if EXPAND_EVENTS_TIME_SLOTS > EXPAND_EVENTS_WG_SIZE_WI
   for(uint i = wi_id; i < (EXPAND_EVENTS_TIME_SLOTS); i += EXPAND_EVENTS_WG_SIZE_WI)
   {
     lmTimeSlotCounters[i] = 0;
     if(i != ((EXPAND_EVENTS_TIME_SLOTS + (step-1))%EXPAND_EVENTS_TIME_SLOTS))
       lmTimeSlotCounters[i] = gm_event_counts[EXPAND_EVENTS_TIME_SLOTS * wg_id + i];
   }
+#else
+  if(wi_id < EXPAND_EVENTS_TIME_SLOTS)
+  {
+    lmTimeSlotCounters[wi_id] = 0;
+    if(wi_id != ((EXPAND_EVENTS_TIME_SLOTS + (step-1))%EXPAND_EVENTS_TIME_SLOTS))
+      lmTimeSlotCounters[wi_id] = gm_event_counts[EXPAND_EVENTS_TIME_SLOTS * wg_id + wi_id];
+  }
+#endif
 
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
   /*Load histogram totals for all time slots.*/
@@ -128,7 +142,7 @@ void expand_events
   {
     uint  spiked_nrn = lmSpikes[EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + 
       EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * j];
-    
+
     /*Get synapse pointer and synapse count*/
     if(tgt_inwrp_id < 2)
     {
@@ -202,7 +216,7 @@ void expand_events
   barrier(CLK_LOCAL_MEM_FENCE);
 
   /*Store event counter to each time slot*/
-  /*TODO: protect from overflow*/
+#if EXPAND_EVENTS_TIME_SLOTS > EXPAND_EVENTS_WG_SIZE_WI
   for
   (
     uint i = wi_id; 
@@ -211,6 +225,12 @@ void expand_events
   ){
     gm_event_counts[EXPAND_EVENTS_TIME_SLOTS*wg_id + i] = lmTimeSlotCounters[i];
   }
+#else
+  if(wi_id < EXPAND_EVENTS_TIME_SLOTS)
+  {
+    gm_event_counts[EXPAND_EVENTS_TIME_SLOTS*wg_id + wi_id] = lmTimeSlotCounters[wi_id];
+  }
+#endif
 
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
 /*Store histogram totals for all time slots.*/

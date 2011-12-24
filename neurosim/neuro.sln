@@ -8,24 +8,89 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Neuro", "Neuro", "{394E5F36
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IntegrationTest", "cpp_cl\app\Neuro\IntegrationTest.vcxproj", "{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SDKUtil", "SDKUtil", "{8C3F942D-B735-402F-96F8-1DFD935BF30E}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "util", "util", "{2BBD7067-383E-4644-9236-D20AFE79A90C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SDKUtil", "SDKUtil", "{2BEAE3BB-E0CC-4D4E-933B-98875EF60095}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SDKUtil", "cpp_cl\util\SDKUtil\SDKUtil.vcxproj", "{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "common", "common", "{6BFDFF87-AD60-4DF0-B7A2-5CA3F11C9B76}"
 	ProjectSection(SolutionItems) = preProject
-		SDKUtil\SDKApplication.cpp = SDKUtil\SDKApplication.cpp
-		SDKUtil\SDKBitMap.cpp = SDKUtil\SDKBitMap.cpp
-		SDKUtil\SDKCommandArgs.cpp = SDKUtil\SDKCommandArgs.cpp
-		SDKUtil\SDKCommon.cpp = SDKUtil\SDKCommon.cpp
-		SDKUtil\SDKFile.cpp = SDKUtil\SDKFile.cpp
-		SDKUtil\SDKThread.cpp = SDKUtil\SDKThread.cpp
+		common\openclsdk_debug.vsprops = common\openclsdk_debug.vsprops
+		common\openclsdk_debug_x64.vsprops = common\openclsdk_debug_x64.vsprops
+		common\openclsdk_debug_x64_VS10.props = common\openclsdk_debug_x64_VS10.props
+		common\openclsdk_debugVS10.props = common\openclsdk_debugVS10.props
+		common\openclsdk_no_sdkutils_debug.vsprops = common\openclsdk_no_sdkutils_debug.vsprops
+		common\openclsdk_no_sdkutils_debug_x64.vsprops = common\openclsdk_no_sdkutils_debug_x64.vsprops
+		common\openclsdk_no_sdkutils_debug_x64_VS10.props = common\openclsdk_no_sdkutils_debug_x64_VS10.props
+		common\openclsdk_no_sdkutils_debugVS10.props = common\openclsdk_no_sdkutils_debugVS10.props
+		common\openclsdk_no_sdkutils_release.vsprops = common\openclsdk_no_sdkutils_release.vsprops
+		common\openclsdk_no_sdkutils_release_x64.vsprops = common\openclsdk_no_sdkutils_release_x64.vsprops
+		common\openclsdk_no_sdkutils_release_x64_VS10.props = common\openclsdk_no_sdkutils_release_x64_VS10.props
+		common\openclsdk_no_sdkutils_releaseVS10.props = common\openclsdk_no_sdkutils_releaseVS10.props
+		common\openclsdk_release.vsprops = common\openclsdk_release.vsprops
+		common\openclsdk_release_x64.vsprops = common\openclsdk_release_x64.vsprops
+		common\openclsdk_release_x64_VS10.props = common\openclsdk_release_x64_VS10.props
+		common\openclsdk_releaseVS10.props = common\openclsdk_releaseVS10.props
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{81F78FC6-BFD5-4C9B-9742-20CA77ADCABC}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "log", "log", "{59423FDD-E8DB-4392-B559-2B5081B64658}"
 	ProjectSection(SolutionItems) = preProject
-		SDKUtil\include\SDKApplication.hpp = SDKUtil\include\SDKApplication.hpp
-		SDKUtil\include\SDKBitMap.hpp = SDKUtil\include\SDKBitMap.hpp
-		SDKUtil\include\SDKCommandArgs.hpp = SDKUtil\include\SDKCommandArgs.hpp
-		SDKUtil\include\SDKCommon.hpp = SDKUtil\include\SDKCommon.hpp
-		SDKUtil\include\SDKFile.hpp = SDKUtil\include\SDKFile.hpp
-		SDKUtil\include\SDKThread.hpp = SDKUtil\include\SDKThread.hpp
+		cpp_cl\app\Neuro\log\log.txt = cpp_cl\app\Neuro\log\log.txt
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{47254E69-2AE8-46FC-936D-C54E70EB5D2F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GL", "GL", "{D069B49B-CC8C-433F-9A5A-F76746912BD4}"
+	ProjectSection(SolutionItems) = preProject
+		include\GL\glew.h = include\GL\glew.h
+		include\GL\glext.h = include\GL\glext.h
+		include\GL\GLU.h = include\GL\GLU.h
+		include\GL\glut.h = include\GL\glut.h
+		include\GL\glxew.h = include\GL\glxew.h
+		include\GL\wglew.h = include\GL\wglew.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SDKUtil", "SDKUtil", "{DA1FD849-A82C-4E4C-B24A-A70A638A732A}"
+	ProjectSection(SolutionItems) = preProject
+		include\SDKUtil\SDKApplication.hpp = include\SDKUtil\SDKApplication.hpp
+		include\SDKUtil\SDKBitMap.hpp = include\SDKUtil\SDKBitMap.hpp
+		include\SDKUtil\SDKCommandArgs.hpp = include\SDKUtil\SDKCommandArgs.hpp
+		include\SDKUtil\SDKCommon.hpp = include\SDKUtil\SDKCommon.hpp
+		include\SDKUtil\SDKFile.hpp = include\SDKUtil\SDKFile.hpp
+		include\SDKUtil\SDKThread.hpp = include\SDKUtil\SDKThread.hpp
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "lib", "lib", "{F4FF45D1-E8B0-48A3-8D13-A3B0DF7BE20F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "x86", "x86", "{646030FA-E37C-4099-87C9-50FF535A40BE}"
+	ProjectSection(SolutionItems) = preProject
+		lib\x86\GLEW32.lib = lib\x86\GLEW32.lib
+		lib\x86\glut32.lib = lib\x86\glut32.lib
+		lib\x86\libglew32.dll.a = lib\x86\libglew32.dll.a
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "x86_64", "x86_64", "{6AB08231-FDE2-4DB7-ACB1-9642991ED998}"
+	ProjectSection(SolutionItems) = preProject
+		lib\x86_64\GLEW64.lib = lib\x86_64\GLEW64.lib
+		lib\x86_64\glut64.lib = lib\x86_64\glut64.lib
+		lib\x86_64\libglew64.dll.a = lib\x86_64\libglew64.dll.a
+		lib\x86_64\libglut64.a = lib\x86_64\libglut64.a
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SDKUtil", "SDKUtil", "{897963BC-6A3D-4266-B9FF-E592EEA6FFB3}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SyntaxHighlighting", "SyntaxHighlighting", "{5B3323B1-3349-45D6-904B-2035C20B26B1}"
+	ProjectSection(SolutionItems) = preProject
+		SyntaxHighlighting\c.vim = SyntaxHighlighting\c.vim
+		SyntaxHighlighting\opencl.lang = SyntaxHighlighting\opencl.lang
+		SyntaxHighlighting\ReadMe.txt = SyntaxHighlighting\ReadMe.txt
+		SyntaxHighlighting\usertype.dat = SyntaxHighlighting\usertype.dat
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "doc", "doc", "{04013E7A-8B00-45B1-8131-26D997D302F4}"
+	ProjectSection(SolutionItems) = preProject
+		doc\readme.txt = doc\readme.txt
 	EndProjectSection
 EndProject
 Global
@@ -48,14 +113,30 @@ Global
 		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Release|Win32.Build.0 = Release|Win32
 		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Release|x64.ActiveCfg = Release|x64
 		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Release|x64.Build.0 = Release|x64
+		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Debug|Win32.ActiveCfg = Debug|Win32
+		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Debug|Win32.Build.0 = Debug|Win32
+		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Debug|x64.ActiveCfg = Debug|x64
+		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Debug|x64.Build.0 = Debug|x64
+		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Release|Win32.ActiveCfg = Release|Win32
+		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Release|Win32.Build.0 = Release|Win32
+		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Release|x64.ActiveCfg = Release|x64
+		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21} = {BD575C4A-7AA8-4545-A610-FB2F5D1F7B04}
+		{2BBD7067-383E-4644-9236-D20AFE79A90C} = {BD575C4A-7AA8-4545-A610-FB2F5D1F7B04}
 		{394E5F36-4F5F-4DDA-89C4-FF19323D3B78} = {BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21}
 		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C} = {394E5F36-4F5F-4DDA-89C4-FF19323D3B78}
-		{81F78FC6-BFD5-4C9B-9742-20CA77ADCABC} = {8C3F942D-B735-402F-96F8-1DFD935BF30E}
+		{59423FDD-E8DB-4392-B559-2B5081B64658} = {394E5F36-4F5F-4DDA-89C4-FF19323D3B78}
+		{2BEAE3BB-E0CC-4D4E-933B-98875EF60095} = {2BBD7067-383E-4644-9236-D20AFE79A90C}
+		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564} = {2BEAE3BB-E0CC-4D4E-933B-98875EF60095}
+		{D069B49B-CC8C-433F-9A5A-F76746912BD4} = {47254E69-2AE8-46FC-936D-C54E70EB5D2F}
+		{DA1FD849-A82C-4E4C-B24A-A70A638A732A} = {47254E69-2AE8-46FC-936D-C54E70EB5D2F}
+		{646030FA-E37C-4099-87C9-50FF535A40BE} = {F4FF45D1-E8B0-48A3-8D13-A3B0DF7BE20F}
+		{6AB08231-FDE2-4DB7-ACB1-9642991ED998} = {F4FF45D1-E8B0-48A3-8D13-A3B0DF7BE20F}
+		{897963BC-6A3D-4266-B9FF-E592EEA6FFB3} = {F4FF45D1-E8B0-48A3-8D13-A3B0DF7BE20F}
 	EndGlobalSection
 EndGlobal

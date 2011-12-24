@@ -1,0 +1,1 @@
+-fbin-source -fbin-llvmir -fbin-amdil -fbin-exe

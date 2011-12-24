@@ -295,17 +295,25 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   
 #define GET_RANDOM_INT(setValue, max, minPercent, maxPercent)\
   {\
-    if(minPercent >= maxPercent){setValue = -1;}\
-    if(minPercent >= 100.0){setValue = -1;}\
-    if(maxPercent > 100.0){setValue = -1;}\
+    if(minPercent > maxPercent){setValue = -1;}\
+    if((minPercent > 100.0) || (maxPercent > 100.0)){setValue = -1;}\
+    if((minPercent < 0.0) || (maxPercent < 0.0)){setValue = -1;}\
     if(setValue != -1)\
     {\
-      setValue = cl_uint(((double)(max))*((minPercent/100.0) + \
-        abs(((maxPercent-minPercent)/100.0)*((double)rand()/((double)RAND_MAX)))));\
+      if(minPercent == maxPercent){setValue = cl_uint(((double)max)*maxPercent);}\
+      else\
+      {\
+        setValue = cl_uint(((double)(max))*((minPercent/100.0) + \
+          abs(((maxPercent-minPercent)/100.0)*((double)rand()/((double)RAND_MAX)))));\
+      }\
     }\
   }
-
   
+/*Define OpenCL 1.2 consants*/
+#if !defined (CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT)
+  #define CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT                 (1 << 7)
+#endif
+
 /*Logging names and macros*/
 #define LOG_MODEL_VARIABLES_NEURON_ID                         1
 #define LOG_SIMULATION_FILE_NAME                              "c:/Users/dima/Documents/dev_neuro/samples/opencl/cpp_cl/app/Neuro/log/simulation_log.txt"
@@ -329,7 +337,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define SIMULATION_MODE                                       3
 
 #if SIMULATION_MODE == 0                             /*Simulation mode: verification and unit test*/
-//#define ENABLE_MASK                                           BIN_16(0000,0000,1000,0000)
+//#define ENABLE_MASK                                           BIN_16(1000,0000,0000,0000)
 #define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
 /*Functional verification of each kernel*/
 #define KERNEL_VERIFY_ENABLE                                  1
@@ -505,7 +513,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT               17
   /*Debugging*/
   #define EXPAND_EVENTS_DEBUG_ENABLE                          (0)&DEBUG_MASK
-  #define EXPAND_EVENTS_DEBUG_BUFFER_SIZE_WORDS               (EXPAND_EVENTS_TIME_SLOTS*EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG)//(1024*1024)
+  #define EXPAND_EVENTS_DEBUG_BUFFER_SIZE_WORDS               (EXPAND_EVENTS_WG_SIZE_WI*EXPAND_EVENTS_GRID_SIZE_WG)//(1024*1024)
   /*Error tracking and codes*/
   #define EXPAND_EVENTS_ERROR_TRY_CATCH_ENABLE                ERROR_TRY_CATCH_ENABLE /*Options: 0, 1*/
   #define EXPAND_EVENTS_ERROR_TRACK_ENABLE                    ERROR_TRACK_ENABLE
@@ -981,7 +989,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   /*Verification*/
   #define UPDATE_NEURONS_VERIFY_ENABLE                            KERNEL_VERIFY_ENABLE
   /*Debugging*/
-  #define UPDATE_NEURONS_DEBUG_ENABLE                             (1)&DEBUG_MASK
+  #define UPDATE_NEURONS_DEBUG_ENABLE                             (0)&DEBUG_MASK
   #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (UPDATE_NEURONS_TOTAL_NEURONS*UPDATE_NEURONS_MODEL_VARIABLES)
   /*Error tracking and codes*/
   /*CONTROL: enable error logging at kernel level*/
