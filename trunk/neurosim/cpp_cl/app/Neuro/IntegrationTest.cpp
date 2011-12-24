@@ -571,7 +571,8 @@ IntegrationTest::initializeExpandEventsData()
   memset(dataHistogram, 0, dataHistogramSizeBytes);
 #endif
 
-  result = initializeSpikeData(0.0, 100.0);
+  result = initializeSpikeData(0.0, 10.0);
+
   if(result != SDK_SUCCESS){return result;}
   
   SET_RANDOM_SEED(srandSeed);
@@ -3778,6 +3779,33 @@ IntegrationTest::runCLKernels()
 #if EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramBuffer, dataHistogramSizeBytes, dataHistogram);
 #endif
+    }
+    else
+    {
+      int result = SDK_SUCCESS;
+      
+      if(expandEventsTimeStep == 1)
+      {
+        result = initializeSpikeData(0.0, 0.0);
+      }
+      else if(expandEventsTimeStep == EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT - 1)
+      {
+        result = initializeSpikeData(100.0, 100.0);
+      }
+      else
+      {
+        result = initializeSpikeData(0.0, 
+          (double)(100*expandEventsTimeStep/EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT));
+      }
+      
+      if(result != SDK_SUCCESS)
+      {
+        std::cout << "Failed initializeSpikeData" << std::endl; 
+        verified = false; 
+        break;
+      }
+      ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
+        dataSpikePackets);
     }
 /*End unit test initialization*/
 #elif OVERWRITE_SPIKES_UNTILL_STEP > 0
