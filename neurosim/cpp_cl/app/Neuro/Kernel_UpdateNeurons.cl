@@ -25,25 +25,23 @@
 #undef GLOBAL_TOTAL_WFs
 #define GLOBAL_TOTAL_WFs            (UPDATE_NEURONS_GRID_SIZE_WG*UPDATE_NEURONS_WG_SIZE_WF)
 
-#define UPDT_RUNTM_SZ_0                   8
+#define UPDT_RUNTM_SZ_0                   4
 #define UPDT_RUNTM_SZ_1                   (UPDATE_NEURONS_PS_ORDER_LIMIT+1)
 #define UPDT_RUNTM_SZ                     (UPDT_RUNTM_SZ_0+UPDT_RUNTM_SZ_1*2)
 #define V_RT                              cache[0]
 #define U_RT                              cache[1]
 #define GA_RT                             cache[2]
 #define GG_RT                             cache[3]
-#define DT_RT                             cache[4]
-#define UP_RT                             cache[5]
-#define GAP_RT                            cache[6]
-#define GGP_RT                            cache[7]
 #define YP1(i)                            cache[UPDT_RUNTM_SZ_0+i]
 #define YP2(i)                            cache[UPDT_RUNTM_SZ_0+UPDT_RUNTM_SZ_1+i]
+
+#define UPDATE_NEURONS_DT_1_0_OPTIMIZATION  0
 
 /*
   Parker-Sochacki integration step for IZ neuron with adaptive order error 
   tollerance test for model variables.
 */
-int gpu_iz_ps_step
+uint gpu_iz_ps_step
 (
 #if (UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD)
               DATA_TYPE divergence_threshold,
@@ -51,12 +49,11 @@ int gpu_iz_ps_step
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
   __global    uint      *gm_error_code,
 #endif
-  //__global    DATA_TYPE const* restrict cm_coefficients,
-  __constant  DATA_TYPE *cm_coefficients,
-              DATA_TYPE *cache,
 #if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
               DATA_TYPE I,
 #endif
+  __constant  DATA_TYPE *cm_coefficients, //__global    DATA_TYPE const* restrict cm_coefficients,
+              DATA_TYPE *cache,
               DATA_TYPE k,
               DATA_TYPE E_ampa,
               DATA_TYPE E_gaba,
@@ -65,9 +62,6 @@ int gpu_iz_ps_step
               DATA_TYPE b,
               DATA_TYPE dt
 ){
-  int i, p;
-  DATA_TYPE vchi, dt_pow;
-  
 #if (!UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE)
   DATA_TYPE tol = UPDATE_NEURONS_PS_TOLERANCE;
 #endif
@@ -76,15 +70,57 @@ int gpu_iz_ps_step
            tau_gaba_gpu = CONST_FP(cm_coefficients,5), 
            co;*/
   /*First term*/
+  DATA_TYPE vchi = MUL(YP1(0),YP2(0));
+  DATA_TYPE u      = U_RT;
+  DATA_TYPE g_ampa = GA_RT;
+  DATA_TYPE g_gaba = GG_RT;
+  
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
+  YP1(1) = MUL( CONST_CO(cm_coefficients,0,0), (vchi - u + MUL(E_ampa, g_ampa) + 
+    MUL(E_gaba, g_gaba) + I) );
+#else
+  YP1(1) = MUL( CONST_CO(cm_coefficients,0,0), (vchi - u + MUL(E_ampa, g_ampa) + 
+    MUL(E_gaba, g_gaba)) );
+#endif
+
+  u         = MUL( CONST_CO(cm_coefficients,1,0), (MUL( b, YP1(0) ) - u) );
+  g_ampa    = MUL( CONST_CO(cm_coefficients,2,0), g_ampa );
+  g_gaba    = MUL( CONST_CO(cm_coefficients,3,0), g_gaba );
+  YP2(1)    = MUL( k, YP1(1) ) - g_ampa - g_gaba;
+  DATA_TYPE dt_pow = dt;
+  
+  /*Update and test error tolerance on variable value change*/
+#if UPDATE_NEURONS_DT_1_0_OPTIMIZATION
+  if(dt == 1.0f)
+  {
+    V_RT  +=  YP1(1);
+    U_RT  +=  u;
+    GA_RT +=  g_ampa;
+    GG_RT +=  g_gaba;
+  }
+  else
+  {
+    V_RT  +=  MUL(YP1(1),dt_pow);
+    U_RT  +=  MUL(u,dt_pow);
+    GA_RT +=  MUL(g_ampa,dt_pow);
+    GG_RT +=  MUL(g_gaba,dt_pow);
+    dt_pow*=dt;
+  }
+#else
+  V_RT  +=  MUL(YP1(1),dt_pow);
+  U_RT  +=  MUL(u,dt_pow);
+  GA_RT +=  MUL(g_ampa,dt_pow);
+  GG_RT +=  MUL(g_gaba,dt_pow);
+  dt_pow*=dt;
+#endif
 
   /*Iterations*/
-  /*TODO: to avoid warp divegence and keep adaptive error tolerance control
-    a warp pipelined architecture might be implemented.*/
-  for(p=0;p<(UPDATE_NEURONS_PS_ORDER_LIMIT-1);p++)
+  uint p;
+  for(p=1;p<(UPDATE_NEURONS_PS_ORDER_LIMIT-1);p++)
   {
     /*
     vchi = MUL(YP1(0),YP2(p)) + MUL(YP2(p),YP1(p));
-    for(i = 1; i < p; i++){vchi+=MUL(YP1(i),YP2(p-i));}
+    for(uint i = 1; i < p; i++){vchi+=MUL(YP1(i),YP2(p-i));}
     co = E/((DATA_TYPE)(p+1));
     YP1(p+1) = co*(vchi - u + MUL(E_ampa,g_ampa) + MUL(E_gaba,g_gaba));
     co = a/((DATA_TYPE)(p+1));
@@ -95,34 +131,12 @@ int gpu_iz_ps_step
     g_gaba    = co*g_gaba;
     YP2(p+1) = MUL(k,YP1(p+1)) - g_ampa - g_gaba;
     */
-    if(dt != 1.0f)
-    {
-      dt_pow  = DT_RT;
-    }
-    
-    DATA_TYPE u      = UP_RT;
-    DATA_TYPE g_ampa = GAP_RT;
-    DATA_TYPE g_gaba = GGP_RT;
 
-    if(p==0)
-    {
-      vchi = MUL(YP1(0),YP2(0));
-#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
-      YP1(1) = MUL( CONST_CO(cm_coefficients,0,p), (vchi - u + MUL(E_ampa, g_ampa) + 
-        MUL(E_gaba, g_gaba) + I) );
-#else
-      YP1(1) = MUL( CONST_CO(cm_coefficients,0,p), (vchi - u + MUL(E_ampa, g_ampa) + 
-        MUL(E_gaba, g_gaba)) );
-#endif
-    }
-    else
-    {
-      vchi = MUL(YP1(0),YP2(p)) + MUL(YP2(0),YP1(p));
-      for(i=1; i < p; i++){vchi += MUL(YP1(i),YP2(p-i));}
-    
-      YP1(p+1) = MUL( CONST_CO(cm_coefficients,0,p), (vchi - u + MUL(E_ampa, g_ampa) + 
-        MUL(E_gaba, g_gaba)) );
-    }
+    DATA_TYPE vchi = MUL(YP1(0),YP2(p)) + MUL(YP2(0),YP1(p));
+    for(uint i=1; i < p; i++){vchi += MUL(YP1(i),YP2(p-i));}
+  
+    YP1(p+1) = MUL( CONST_CO(cm_coefficients,0,p), (vchi - u + MUL(E_ampa, g_ampa) + 
+      MUL(E_gaba, g_gaba)) );
   
     u         = MUL( CONST_CO(cm_coefficients,1,p), (MUL( b, YP1(p) ) - u) );
     g_ampa    = MUL( CONST_CO(cm_coefficients,2,p), g_ampa );
@@ -130,169 +144,69 @@ int gpu_iz_ps_step
     YP2(p+1) = MUL( k, YP1(p+1) ) - g_ampa - g_gaba;
 
     /*Update and test error tolerance on variable value change*/
+    DATA_TYPE v_old = V_RT;
+    DATA_TYPE u_old = U_RT;
+    DATA_TYPE ga_old = GA_RT;
+    DATA_TYPE gg_old = GG_RT;
+    
+#if UPDATE_NEURONS_DT_1_0_OPTIMIZATION
     if(dt == 1.0f)
     {
-      if(p>0)
-      {
-        DATA_TYPE val_1, val_2;
-        
-#if(UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE)
-        val_1 = V_RT;
-        val_2 = val_1;
-        val_2 += YP1(p+1);
-        V_RT = val_2;
-        if(val_2 - val_1)goto UPDATE_U_1;
-        
-        val_1 = U_RT;
-        val_2 = val_1;
-        val_2 += u;
-        U_RT = val_2;
-        if(val_2 - val_1)goto UPDATE_G_AMPA_1;
-        
-        val_1 = GA_RT;
-        val_2 = val_1;
-        val_2 += g_ampa;
-        GA_RT = val_2;
-        if(val_2 - val_1)goto UPDATE_G_GABA_1;
-        
-        val_1 = GG_RT;
-        val_2 = val_1;
-        val_2 += g_gaba;
-        GG_RT = val_2;
-        if(val_2 - val_1)goto UPDATE_RT;
-#else
-        val_1 = V_RT;
-        val_2 = val_1;
-        val_2 += YP1(p+1);
-        V_RT = val_2;
-        if(fabs(val_2 - val_1)>tol)goto UPDATE_U_1;
-        
-        val_1 = U_RT;
-        val_2 = val_1;
-        val_2 += u;
-        U_RT = val_2;
-        if(fabs(val_2 - val_1)>tol)goto UPDATE_G_AMPA_1;
-        
-        val_1 = GA_RT;
-        val_2 = val_1;
-        val_2 += g_ampa;
-        GA_RT = val_2;
-        if(fabs(val_2 - val_1)>tol)goto UPDATE_G_GABA_1;
-        
-        val_1 = GG_RT;
-        val_2 = val_1;
-        val_2 += g_gaba;
-        GG_RT = val_2;
-        if(fabs(val_2 - val_1)>tol)goto UPDATE_RT;
-#endif
-
-        break;
-        
-UPDATE_U_1:
-        U_RT += u;
-UPDATE_G_AMPA_1:
-        GA_RT += g_ampa;
-UPDATE_G_GABA_1:
-        GG_RT += g_gaba;
-      }
-      else
-      {
-        V_RT  +=  YP1(p+1);
-        U_RT  +=  u;
-        GA_RT +=  g_ampa;
-        GG_RT +=  g_gaba;
-      }
+      V_RT  +=  YP1(p+1);
+      U_RT  +=  u;
+      GA_RT +=  g_ampa;
+      GG_RT +=  g_gaba;
     }
     else
     {
-      DATA_TYPE val_1, val_2;
-
-#if(UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE)
-      val_1 = V_RT;
-      val_2 = val_1;
-      val_2 += MUL(YP1(p+1),dt_pow);
-      V_RT = val_2;
-      if(val_2 - val_1)goto UPDATE_U_2;
-
-      val_1 = U_RT;
-      val_2 = val_1;
-      val_2 += MUL(u,dt_pow);
-      U_RT = val_2;
-      if(val_2 - val_1)goto UPDATE_G_AMPA_2;
-
-      val_1 = GA_RT;
-      val_2 = val_1;
-      val_2 += MUL(g_ampa,dt_pow);
-      GA_RT = val_2;
-      if(val_2 - val_1)goto UPDATE_G_GABA_2;
-
-      val_1 = GG_RT;
-      val_2 = val_1;
-      val_2 += MUL(g_gaba,dt_pow);
-      GG_RT = val_2;
-      if(val_2 - val_1)goto UPDATE_DT;
-#else
-      val_1 = V_RT;
-      val_2 = val_1;
-      val_2 += MUL(YP1(p+1),dt_pow);
-      V_RT = val_2;
-      if(fabs(val_2 - val_1)>tol)goto UPDATE_U_2;
-
-      val_1 = U_RT;
-      val_2 = val_1;
-      val_2 += MUL(u,dt_pow);
-      U_RT = val_2;
-      if(fabs(val_2 - val_1)>tol)goto UPDATE_G_AMPA_2;
-
-      val_1 = GA_RT;
-      val_2 = val_1;
-      val_2 += MUL(g_ampa,dt_pow);
-      GA_RT = val_2;
-      if(fabs(val_2 - val_1)>tol)goto UPDATE_G_GABA_2;
-
-      val_1 = GG_RT;
-      val_2 = val_1;
-      val_2 += MUL(g_gaba,dt_pow);
-      GG_RT = val_2;
-      if(fabs(val_2 - val_1)>tol)goto UPDATE_DT;
-#endif
-
-      if(p>0){break;}else{goto UPDATE_DT;}
-
-UPDATE_U_2:
-      val_1 = MUL(u,dt_pow);
-      U_RT += val_1;
-UPDATE_G_AMPA_2:
-      val_1 = MUL(g_ampa,dt_pow);
-      GA_RT += val_1;
-UPDATE_G_GABA_2:
-      val_1 = MUL(g_gaba,dt_pow);
-      GG_RT += val_1;
-UPDATE_DT:
+      V_RT  +=  MUL(YP1(p+1),dt_pow);
+      U_RT  +=  MUL(u,dt_pow);
+      GA_RT +=  MUL(g_ampa,dt_pow);
+      GG_RT +=  MUL(g_gaba,dt_pow);
       dt_pow*=dt;
-      DT_RT = dt_pow;
     }
-
-UPDATE_RT:
-    UP_RT   = u;
-    GAP_RT  = g_ampa;
-    GGP_RT  = g_gaba;
-
-    if(p!=0)
-    {
-      /*Check for divergence*/
-#if (UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD)
-      if((fabs(YP1(p+1)) > divergence_threshold))
 #else
-      if((fabs(YP1(p+1)) > 10.0f))
+    V_RT  +=  MUL(YP1(p+1),dt_pow);
+    U_RT  +=  MUL(u,dt_pow);
+    GA_RT +=  MUL(g_ampa,dt_pow);
+    GG_RT +=  MUL(g_gaba,dt_pow);
+    dt_pow*=dt;
 #endif
-      {
+
+    /*Check for divergence*/
+#if (UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD)
+    if((fabs(YP1(p+1)) > divergence_threshold))
+#else
+    if((fabs(YP1(p+1)) > 10.0f))
+#endif
+    {
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
-        atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_6);
+      atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_6);
 #endif
-        break;
-      }
+      break;
     }
+    
+    /*TODO: order variables for tol check according to their statistical rate for satisfying the tol*/
+#if(UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE)
+    DATA_TYPE tol_check = V_RT - v_old;
+    if(tol_check)continue;
+    tol_check = U_RT - u_old;
+    if(tol_check)continue;
+    tol_check = GA_RT - ga_old;
+    if(tol_check)continue;
+    tol_check = GG_RT - gg_old;
+    if(tol_check)continue;
+#else
+    DATA_TYPE tol_check = fabs(V_RT - v_old);
+    if(tol_check > tol)continue;
+    tol_check = fabs(U_RT - u_old);
+    if(tol_check > tol)continue;
+    tol_check = fabs(GA_RT - ga_old);
+    if(tol_check > tol)continue;
+    tol_check = fabs(GG_RT - gg_old);
+    if(tol_check > tol)continue;
+#endif
+    break;
   }
   
   p++;
@@ -409,21 +323,28 @@ void update_neurons
                 uint            step
 ){
 
+  uint wi_id = get_local_id(0);
+  uint wg_id = get_group_id(0);
+  
 #if (UPDATE_NEURONS_EVENT_DELIVERY_MODE == 1)
   __local uint lmGeneralPurpose[UPDATE_NEURONS_WG_SIZE_WF];
 #endif
   
+#if TAHITI_WORKAROUND == 0/*Temp work-around until a SC bug is fixed*/
   /*Each WF has a spike packet*/
   __local uint lmSpikePackets[UPDATE_NEURONS_WG_SIZE_WF*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS];
-  
-  uint wi_id = get_local_id(0);
-  uint wg_id = get_group_id(0);
-  
+
   /*Init spike counts*/
   if(WI_ID_WF_SCOPE(wi_id) == 0)
   {
     lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id)] = 0;
   }
+#else
+  if(WI_ID_WF_SCOPE(wi_id) == 0)
+  {
+    gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id)] = 0;
+  }
+#endif
 
 #if UPDATE_NEURONS_EVENT_DELIVERY_MODE == 0
 
@@ -548,8 +469,7 @@ void update_neurons
     int ev_count = neuronEventPtrEnd - neuronEventPtrStart + 1;
 #endif
 
-  int spiked = 0;
-  DATA_TYPE start_gpu = 0.0f, start_dt_part;
+  DATA_TYPE start_gpu = 0.0f, start_dt_part, spiked = -1.0f;
   DATA_TYPE cache[UPDT_RUNTM_SZ];
 
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
@@ -558,47 +478,40 @@ void update_neurons
   
   while(ev_count > 0)
   {
-    int ps_order;
-    int stp_pass = (ev_count > 1);
-    DATA_TYPE in_t_now, w;
+    /*Same as: uint stp_pass = (ev_count > 1);*/
+    uint stp_pass = clamp(ev_count-1, 0, 1);
     
     /*Read event time from valid ptr else make it eq 1: */
+    DATA_TYPE in_t_now = 1.0f;
     if(stp_pass)
     {
       in_t_now = gm_events[neuronEventPtrStart+1];
     }
-    else
-    {
-      in_t_now = 1.0f;
-    }
     
     /*Compute time difference btwn events: */
-    start_dt_part = (spiked==0)*(in_t_now - start_gpu) + 
-      (spiked!=0)*(start_dt_part);
-    spiked = 0;
+    if(spiked < 0)
+    {
+      start_dt_part = in_t_now - start_gpu;
+    }
 
     if(start_dt_part > 0)
     {
     /*Load parameters into work memory space: */
-    DT_RT   = start_dt_part;
     YP1(0)  = v;
     V_RT    = v;
     U_RT    = u;
-    UP_RT   = u;
     GA_RT   = g_ampa;
-    GAP_RT  = g_ampa;
     GG_RT   = g_gaba;
-    GGP_RT  = g_gaba;
     YP2(0)  = MUL(k,v) - g_ampa - g_gaba + l;
     
-    /*TODO: review which ones are only needed to init*/
+    /*
     for(uint i = 1; i < UPDT_RUNTM_SZ_1; i++)
     {
       YP1(i) = 0; YP2(i) = 0;
-    }
+    }*/
 
     /*numerical integration step function*/
-    ps_order = gpu_iz_ps_step
+    uint ps_order = gpu_iz_ps_step
     (
 #if (UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD)
       v_peak,
@@ -606,11 +519,11 @@ void update_neurons
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
       gm_error_code,
 #endif
-      cm_coefficients, 
-      cache,
 #if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
       I,
 #endif
+      cm_coefficients, 
+      cache,
       k,
       E_ampa,
       E_gaba,
@@ -628,11 +541,11 @@ void update_neurons
 #endif
 
     DATA_TYPE vnew = V_RT;
-    
-    spiked = (vnew >= v_peak);
+
+    spiked = vnew - v_peak;
 
     /*if a spike occured (rare)*/
-    if(spiked)
+    if(spiked >= 0)
     {
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
       spikeCount++;
@@ -693,6 +606,7 @@ void update_neurons
       }
 
       /*Record spike and schedule events:*/
+#if TAHITI_WORKAROUND == 0 /*Temp work-around until a SC bug is fixed*/
       uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id);
       uint index = spikePacketOffset + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
         atomic_inc(lmSpikePackets+spikePacketOffset)*UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
@@ -707,7 +621,23 @@ void update_neurons
 #endif
       lmSpikePackets[index] = neuronId;
       lmSpikePackets[index+1] = as_uint(start_gpu+dt_part);
-      
+#else
+      uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id);
+      uint index = spikePacketOffset + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
+        atomic_inc(gm_spikes+spikePacketOffset)*UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+      if(index > spikePacketOffset + UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS - 
+        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
+      {
+        atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_5);
+        index = spikePacketOffset + UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS - 
+          UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
+      }
+#endif
+      gm_spikes[index] = neuronId;
+      gm_spikes[index+1] = as_uint(start_gpu+dt_part);
+#endif
+
       /*Evaluate u, g_ampa, g_gaba at corrected spike time: */
       YP1(0) = v;
       YP2(0) = u;
@@ -732,30 +662,20 @@ void update_neurons
       g_ampa = GA_RT;
       g_gaba = GG_RT;
       start_gpu = in_t_now;
-        
-      if(stp_pass)
-      {
-        w = gm_events[neuronEventPtrStart+2];
-        uint g_select = (w > 0);
-        g_ampa += g_select*w;
-        g_gaba -= (!g_select)*w;
-      }
-    
-      //TODO: verify if "if" is really needed
-      if(stp_pass){neuronEventPtrStart += UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS;}
-      ev_count--;
     }
     }
-    else
+
+    if(spiked < 0)
     {
       if(stp_pass)
       {
-        w = gm_events[neuronEventPtrStart+2];
+        DATA_TYPE w = gm_events[neuronEventPtrStart+2];
         uint g_select = (w > 0);
         g_ampa += g_select*w;
         g_gaba -= (!g_select)*w;
       }
-      if(stp_pass){neuronEventPtrStart += UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS;}
+      
+      neuronEventPtrStart += UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS;
       ev_count--;
     }
   }
@@ -768,18 +688,31 @@ void update_neurons
     *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1) = 0;
   }
 
+#if TAHITI_WORKAROUND == 0 /*Temp work-around until a SC bug is fixed*/
   uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id);
-  uint spikeDataSizeWords = (*(lmSpikePackets + spikePacketOffset))* 
-    UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
+  uint spikePacketSizeWords = (*(lmSpikePackets + spikePacketOffset))* 
+    UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE;
 
   /*Store spike packet*/
+#if UPDATE_NEURONS_WF_SIZE_WI >= UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS
+  {
+    uint i = WI_ID_WF_SCOPE(wi_id);
+    if(i < spikePacketSizeWords)
+    {
+      gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id) + i] = 
+        lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id) + i];
+    }
+  }
+#else
   for
   (
     uint i = WI_ID_WF_SCOPE(wi_id); 
-    i < UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + spikeDataSizeWords;
+    i < spikePacketSizeWords;
     i += UPDATE_NEURONS_WF_SIZE_WI
   ){
     gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id) + i] = 
       lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id) + i];
   }
+#endif
+#endif
 }

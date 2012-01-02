@@ -337,7 +337,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define SIMULATION_MODE                                       3
 
 #if SIMULATION_MODE == 0                             /*Simulation mode: verification and unit test*/
-//#define ENABLE_MASK                                           BIN_16(1000,0000,0000,0000)
+//#define ENABLE_MASK                                           BIN_16(0000,0000,1000,0000)
 #define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
 /*Functional verification of each kernel*/
 #define KERNEL_VERIFY_ENABLE                                  1
@@ -435,6 +435,8 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   "Tahiti"
 */
 #define TARGET_DEVICE_NAME                                    "Cayman"
+#define TAHITI_WORKAROUND                                     0
+
 /*String used to tag statistics relevant to all kernels*/
 #define KERNEL_ALL                                            "All Kernels"
 
@@ -996,12 +998,12 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_ERROR_TRACK_ENABLE                       ERROR_TRACK_ENABLE
   #define UPDATE_NEURONS_ERROR_BUFFER_SIZE_WORDS                  1
   #define UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK            0x00000012
-  #define UPDATE_NEURONS_ERROR_CODE_1                             0x1
-  #define UPDATE_NEURONS_ERROR_CODE_2                             0x2
-  #define UPDATE_NEURONS_ERROR_CODE_3                             0x4
-  #define UPDATE_NEURONS_ERROR_CODE_4                             0x8
-  #define UPDATE_NEURONS_ERROR_CODE_5                             0x16
-  #define UPDATE_NEURONS_ERROR_CODE_6                             0x32
+  #define UPDATE_NEURONS_ERROR_CODE_1                             1
+  #define UPDATE_NEURONS_ERROR_CODE_2                             2
+  #define UPDATE_NEURONS_ERROR_CODE_3                             4
+  #define UPDATE_NEURONS_ERROR_CODE_4                             8
+  #define UPDATE_NEURONS_ERROR_CODE_5                             16
+  #define UPDATE_NEURONS_ERROR_CODE_6                             32
   /*Kernel file and name*/
   #define UPDATE_NEURONS_KERNEL_FILE_NAME                         "Kernel_UpdateNeurons.cl"
   #define UPDATE_NEURONS_KERNEL_NAME                              "update_neurons"
