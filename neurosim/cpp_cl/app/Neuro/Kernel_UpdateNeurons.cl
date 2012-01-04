@@ -1,7 +1,14 @@
 
 /*
   TODO:
-
+  
+  - Restructire spike packet: contiguous neuronID part and contiguous spike time part
+  - Spike packet per group instead of per WF?
+  - Investigate "missing a spike": It is possible to miss a spike if the membrane potential only has a brief superthreshold excursion and returns to subthreshold values before the end of the subinterval (Hanuschkin et al., http://www.nest-initiative.org).
+  - NR divergence: find more robust method
+    - Adapted NR, converges at the first threshold crossing of the membrane potential. See D’Haene et al. Accelerating event-driven simulation of spiking neurons with multiple synaptic time constants.
+    - D’Haene et al. Fast and exact simulation methods applied on a broad range of neuron models.
+    - Interpolation. Morrison et al. Exact subthreshold integration with continuous spike times in discrete time neural network simulations.
 */
 
 
@@ -298,9 +305,7 @@ void gpu_ps_update
   2) Iterates through synaptic events and updates model variables.
   3) Detects spiking neurons and computes spike times
   4) Writes spike times and updated model variables back to GM
-  
-  TODO:
-  - enable ERROR_TRACK_ENABLE feature
+
 */
 __kernel 
 void update_neurons
@@ -325,12 +330,7 @@ void update_neurons
 
   uint wi_id = get_local_id(0);
   uint wg_id = get_group_id(0);
-  
-#if (UPDATE_NEURONS_EVENT_DELIVERY_MODE == 1)
-  __local uint lmGeneralPurpose[UPDATE_NEURONS_WG_SIZE_WF];
-#endif
-  
-#if TAHITI_WORKAROUND == 0/*Temp work-around until a SC bug is fixed*/
+
   /*Each WF has a spike packet*/
   __local uint lmSpikePackets[UPDATE_NEURONS_WG_SIZE_WF*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS];
 
@@ -339,14 +339,6 @@ void update_neurons
   {
     lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id)] = 0;
   }
-#else
-  if(WI_ID_WF_SCOPE(wi_id) == 0)
-  {
-    gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id)] = 0;
-  }
-#endif
-
-#if UPDATE_NEURONS_EVENT_DELIVERY_MODE == 0
 
   /*Compute total chunks in the grid*/
   uint totalChunks = UPDATE_NEURONS_TOTAL_NEURONS/ELEMENTS_PER_WF;
@@ -385,6 +377,12 @@ void update_neurons
     DATA_TYPE g_gaba    = gm_model_variables[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     
     /*Load model parameters*/
+    DATA_TYPE k         = gm_model_parameters[UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
+    DATA_TYPE l         = gm_model_parameters[2*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
+    DATA_TYPE b         = gm_model_parameters[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
+    DATA_TYPE v_peak    = gm_model_parameters[6*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
+    DATA_TYPE E_ampa    = gm_model_parameters[7*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
+    DATA_TYPE E_gaba    = gm_model_parameters[8*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
 #if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
     DATA_TYPE I = 0.0f;
     if(step < UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP)
@@ -392,14 +390,6 @@ void update_neurons
       I = gm_model_parameters[neuronId];
     }
 #endif
-    DATA_TYPE k         = gm_model_parameters[UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
-    DATA_TYPE l         = gm_model_parameters[2*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
-    DATA_TYPE b         = gm_model_parameters[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
-    DATA_TYPE v_reset   = gm_model_parameters[4*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
-    DATA_TYPE u_step    = gm_model_parameters[5*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
-    DATA_TYPE v_peak    = gm_model_parameters[6*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
-    DATA_TYPE E_ampa    = gm_model_parameters[7*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
-    DATA_TYPE E_gaba    = gm_model_parameters[8*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     /*
     DATA_TYPE E         = gm_model_parameters[9*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE a         = gm_model_parameters[10*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
@@ -407,45 +397,227 @@ void update_neurons
     DATA_TYPE E         = (1.0f/UPDATE_NEURONS_C)*UPDATE_NEURONS_DT; 
     DATA_TYPE a         = UPDATE_NEURONS_a*UPDATE_NEURONS_DT;
 
-#elif(UPDATE_NEURONS_EVENT_DELIVERY_MODE == 1)
+    DATA_TYPE start_gpu = 0.0f, start_dt_part, spiked = -1.0f;
+    DATA_TYPE cache[UPDT_RUNTM_SZ];
 
-  uint globalWfEventOffset = UPDATE_NEURONS_STRUCT_SIZE*GLOBAL_WF_ID(wg_id, wi_id)+1;
-  
-  /* Get totals entries in the event struct*/
-  if(wi_id == 0)
+  while(ev_count > 0)
   {
-    lmGeneralPurpose[LOCAL_WF_ID(wi_id)] = *(gm_event_ptr + globalWfEventOffset-1);
+    /*Same as: uint stp_pass = (ev_count > 1);*/
+    uint stp_pass = clamp(ev_count-1, 0, 1);
+    
+    /*Read event time from valid ptr else make it eq 1: */
+    DATA_TYPE in_t_now = 1.0f;
+    if(stp_pass)
+    {
+      in_t_now = gm_events[neuronEventPtrStart+1];
+    }
+    
+    /*Compute time difference btwn events: */
+    if(spiked < 0)
+    {
+      start_dt_part = in_t_now - start_gpu;
+    }
+
+    if(start_dt_part > 0)
+    {
+    /*Load parameters into work memory space: */
+    YP1(0)  = v;
+    V_RT    = v;
+    U_RT    = u;
+    GA_RT   = g_ampa;
+    GG_RT   = g_gaba;
+    YP2(0)  = MUL(k,v) - g_ampa - g_gaba + l;
+
+    /*numerical integration step function*/
+    uint ps_order = gpu_iz_ps_step
+    (
+#if (UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD)
+      v_peak,
+#endif
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+      gm_error_code,
+#endif
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
+      I,
+#endif
+      cm_coefficients, 
+      cache,
+      k,
+      E_ampa,
+      E_gaba,
+      E,
+      a,
+      b,
+      start_dt_part
+    );
+    
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+    if(ps_order >= UPDATE_NEURONS_PS_ORDER_LIMIT)
+    {
+      atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_1);
+    }
+#endif
+
+    DATA_TYPE vnew = V_RT;
+
+    spiked = vnew - v_peak;
+
+    /*if a spike occures: record neuron data and break*/
+    if(spiked >= 0)
+    {
+      *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE) = neuronEventPtrStart;
+      *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1) = ev_count;
+
+      /*Record spike and schedule events:*/
+      /*TODO: find if storing directly to GM is faster (totals are still accumulated in LM)*/
+      uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id);
+      uint index = spikePacketOffset + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
+        atomic_inc(lmSpikePackets+spikePacketOffset)*UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+      if(index > spikePacketOffset + UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS - 
+        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
+      {
+        atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_5);
+        index = spikePacketOffset + UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS - 
+          UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
+      }
+#endif
+      lmSpikePackets[index] = neuronId;
+      lmSpikePackets[index+1] = as_uint(start_gpu);
+      break;
+    }
+    else
+    {
+      v = V_RT;
+      u = U_RT;
+      g_ampa = GA_RT;
+      g_gaba = GG_RT;
+      start_gpu = in_t_now;
+    }
+    }
+
+    if(spiked < 0)
+    {
+      if(stp_pass)
+      {
+        DATA_TYPE w = gm_events[neuronEventPtrStart+2];
+        uint g_select = (w > 0);
+        g_ampa += g_select*w;
+        g_gaba -= (!g_select)*w;
+      }
+      
+      neuronEventPtrStart += UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS;
+      ev_count--;
+    }
+  }
+  
+    /*Store model variables*/
+    gm_model_variables[neuronId]                                = v;
+    gm_model_variables[UPDATE_NEURONS_TOTAL_NEURONS+neuronId]   = u;
+    gm_model_variables[2*UPDATE_NEURONS_TOTAL_NEURONS+neuronId] = g_ampa;
+    gm_model_variables[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId] = g_gaba;
+    if(spiked < 0)
+    {
+      *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1) = 0;
+    }
   }
 
-  /*Broadcast total events to all WIs in a WF*/
-  barrier(CLK_LOCAL_MEM_FENCE);
-  uint totalEntries = lmGeneralPurpose[LOCAL_WF_ID(wi_id)];
-  
-  /*A WF works on a struct of synaptic events*/
+  uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id);
+  uint spikePacketSizeWords = (*(lmSpikePackets + spikePacketOffset))* 
+    UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE;
+
+  /*Store spike packet*/
+#if UPDATE_NEURONS_WF_SIZE_WI >= UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS
+  {
+    uint i = WI_ID_WF_SCOPE(wi_id);
+    if(i < spikePacketSizeWords)
+    {
+      gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id) + i] = 
+        lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id) + i];
+    }
+  }
+#else
   for
   (
-    uint i = LOCAL_WF_ID(wi_id); 
-    i < totalEntries;
+    uint i = WI_ID_WF_SCOPE(wi_id); 
+    i < spikePacketSizeWords;
     i += UPDATE_NEURONS_WF_SIZE_WI
   ){
-    uint wiEventOffset = globalWfEventOffset + i*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE;
-    uint neuronId = *(gm_event_ptr + wiEventOffset);
+    gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id) + i] = 
+      lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id) + i];
+  }
+#endif
+}
 
-    /*Load model variables
-    DATA_TYPE *fp_ptr  = (fp_params + wi_id*GPU_NRN_VAR_A);*/
+
+
+/*
+  update_spiked_neurons
+  
+  1) Loads model variables, parameters, and synaptic events from GM to PM.
+  2) Iterates through synaptic events and updates model variables.
+  3) Detects spiking neurons and computes spike times
+  4) Writes spike times and updated model variables back to GM
+  
+*/
+__kernel 
+void update_spiked_neurons
+(
+#if (UPDATE_NEURONS_DEBUG_ENABLE)
+  __global      uint            *gm_debug_host,
+  __global      uint            *gm_debug_device,
+#endif
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+  __global      uint            *gm_error_code,
+#endif
+  //__global      DATA_TYPE const* restrict cm_coefficients,
+  //constant      DATA_TYPE       *cm_coefficients __attribute__((max_constant_size (4*CONST_SIZE))),
+  __constant    DATA_TYPE       *cm_coefficients,
+  __global      DATA_TYPE       *gm_model_parameters,
+  __global      DATA_TYPE       *gm_model_variables,
+  __global      uint            *gm_spikes,
+  __global      uint            *gm_event_ptr,
+  __global      DATA_TYPE       *gm_events,
+                uint            step
+){
+
+  uint wi_id = get_local_id(0);
+  uint wg_id = get_group_id(0);
+
+  /*Each WF has a spike packet
+  __local uint lmSpikePackets[UPDATE_NEURONS_WG_SIZE_WF];
+  
+  if(WI_ID_WF_SCOPE(wi_id) == 0)
+  {
+    lmSpikePackets[LOCAL_WF_ID(wi_id)] = 
+      gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id)];
+  }
+
+  barrier(CLK_LOCAL_MEM_FENCE);
+  uint  totalSpikes =  lmSpikePackets[LOCAL_WF_ID(wi_id)];*/
+  
+  /*TODO: verify if this short version is faster than the one above*/
+  uint  totalSpikes =  gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id)];
+
+  /*A WF works on allocated for it spike packet*/
+  for(uint j = WI_ID_WF_SCOPE(wi_id); j < totalSpikes; j += UPDATE_NEURONS_WF_SIZE_WI)
+  {
+    uint spikeOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id) +
+      UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + j*UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
+    uint  neuronId = gm_spikes[spikeOffset];
+    DATA_TYPE start_gpu = as_float(gm_spikes[spikeOffset + 1]);
+
+    /*WI: load event pointer and count, reset the count*/
+    uint neuronEventPtrStart = *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE);
+    int ev_count = *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1);
+
+    /*Load model variables*/
     DATA_TYPE v         = gm_model_variables[neuronId];
     DATA_TYPE u         = gm_model_variables[UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE g_ampa    = gm_model_variables[2*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE g_gaba    = gm_model_variables[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     
     /*Load model parameters*/
-#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
-    DATA_TYPE I = 0.0f;
-    if(step < UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP)
-    {
-      I = gm_model_parameters[neuronId];
-    }
-#endif
     DATA_TYPE k         = gm_model_parameters[UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE l         = gm_model_parameters[2*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE b         = gm_model_parameters[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
@@ -454,23 +626,22 @@ void update_neurons
     DATA_TYPE v_peak    = gm_model_parameters[6*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE E_ampa    = gm_model_parameters[7*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE E_gaba    = gm_model_parameters[8*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
+    DATA_TYPE I = 0.0f;
+    if(step < UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP)
+    {
+      I = gm_model_parameters[neuronId];
+    }
+#endif
     /*
     DATA_TYPE E         = gm_model_parameters[9*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE a         = gm_model_parameters[10*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     */
     DATA_TYPE E         = (1.0f/UPDATE_NEURONS_C)*UPDATE_NEURONS_DT; 
     DATA_TYPE a         = UPDATE_NEURONS_a*UPDATE_NEURONS_DT;
-    
-    uint neuronEventPtrStart = *(gm_event_ptr + wiEventOffset + 1);
-    uint endOfStruct = (i == (totalEntries-1));
-    uint neuronEventPtrEnd = *(gm_event_ptr + wiEventOffset + 1 + 
-      (!endOfStruct)*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 
-      endOfStruct*(UPDATE_NEURONS_STRUCT_SIZE+UPDATE_NEURONS_STRUCT_ELEMENT_SIZE));
-    int ev_count = neuronEventPtrEnd - neuronEventPtrStart + 1;
-#endif
 
-  DATA_TYPE start_gpu = 0.0f, start_dt_part, spiked = -1.0f;
-  DATA_TYPE cache[UPDT_RUNTM_SZ];
+    DATA_TYPE start_dt_part, spiked = -1.0f;
+    DATA_TYPE cache[UPDT_RUNTM_SZ];
 
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
   uint spikeCount = 0;
@@ -503,12 +674,6 @@ void update_neurons
     GA_RT   = g_ampa;
     GG_RT   = g_gaba;
     YP2(0)  = MUL(k,v) - g_ampa - g_gaba + l;
-    
-    /*
-    for(uint i = 1; i < UPDT_RUNTM_SZ_1; i++)
-    {
-      YP1(i) = 0; YP2(i) = 0;
-    }*/
 
     /*numerical integration step function*/
     uint ps_order = gpu_iz_ps_step
@@ -606,37 +771,7 @@ void update_neurons
       }
 
       /*Record spike and schedule events:*/
-#if TAHITI_WORKAROUND == 0 /*Temp work-around until a SC bug is fixed*/
-      uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id);
-      uint index = spikePacketOffset + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
-        atomic_inc(lmSpikePackets+spikePacketOffset)*UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
-#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
-      if(index > spikePacketOffset + UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS - 
-        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
-      {
-        atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_5);
-        index = spikePacketOffset + UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS - 
-          UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
-      }
-#endif
-      lmSpikePackets[index] = neuronId;
-      lmSpikePackets[index+1] = as_uint(start_gpu+dt_part);
-#else
-      uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id);
-      uint index = spikePacketOffset + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
-        atomic_inc(gm_spikes+spikePacketOffset)*UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
-#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
-      if(index > spikePacketOffset + UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS - 
-        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
-      {
-        atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_5);
-        index = spikePacketOffset + UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS - 
-          UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
-      }
-#endif
-      gm_spikes[index] = neuronId;
-      gm_spikes[index+1] = as_uint(start_gpu+dt_part);
-#endif
+      gm_spikes[spikeOffset+1] = as_uint(start_gpu+dt_part);
 
       /*Evaluate u, g_ampa, g_gaba at corrected spike time: */
       YP1(0) = v;
@@ -687,32 +822,4 @@ void update_neurons
     gm_model_variables[3*UPDATE_NEURONS_TOTAL_NEURONS+neuronId] = g_gaba;
     *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1) = 0;
   }
-
-#if TAHITI_WORKAROUND == 0 /*Temp work-around until a SC bug is fixed*/
-  uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id);
-  uint spikePacketSizeWords = (*(lmSpikePackets + spikePacketOffset))* 
-    UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE;
-
-  /*Store spike packet*/
-#if UPDATE_NEURONS_WF_SIZE_WI >= UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS
-  {
-    uint i = WI_ID_WF_SCOPE(wi_id);
-    if(i < spikePacketSizeWords)
-    {
-      gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id) + i] = 
-        lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id) + i];
-    }
-  }
-#else
-  for
-  (
-    uint i = WI_ID_WF_SCOPE(wi_id); 
-    i < spikePacketSizeWords;
-    i += UPDATE_NEURONS_WF_SIZE_WI
-  ){
-    gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id) + i] = 
-      lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id) + i];
-  }
-#endif
-#endif
 }

@@ -316,8 +316,8 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 
 /*Logging names and macros*/
 #define LOG_MODEL_VARIABLES_NEURON_ID                         1
-#define LOG_SIMULATION_FILE_NAME                              "c:/Users/dima/Documents/dev_neuro/samples/opencl/cpp_cl/app/Neuro/log/simulation_log.txt"
-#define LOG_MODEL_VARIABLES_FILE_NAME                         "c:/Users/dima/Documents/dev_neuro/samples/opencl/cpp_cl/app/Neuro/log/model_variable_trace.csv"
+#define LOG_SIMULATION_FILE_NAME                              "log/simulation_log.txt"
+#define LOG_MODEL_VARIABLES_FILE_NAME                         "log/model_variable_trace.csv"
 #define LOG_MODEL_VARIABLES_FILE_HEADER                       "v,u,g_ampa,g_gaba,v_peak,I"
 #define LOG_MODEL_VARIABLES_FILE_BODY(i)                      << nrn_ps[i].v << "," \
                                                               << nrn_ps[i].u << "," \
@@ -348,7 +348,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 /*Log model variables with parameters LOG_MODEL_VARIABLES_* defined above*/
 #define LOG_MODEL_VARIABLES                                   0
 /*Log simulation messages*/
-#define LOG_SIMULATION                                        0
+#define LOG_SIMULATION                                        1
 /*Record error codes from the kernel*/
 #define ERROR_TRACK_ENABLE                                    1
 /*Debug mask, enables each kernel to have debug buffer r/w*/
@@ -434,8 +434,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   "AMD Engineering Sample"
   "Tahiti"
 */
-#define TARGET_DEVICE_NAME                                    "Cayman"
-#define TAHITI_WORKAROUND                                     0
+#define TARGET_DEVICE_NAME                                    "Tahiti"
 
 /*String used to tag statistics relevant to all kernels*/
 #define KERNEL_ALL                                            "All Kernels"
@@ -1007,6 +1006,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   /*Kernel file and name*/
   #define UPDATE_NEURONS_KERNEL_FILE_NAME                         "Kernel_UpdateNeurons.cl"
   #define UPDATE_NEURONS_KERNEL_NAME                              "update_neurons"
+  #define UPDATE_NEURONS_SPIKED_KERNEL_NAME                       "update_spiked_neurons"
   /*WF size measured in WIs*/
   #define UPDATE_NEURONS_WF_SIZE_WI                               WF_SIZE_WI /*Options: 64*/
   /*Scaling parameter for the grid size*/

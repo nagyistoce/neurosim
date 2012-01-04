@@ -415,6 +415,7 @@ class IntegrationTest : public SDKSample
     cl::Buffer constantCoefficientsBuffer;
 
     cl::Kernel kernelUpdateNeuronsV00;
+    cl::Kernel kernelUpdateSpikedNeuronsV00;
     size_t blockSizeX_kernelUpdateNeuronsV00;
     size_t blockSizeY_kernelUpdateNeuronsV00;
 #if (UPDATE_NEURONS_DEBUG_ENABLE)
