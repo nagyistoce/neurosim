@@ -2088,13 +2088,15 @@ IntegrationTest::registerLocalMemory()
 #if UPDATE_NEURONS_ENABLE_V00
   {
   std::string kernelTag = std::string(UPDATE_NEURONS_KERNEL_NAME) + std::string("_V00");
-#if 0
-  cl_uint lmGeneralPurpose = sizeof(cl_uint)*
-    (UPDATE_NEURONS_WG_SIZE_WI_V00 + UPDATE_NEURONS_WG_SIZE_WF_V00); 
-  lmGeneralPurposeSizeBytes = lmGeneralPurpose;
-  REGISTER_MEMORY(kernelTag, MEM_LOCAL, lmGeneralPurpose);
-#endif
+
   cl_uint lmSpikePackets = sizeof(cl_uint)*UPDATE_NEURONS_WG_SIZE_WF_V00*
+    UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS; 
+  lmSpikePacketsSizeBytes = lmSpikePackets;
+  REGISTER_MEMORY(kernelTag, MEM_LOCAL, lmSpikePackets);
+  
+  kernelTag = std::string(UPDATE_NEURONS_SPIKED_KERNEL_NAME) + std::string("_V00");
+
+  lmSpikePackets = sizeof(cl_uint)*UPDATE_NEURONS_WG_SIZE_WF_V00*
     UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS; 
   lmSpikePacketsSizeBytes = lmSpikePackets;
   REGISTER_MEMORY(kernelTag, MEM_LOCAL, lmSpikePackets);
@@ -3292,6 +3294,21 @@ IntegrationTest::setupCL()
       blockSizeX_kernelUpdateNeuronsV00,
       blockSizeY_kernelUpdateNeuronsV00
     );
+    
+    createKernel
+    (
+      kernelUpdateSpikedNeuronsV00,
+      UPDATE_NEURONS_KERNEL_FILE_NAME,
+      UPDATE_NEURONS_SPIKED_KERNEL_NAME,
+#if COMPILER_FLAGS_NO_OPTIMIZE_ENABLE
+      "-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",
+#else
+      "-D UPDATE_NEURONS_DEVICE_V00 -cl-denorms-are-zero -cl-mad-enable -cl-no-signed-zeros "
+      "-cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math",
+#endif
+      blockSizeX_kernelUpdateNeuronsV00,
+      blockSizeY_kernelUpdateNeuronsV00
+    );
     }
 #endif
 
@@ -3653,6 +3670,30 @@ IntegrationTest::runCLKernels()
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, modelVariablesBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataSpikePacketsBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataMakeEventPtrsStructBuffer, argNumUpdateNeuronsV00++);
+  }
+  
+  cl_uint argNumUpdateSpikedNeuronsV00 = 0;
+  {
+#if (UPDATE_NEURONS_DEBUG_ENABLE)
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataUpdateNeuronsDebugHostBuffer, 
+    argNumUpdateSpikedNeuronsV00++);
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataUpdateNeuronsDebugDeviceBuffer, 
+    argNumUpdateSpikedNeuronsV00++);
+#endif
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataUpdateNeuronsErrorBuffer, 
+    argNumUpdateSpikedNeuronsV00++);
+#endif
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, constantCoefficientsBuffer, 
+    argNumUpdateSpikedNeuronsV00++);
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, modelParametersBuffer, 
+    argNumUpdateSpikedNeuronsV00++);
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, modelVariablesBuffer, 
+    argNumUpdateSpikedNeuronsV00++);
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataSpikePacketsBuffer, 
+    argNumUpdateSpikedNeuronsV00++);
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataMakeEventPtrsStructBuffer, 
+    argNumUpdateSpikedNeuronsV00++);
   }
 #endif
 
@@ -4868,6 +4909,7 @@ IntegrationTest::runCLKernels()
 #endif
 #endif
 #endif
+
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataGroupEventsTikBuffer, argNumUpdateNeuronsV00);
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, currentTimeStep, argNumUpdateNeuronsV00+1);
 #if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
@@ -4891,6 +4933,31 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelUpdateNeuronsV00, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
+    SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataGroupEventsTikBuffer, argNumUpdateSpikedNeuronsV00);
+    SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, currentTimeStep, argNumUpdateSpikedNeuronsV00+1);
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
+#endif
+    status = commandQueue.enqueueNDRangeKernel(kernelUpdateSpikedNeuronsV00, cl::NullRange, 
+      globalThreadsUpdateNeuronsV00, localThreadsUpdateNeuronsV00, NULL, &ndrEvt);
+    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
+    {
+      return SDK_FAILURE;
+    }
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    if(currentTimeStep >= START_PROFILING_AT_STEP)
+    {
+      status = ndrEvt.wait();
+      endAppTime = timeStampNs();
+      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+      {
+        return SDK_FAILURE;
+      }
+      REGISTER_TIME(kernelUpdateSpikedNeuronsV00, (endAppTime-startAppTime), 1.0)
+    }
+#endif
+
 /*Profiling: initiating host equivalent*/
 #if (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0)
 #if (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 &&\
