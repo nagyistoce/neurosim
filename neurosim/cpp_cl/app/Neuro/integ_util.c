@@ -7,13 +7,14 @@
 /*Parker-Sochacki stepper - Solve and update in one function*/
 int ps_step
 (
-  bool zero_tol_enable,
+#if(UPDATE_NEURONS_TOLERANCE_MODE != 0)
+  DATA_TYPE eta[],
+#endif
   DATA_TYPE **y,
   DATA_TYPE **co,
   DATA_TYPE *y1,
   DATA_TYPE *ynew,
   DATA_TYPE *fp,
-  DATA_TYPE eta[],
   void (*first)(DATA_TYPE **,DATA_TYPE **,DATA_TYPE *), 
   void (*iter)(DATA_TYPE **,DATA_TYPE **,DATA_TYPE *,int),
   int ps_limit, 
@@ -45,14 +46,11 @@ int ps_step
 #endif
 
     /*Test error tolerance on variable value change*/
-    if(zero_tol_enable)
-    {
+#if(UPDATE_NEURONS_TOLERANCE_MODE == 0)
       for(i=0;i<err_nv;i++){if(ynew[i]-y1[i]) break;}
-    }
-    else
-    {
+#else
       for(i=0;i<err_nv;i++){if(fabs(ynew[i]-y1[i])>eta[i]) break;}
-    }
+#endif
 
     if(i==err_nv)break;
     
