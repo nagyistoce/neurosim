@@ -180,7 +180,7 @@ copy compilerOptions.txt "$(OUTDIR)"\compilerOptions.txt</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>$(AMDAPPSDKROOT)\lib\x86_64;$(SolutionDir)\lib\x86_64;$(SolutionDir)\lib\SDKUtil\release\x86_64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(AMDAPPSDKROOT)/lib/x86_64;$(SolutionDir)/lib/x86_64</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>copy Kernel_ExpandEvents.cl "$(OUTDIR)"\Kernel_ExpandEvents.cl

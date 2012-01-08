@@ -59,6 +59,9 @@ uint gpu_iz_ps_step
 #if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
               DATA_TYPE I,
 #endif
+#if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+              DATA_TYPE tol,
+#endif
   __constant  DATA_TYPE *cm_coefficients, //__global    DATA_TYPE const* restrict cm_coefficients,
               DATA_TYPE *cache,
               DATA_TYPE k,
@@ -69,7 +72,7 @@ uint gpu_iz_ps_step
               DATA_TYPE b,
               DATA_TYPE dt
 ){
-#if (!UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE)
+#if (UPDATE_NEURONS_TOLERANCE_MODE == 1)
   DATA_TYPE tol = UPDATE_NEURONS_PS_TOLERANCE;
 #endif
 
@@ -194,7 +197,7 @@ uint gpu_iz_ps_step
     }
     
     /*TODO: order variables for tol check according to their statistical rate for satisfying the tol*/
-#if(UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE)
+#if(UPDATE_NEURONS_TOLERANCE_MODE == 0)
     DATA_TYPE tol_check = V_RT - v_old;
     if(tol_check)continue;
     tol_check = U_RT - u_old;
@@ -204,6 +207,7 @@ uint gpu_iz_ps_step
     tol_check = GG_RT - gg_old;
     if(tol_check)continue;
 #else
+    /*TODO: verify if using UPDATE_NEURONS_PS_TOLERANCE directly here is faster than through reg tol*/
     DATA_TYPE tol_check = fabs(V_RT - v_old);
     if(tol_check > tol)continue;
     tol_check = fabs(U_RT - u_old);
@@ -317,6 +321,9 @@ void update_neurons
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
   __global      uint            *gm_error_code,
 #endif
+#if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+  __constant    DATA_TYPE       *cm_ps_tol,
+#endif
   //__global      DATA_TYPE const* restrict cm_coefficients,
   //constant      DATA_TYPE       *cm_coefficients __attribute__((max_constant_size (4*CONST_SIZE))),
   __constant    DATA_TYPE       *cm_coefficients,
@@ -390,6 +397,9 @@ void update_neurons
       I = gm_model_parameters[neuronId];
     }
 #endif
+#if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    DATA_TYPE ps_tol = cm_ps_tol[neuronId/(UPDATE_NEURONS_TOTAL_NEURONS/UPDATE_NEURONS_TOLERANCE_CHUNKS)];
+#endif
     /*
     DATA_TYPE E         = gm_model_parameters[9*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE a         = gm_model_parameters[10*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
@@ -439,6 +449,9 @@ void update_neurons
 #endif
 #if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
       I,
+#endif
+#if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+      ps_tol,
 #endif
       cm_coefficients, 
       cache,
@@ -570,6 +583,9 @@ void update_spiked_neurons
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
   __global      uint            *gm_error_code,
 #endif
+#if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+  __constant    DATA_TYPE       *cm_ps_tol,
+#endif
   //__global      DATA_TYPE const* restrict cm_coefficients,
   //constant      DATA_TYPE       *cm_coefficients __attribute__((max_constant_size (4*CONST_SIZE))),
   __constant    DATA_TYPE       *cm_coefficients,
@@ -633,6 +649,9 @@ void update_spiked_neurons
       I = gm_model_parameters[neuronId];
     }
 #endif
+#if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    DATA_TYPE ps_tol = cm_ps_tol[neuronId/(UPDATE_NEURONS_TOTAL_NEURONS/UPDATE_NEURONS_TOLERANCE_CHUNKS)];
+#endif
     /*
     DATA_TYPE E         = gm_model_parameters[9*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE a         = gm_model_parameters[10*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
@@ -687,6 +706,9 @@ void update_spiked_neurons
 #if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
       I,
 #endif
+#if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+      ps_tol,
+#endif
       cm_coefficients, 
       cache,
       k,
@@ -732,7 +754,15 @@ void update_spiked_neurons
       
       /*NR: */
       int nr_order;
-
+#if (UPDATE_NEURONS_TOLERANCE_MODE == 0)
+      DATA_TYPE nr_tol = (DATA_TYPE)UPDATE_NEURONS_NR_ZERO_TOLERANCE;
+#elif (UPDATE_NEURONS_TOLERANCE_MODE == 1)
+      DATA_TYPE nr_tol = (DATA_TYPE)UPDATE_NEURONS_NR_TOLERANCE;
+#elif (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+      DATA_TYPE nr_tol = (DATA_TYPE)UPDATE_NEURONS_NR_ZERO_TOLERANCE;
+      if(ps_tol != 0){nr_tol = ps_tol;}
+#endif
+      
       for (nr_order=0; nr_order<UPDATE_NEURONS_NR_ORDER_LIMIT; nr_order++)
       {
         vnew = MUL(YP1(ps_order),dt_part) + YP1(ps_order-1);
@@ -748,9 +778,9 @@ void update_spiked_neurons
         dx = DIV(vnew,dv);
         dt_part -= dx; 
 
-        if(fabs(dx)<(float)UPDATE_NEURONS_NR_TOLERANCE)break;
+        if(fabs(dx)<nr_tol)break;
         /*For oscillations*/
-        if(fabs(dx+dx_old)<(float)UPDATE_NEURONS_NR_TOLERANCE)break; 
+        if(fabs(dx+dx_old)<nr_tol)break; 
         dx_old=dx;
       }
       

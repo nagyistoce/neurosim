@@ -418,6 +418,12 @@ class IntegrationTest : public SDKSample
     cl::Kernel kernelUpdateSpikedNeuronsV00;
     size_t blockSizeX_kernelUpdateNeuronsV00;
     size_t blockSizeY_kernelUpdateNeuronsV00;
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    cl_uint psToleranceSize;
+    cl_uint psToleranceSizeBytes;
+    CL_DATA_TYPE *psTolerance;
+    cl::Buffer psToleranceBuffer;
+#endif
 #if (UPDATE_NEURONS_DEBUG_ENABLE)
     cl_uint dataUpdateNeuronsDebugHostSize;
     cl_uint dataUpdateNeuronsDebugHostSizeBytes;
@@ -566,6 +572,9 @@ public:
     modelParameters(NULL),
     modelVariables(NULL),
     constantCoefficients(NULL),
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    psTolerance(NULL),
+#endif
 #if (UPDATE_NEURONS_DEBUG_ENABLE)
     dataUpdateNeuronsDebugHost(NULL),
     dataUpdateNeuronsDebugDevice(NULL),
@@ -742,6 +751,9 @@ public:
     modelParameters(NULL),
     modelVariables(NULL),
     constantCoefficients(NULL),
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    psTolerance(NULL),
+#endif
 #if (UPDATE_NEURONS_DEBUG_ENABLE)
     dataUpdateNeuronsDebugHost(NULL),
     dataUpdateNeuronsDebugDevice(NULL),
@@ -1094,15 +1106,13 @@ public:
       int ps_order_limit,
       int nr_order_limit,
       DATA_TYPE nrTolerance,
-      bool variableDelaysEnalbe,
-      bool zeroTolEnable
+      bool variableDelaysEnalbe
     );
     
     int 
     updateStep
     (
       bool    ignoreFailures,
-      bool    psZeroToleranceEnable,
       cl_uint injectCurrentUntilStep,
       cl_uint currentTimeStep,
       cl_uint totalNeurons,

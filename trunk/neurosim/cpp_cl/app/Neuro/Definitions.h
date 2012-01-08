@@ -316,8 +316,8 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 
 /*Logging names and macros*/
 #define LOG_MODEL_VARIABLES_NEURON_ID                         1
-#define LOG_SIMULATION_FILE_NAME                              "log/simulation_log.txt"
-#define LOG_MODEL_VARIABLES_FILE_NAME                         "log/model_variable_trace.csv"
+#define LOG_SIMULATION_FILE_NAME                              "log_simulation.txt"
+#define LOG_MODEL_VARIABLES_FILE_NAME                         "log_model_variable_trace.csv"
 #define LOG_MODEL_VARIABLES_FILE_HEADER                       "v,u,g_ampa,g_gaba,v_peak,I"
 #define LOG_MODEL_VARIABLES_FILE_BODY(i)                      << nrn_ps[i].v << "," \
                                                               << nrn_ps[i].u << "," \
@@ -346,7 +346,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 /*Enable high-level verification of model variables, spikes, events for whole network*/
 #define NETWORK_VERIFY_ENABLE                                 1
 /*Log model variables with parameters LOG_MODEL_VARIABLES_* defined above*/
-#define LOG_MODEL_VARIABLES                                   0
+#define LOG_MODEL_VARIABLES                                   1
 /*Log simulation messages*/
 #define LOG_SIMULATION                                        1
 /*Record error codes from the kernel*/
@@ -448,6 +448,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define TOTAL_NEURON_BITS                                     17
 #define WF_SIZE_WI                                            64
 #define DATA_TYPE                                             float
+#define CL_DATA_TYPE                                          cl_float
 /*Size of spike packet buffer (spikes) per WF*/
 #define SPIKE_DATA_BUFFER_SIZE                                127
 /*Size of event data buffer*/
@@ -488,7 +489,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define SORT_VERIFY_ENABLE  0
 #endif
 #if (PROFILING_MODE == 1) && KERNEL_VERIFY_ENABLE
-  #error (can't use (PROFILING_MODE = 1) if KERNEL_VERIFY_ENABLE is true)
+  #error (cannot use (PROFILING_MODE = 1) if KERNEL_VERIFY_ENABLE is true)
 #endif
 /*
   Configuration interface for each kernel exists for tuning kernels to desired functionality and
@@ -1045,14 +1046,24 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_MIN_DELAY                                1.0f
   
   /*Simulation parameters*/
-  #define UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE                    1
+  /*Tolerance mode: 
+  0 - zero PS tolerance (0.0), UPDATE_NEURONS_PS_TOLERANCE is ignored,
+      NR tolerance is UPDATE_NEURONS_NR_ZERO_TOLERANCE, UPDATE_NEURONS_NR_TOLERANCE is ignored
+  1 - tolerance is defined for all neurons by UPDATE_NEURONS_PS_TOLERANCE and 
+      UPDATE_NEURONS_NR_TOLERANCE
+  2 - PS and NR tolerances are the same and defined on chunk basis in a constant data structure with 
+      UPDATE_NEURONS_TOLERANCE_CHUNKS except that for neurons with PS zero tolerance (0.0) the NR
+      tolerance is defined by UPDATE_NEURONS_NR_ZERO_TOLERANCE*/
+  #define UPDATE_NEURONS_TOLERANCE_MODE                           2
   #define UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD       1
-  /*Possible values: const double tols[16] = 
+  #define UPDATE_NEURONS_TOLERANCE_CHUNKS                         (1<<8)
+  /*Possible UPDATE_NEURONS_PS_TOLERANCE values: const double tols[16] = 
   {1e-1,1e-2,1e-3,1e-4,1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-11,1e-12,1e-13,1e-14,1e-15,1e-16};*/
   #define UPDATE_NEURONS_PS_TOLERANCE                             (1.0e-7)
   #define UPDATE_NEURONS_NR_TOLERANCE                             (1.0e-7) /*normally no more than UPDATE_NEURONS_PS_TOLERANCE*/
+  #define UPDATE_NEURONS_NR_ZERO_TOLERANCE                        (1.0e-16)
   #define UPDATE_NEURONS_PS_ORDER_LIMIT                           16
-  #define UPDATE_NEURONS_NR_ORDER_LIMIT                           20
+  #define UPDATE_NEURONS_NR_ORDER_LIMIT                           32
   #define UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP                INJECT_CURRENT_UNTILL_STEP
   /*Possible values:  const double dt_vals[16] = {(double)1/4,(double)1/6,(double)1/8,(double)1/10,
                                                   (double)1/20,(double)1/40,(double)1/60,
@@ -1070,6 +1081,10 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 */
 #if UPDATE_NEURONS_ELEMENTS_PER_WI != 1
   #error (UPDATE_NEURONS_ELEMENTS_PER_WI has to be 1)
+#endif
+#if	((UPDATE_NEURONS_TOLERANCE_MODE == 2) && \
+    (UPDATE_NEURONS_TOTAL_NEURONS < UPDATE_NEURONS_TOLERANCE_CHUNKS))
+  #error (UPDATE_NEURONS_TOTAL_NEURONS has to be no less than UPDATE_NEURONS_TOLERANCE_CHUNKS)
 #endif
 
 /*

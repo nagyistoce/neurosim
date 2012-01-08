@@ -22,10 +22,11 @@ extern void ps_update(DATA_TYPE **, int, int, DATA_TYPE, DATA_TYPE *);
 
 extern int ps_step
 (
-  bool zero_tol_enable,
-  DATA_TYPE **,
-  DATA_TYPE **,
+#if (UPDATE_NEURONS_TOLERANCE_MODE != 0)
   DATA_TYPE *,
+#endif
+  DATA_TYPE **,
+  DATA_TYPE **,
   DATA_TYPE *,
   DATA_TYPE *,
   DATA_TYPE *,

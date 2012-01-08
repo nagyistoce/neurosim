@@ -441,6 +441,11 @@ IntegrationTest::allocateHostData()
   CALLOC(dataUpdateNeuronsError, cl_uint, UPDATE_NEURONS_ERROR_BUFFER_SIZE_WORDS);
   REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataUpdateNeuronsError);
 #endif
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+  /* allocate memory for toleraces */
+  CALLOC(psTolerance, CL_DATA_TYPE, UPDATE_NEURONS_TOLERANCE_CHUNKS);
+  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, psTolerance);
+#endif
 
   /*Parameters for each neuron in the network: */
   CALLOC(modelParameters, cl_float, UPDATE_NEURONS_TOTAL_NEURONS*
@@ -1859,9 +1864,12 @@ IntegrationTest::psInit
     }
     
     /*Voltages are shifted relative to vr: */
-    nrnp_ps->l       = (DATA_TYPE)(-k*(vt-vr))*(DATA_TYPE)abs(1.0 - 0.3*((double)rand()/((double)RAND_MAX))); 
-    nrnp_ps->v_reset = (DATA_TYPE)(v_reset-vr)*(DATA_TYPE)abs(1.0 - 0.3*((double)rand()/((double)RAND_MAX)));
-    nrnp_ps->v_peak  = (DATA_TYPE)(v_peak-vr)*(DATA_TYPE)abs(1.0 - 0.3*((double)rand()/((double)RAND_MAX))); 
+    nrnp_ps->l       = (DATA_TYPE)(-k*(vt-vr))*(DATA_TYPE)abs(1.0 - 0.3*
+      ((double)rand()/((double)RAND_MAX))); 
+    nrnp_ps->v_reset = (DATA_TYPE)(v_reset-vr)*(DATA_TYPE)abs(1.0 - 0.3*
+      ((double)rand()/((double)RAND_MAX)));
+    nrnp_ps->v_peak  = (DATA_TYPE)(v_peak-vr)*(DATA_TYPE)abs(1.0 - 0.3*
+      ((double)rand()/((double)RAND_MAX))); 
     nrnp_ps->E_ampa  = (DATA_TYPE)(E_ampa-vr); 
     nrnp_ps->E_gaba  = (DATA_TYPE)(E_gaba-vr);
     
@@ -1914,6 +1922,9 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
 {
 #if UPDATE_NEURONS_ENABLE_V00
   int result = SDK_SUCCESS;
+  
+  SET_RANDOM_SEED(srandSeed);
+  LOG("initializeDataForKernelUpdateNeurons: set srand seed to " << srandSeed);
   
   memset(dataSpikePackets, 0, dataSpikePacketsSizeBytes);
   
@@ -1997,9 +2008,28 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
       CONST_CO(constantCoefficients,2,i) = co[2][i];
       CONST_CO(constantCoefficients,3,i) = co[3][i];
     }
+    
     CONST_TOL(constantCoefficients) = tol_ps;
+    
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    {
+      #define psToleranceValueCount     17
+      #define psToleranceValuesOffset   0
+      const double psToleranceValues[psToleranceValueCount] = 
+        {1e-1,1e-2,1e-3,1e-4,1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-11,1e-12,1e-13,1e-14,1e-15,1e-16,0.0};
+      
+      for(cl_uint i = 0; i < UPDATE_NEURONS_TOLERANCE_CHUNKS; i++)
+      {
+        cl_uint selection = cl_uint(abs(psToleranceValuesOffset + 
+          (psToleranceValueCount-1-psToleranceValuesOffset)*((double)rand()/((double)RAND_MAX))));
+        psTolerance[i] = CL_DATA_TYPE(psToleranceValues[selection]);
+      }
+      #undef psToleranceValueCount
+      #undef psToleranceValuesOffset
+    }
+#endif
   }
-
+  
   return result;
 #else
   std::cerr << "ERROR, initializeDataForKernelUpdateNeurons: " 
@@ -3276,6 +3306,9 @@ IntegrationTest::setupCL()
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataUpdateNeuronsErrorBuffer, dataUpdateNeuronsErrorSizeBytes);
 #endif
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    CREATE_BUFFER(CL_MEM_READ_ONLY, psToleranceBuffer, psToleranceSizeBytes);
+#endif
     CREATE_BUFFER(CL_MEM_READ_ONLY, constantCoefficientsBuffer, constantCoefficientsSizeBytes);
     CREATE_BUFFER(CL_MEM_READ_WRITE, modelVariablesBuffer, modelVariablesSizeBytes);
     CREATE_BUFFER(CL_MEM_READ_ONLY, modelParametersBuffer, modelParametersSizeBytes);
@@ -3499,6 +3532,9 @@ IntegrationTest::runCLKernels()
 
 #if UPDATE_NEURONS_ENABLE_V00
   {
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, psToleranceBuffer, psToleranceSizeBytes, psTolerance);
+#endif
   ENQUEUE_WRITE_BUFFER(CL_FALSE, constantCoefficientsBuffer, constantCoefficientsSizeBytes, 
     constantCoefficients);
   ENQUEUE_WRITE_BUFFER(CL_FALSE, modelVariablesBuffer, modelVariablesSizeBytes, 
@@ -3665,6 +3701,9 @@ IntegrationTest::runCLKernels()
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataUpdateNeuronsErrorBuffer, argNumUpdateNeuronsV00++);
 #endif
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+  SET_KERNEL_ARG(kernelUpdateNeuronsV00, psToleranceBuffer, argNumUpdateNeuronsV00++);
+#endif
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, constantCoefficientsBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, modelParametersBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, modelVariablesBuffer, argNumUpdateNeuronsV00++);
@@ -3682,6 +3721,10 @@ IntegrationTest::runCLKernels()
 #endif
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
   SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataUpdateNeuronsErrorBuffer, 
+    argNumUpdateSpikedNeuronsV00++);
+#endif
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, psToleranceBuffer, 
     argNumUpdateSpikedNeuronsV00++);
 #endif
   SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, constantCoefficientsBuffer, 
@@ -4843,17 +4886,21 @@ IntegrationTest::runCLKernels()
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02 &&\
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && EXPAND_EVENTS_ENABLE)
-    bool restVarsAndParams = (currentTimeStep==0); /*TODO: fix, doesnt work with !(currentTimeStep%17);*/
+    bool resetVarsAndParams = (currentTimeStep==0); /*TODO: fix, doesnt work with !(currentTimeStep%17);*/
     if(initializeDataForKernelUpdateNeurons(!(MAKE_EVENT_PTRS_ENABLE), 
-      restVarsAndParams, restVarsAndParams, currentTimeStep) != SDK_SUCCESS)
+      resetVarsAndParams, resetVarsAndParams, currentTimeStep) != SDK_SUCCESS)
     {
       std::cout 
       << "Failed initializeDataForKernelUpdateNeurons" << std::endl; 
       verified = false; 
       break;
     }
-    if(restVarsAndParams)
+    if(resetVarsAndParams)
     {
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+      ENQUEUE_WRITE_BUFFER(CL_TRUE, psToleranceBuffer, psToleranceSizeBytes, 
+        psTolerance);
+#endif
       ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
         dataSpikePackets);
       ENQUEUE_WRITE_BUFFER(CL_TRUE, constantCoefficientsBuffer, constantCoefficientsSizeBytes, 
@@ -5177,13 +5224,18 @@ IntegrationTest::runCLKernels()
       result = updateStep
       (
         IGNORE_SOLVER_EXCEPTIONS,
-        UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE,
         UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP,
         step,
         UPDATE_NEURONS_TOTAL_NEURONS,
         UPDATE_NEURONS_PS_ORDER_LIMIT,
         UPDATE_NEURONS_NR_ORDER_LIMIT,
+#if (UPDATE_NEURONS_TOLERANCE_MODE == 0)
+        UPDATE_NEURONS_NR_ZERO_TOLERANCE
+#elif (UPDATE_NEURONS_TOLERANCE_MODE == 1)
         UPDATE_NEURONS_NR_TOLERANCE
+#elif (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+        UPDATE_NEURONS_NR_ZERO_TOLERANCE
+#endif
       );
       if(result != SDK_SUCCESS && !IGNORE_SOLVER_EXCEPTIONS){break;}
     }
@@ -7310,23 +7362,22 @@ IntegrationTest::stepIzPs
   int ps_order_limit,
   int nr_order_limit,
   DATA_TYPE nrTolerance,
-  bool variableDelaysEnalbe,
-  bool zeroTolEnable
+  bool variableDelaysEnalbe
 )
 /**************************************************************************************************/
 {
 #define PRINT_stepIzPs                                                            ERROR_TRACK_ENABLE
 	int result = SDK_SUCCESS;
   
-  DATA_TYPE v,u,g_ampa,g_gaba,chi,E_ampa,E_gaba,t,start,tol;
-	DATA_TYPE k,a,b,E,I,vnew,dv,dx,dx_old,dt_part,dt_full,dt,eta[4]; 
+  DATA_TYPE v,u,g_ampa,g_gaba,chi,E_ampa,E_gaba,t,start;
+	DATA_TYPE k,a,b,E,I,vnew,dv,dx,dx_old,dt_part,dt_full,dt; 
 	int ps_order,i,j,nrn_ind,steps;
 	int err_nv=4, nv=5;
 	steps = ip[1];
   nrn_ind = ip[4];
 
   /*decay_ampa = fp[10];decay_gaba = fp[11];*/
-	dt = fp[12]; dt_full = fp[13]; t = fp[15]; start = fp[16]; tol = fp[17];
+	dt = fp[12]; dt_full = fp[13]; t = fp[15]; start = fp[16];
 		
 	/*extract variables from neuron structure*/
 	v = nrnp->v; u = nrnp->u; g_ampa = nrnp->g_ampa; g_gaba = nrnp->g_gaba;
@@ -7335,7 +7386,13 @@ IntegrationTest::stepIzPs
 	chi = k*v - g_ampa - g_gaba + nrnp->l;
 
 	/*Set error tolerance */
-  eta[0] = tol;eta[1] = tol;eta[2] = tol;eta[3] = tol;
+#if(UPDATE_NEURONS_TOLERANCE_MODE != 0)
+  DATA_TYPE tol = fp[17], eta[4];
+  eta[0] = tol; eta[1] = tol; eta[2] = tol; eta[3] = tol;
+#endif
+#if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+  if(tol != 0){nrTolerance = tol;}
+#endif
 
 	yp[0][0] = v;yp[1][0] = u;yp[2][0] = g_ampa;yp[3][0] = g_gaba;yp[4][0] = chi;
 	fp[0] = I; fp[1] = k; fp[3] = E_ampa; fp[4] = E_gaba;
@@ -7349,13 +7406,14 @@ IntegrationTest::stepIzPs
   
   /*integrated step function*/  
   ps_order = ps_step(
-    zeroTolEnable,
+#if(UPDATE_NEURONS_TOLERANCE_MODE != 0)
+    eta,
+#endif
     yp,
     co,
     yold,
     ynew,
     fp,
-    eta,
     iz_first,
     iz_iter,
     ps_order_limit,
@@ -7467,13 +7525,14 @@ IntegrationTest::stepIzPs
     
     /*new integrated step function*/  
     ps_order = ps_step(
-      zeroTolEnable,
+#if(UPDATE_NEURONS_TOLERANCE_MODE != 0)
+    eta,
+#endif
       yp,
       co,
       yold,
       ynew,
       fp,
-      eta,
       iz_first,
       iz_iter,
       ps_order_limit,
@@ -7524,7 +7583,6 @@ int
 IntegrationTest::updateStep
 (
   bool    ignoreFailures,
-  bool    psZeroToleranceEnable,
   cl_uint injectCurrentUntilStep,
   cl_uint currentTimeStep,
   cl_uint totalNeurons,
@@ -7560,8 +7618,10 @@ IntegrationTest::updateStep
   fp_ps[8]  = co_g_ampa_ps;
   fp_ps[9]  = co_g_gaba_ps;
   fp_ps[12] = dt_ps;
+#if(UPDATE_NEURONS_TOLERANCE_MODE == 1)
   fp_ps[17] = tol_ps;
-  
+#endif
+
   nrnx_ps = nrn_ps + totalNeurons;
   
   if((injectCurrentUntilStep > 0) && (currentTimeStep == injectCurrentUntilStep))
@@ -7583,7 +7643,11 @@ IntegrationTest::updateStep
     /*Work through substeps separated by synaptic events*/
     /*start time of substep (in [0 1] of whole step)*/
     start_ps = 0; 
-    fp_ps[16] = start_ps; 
+    fp_ps[16] = start_ps;
+    
+#if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    fp_ps[17] = psTolerance[nrn_ind/(UPDATE_NEURONS_TOTAL_NEURONS/UPDATE_NEURONS_TOLERANCE_CHUNKS)];
+#endif
 
     if(nrnp_ps->n_in)
     {
@@ -7626,8 +7690,7 @@ IntegrationTest::updateStep
             psOrderLimit,
             nrOrderLimit,
             (DATA_TYPE)nrTolerance,
-            FLIXIBLE_DELAYS_ENABLE,
-            psZeroToleranceEnable
+            FLIXIBLE_DELAYS_ENABLE
           );
           if(result != SDK_SUCCESS && !ignoreFailures){break;}
 
@@ -7698,8 +7761,7 @@ IntegrationTest::updateStep
         psOrderLimit,
         nrOrderLimit,
         (DATA_TYPE)nrTolerance,
-        FLIXIBLE_DELAYS_ENABLE,
-        psZeroToleranceEnable
+        FLIXIBLE_DELAYS_ENABLE
       );
       if(result != SDK_SUCCESS && !ignoreFailures){break;}
     }
@@ -7726,8 +7788,7 @@ IntegrationTest::updateStep
         psOrderLimit,
         nrOrderLimit,
         (DATA_TYPE)nrTolerance,
-        FLIXIBLE_DELAYS_ENABLE,
-        psZeroToleranceEnable
+        FLIXIBLE_DELAYS_ENABLE
       );
       if(result != SDK_SUCCESS && !ignoreFailures){break;}
     }
@@ -7885,13 +7946,18 @@ IntegrationTest::verifyKernelUpdateNeurons
   result = updateStep
   (
     ignoreSolverFailuresHost,
-    UPDATE_NEURONS_ZERO_TOLERANCE_ENABLE,
     UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP,
     currentTimeStep,
     UPDATE_NEURONS_TOTAL_NEURONS,
     UPDATE_NEURONS_PS_ORDER_LIMIT,
     UPDATE_NEURONS_NR_ORDER_LIMIT,
+#if (UPDATE_NEURONS_TOLERANCE_MODE == 0)
+    UPDATE_NEURONS_NR_ZERO_TOLERANCE
+#elif (UPDATE_NEURONS_TOLERANCE_MODE == 1)
     UPDATE_NEURONS_NR_TOLERANCE
+#elif (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    UPDATE_NEURONS_NR_ZERO_TOLERANCE
+#endif
   );
 
   if(result != SDK_SUCCESS && !ignoreSolverFailuresHost){return result;}
@@ -8553,6 +8619,10 @@ IntegrationTest::cleanup()
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
   if(dataUpdateNeuronsError)
       free(dataUpdateNeuronsError);
+#endif
+#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+  if(psTolerance)
+      free(psTolerance);
 #endif
   if(modelParameters)
       free(modelParameters);
