@@ -30,13 +30,13 @@
     <ClCompile Include="iz_util.c" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="compilerOptions.txt" />
     <None Include="IntegrationTest.vcxproj.user" />
     <None Include="Kernel_ExpandEvents.cl" />
     <None Include="Kernel_GroupEvents.cl" />
     <None Include="Kernel_MakeEventPointers.cl" />
     <None Include="Kernel_ScanHistogram.cl" />
     <None Include="Kernel_UpdateNeurons.cl" />
+    <None Include="oclCompilerOptions.txt" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}</ProjectGuid>
@@ -189,7 +189,7 @@ copy Kernel_GroupEvents.cl "$(OUTDIR)"\Kernel_GroupEvents.cl
 copy Kernel_MakeEventPointers.cl "$(OUTDIR)"\Kernel_MakeEventPointers.cl
 copy Kernel_UpdateNeurons.cl "$(OUTDIR)"\Kernel_UpdateNeurons.cl
 copy Definitions.h "$(OUTDIR)"\Definitions.h
-copy compilerOptions.txt "$(OUTDIR)"\compilerOptions.txt</Command>
+copy oclCompilerOptions.txt "$(OUTDIR)"\oclCompilerOptions.txt</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

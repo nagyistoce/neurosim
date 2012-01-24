@@ -15,40 +15,17 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #ifndef INC_DEFINITIONS_H
 #define INC_DEFINITIONS_H
 
-/*Somer parameters here should be passed rather then hard-coded:*/
+/** ############################################################################################# **
 
-/*Connectivity density*/
-#ifndef P_CONNECT
-  #define P_CONNECT               2
-#endif
+  I. Generic Parameters, Macros and Definitions
+  
+** ############################################################################################# **/
 
-/*Connectivity ratio (% of excitatory): */
-#ifndef R_CONNECT
-  #define R_CONNECT               0.94
-#endif
 
-/*IZ model variable tolerance select (0-15): */
-#define IZ_TOL                    7
 
-/*If ZERO_TOL ==  1 it overwrites IZ_TOL with zero tolerance*/
-#ifndef ZERO_TOL
-  #define ZERO_TOL                1
-#endif
-
-/*Newton-Raphson error tolerance: */
-#ifndef NR_TOL
-  #define NR_TOL                  (1e-8f)
-#endif
-
-/*Verification error tolerance: */
-#define VERIFY_TOL                (1e-7f)
-
-/*If VERIFY_ZERO_TOL ==  1 it overwrites VERIFY_TOL with zero tolerance*/
-#ifndef VERIFY_ZERO_TOL
-  #define VERIFY_ZERO_TOL         1 
-#endif
-
-/*Math macros:*/
+/***************************************************************************************************
+  Math macros
+***************************************************************************************************/
 #define TESTPOW2(x)           (x && !( (x-1) & x ))
 #define FLOAT_UNFLIP(f)       (f ^ (((f >> 31) - 1) | 0x80000000))
 #define FLOAT_FLIP(f)         (f ^ (-int(f >> 31) | 0x80000000))
@@ -86,7 +63,43 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define BIN_16_RELAY(b1,b2,b3,b4) BIN_16_HEXIFY(b1, b2, b3, b4)
 #define BIN_16(b1,b2,b3,b4) BIN_16_RELAY(BIN_##b1, BIN_##b2, BIN_##b3, BIN_##b4)
 
-/* Print macros: */
+/*Checksum*/
+/*For finding primes refer to http://www.archimedes-lab.org/primOmatic.html*/
+#define CHECKSUM01(checksum, data)\
+  {\
+    checksum += ((1705662821u + data) % 2147483659u);\
+  }
+  
+#define SET_RANDOM_SEED(seed)\
+  {\
+    time_t t = time(NULL);\
+    seed = *((unsigned int *)(&t)) + srandCounter;\
+    srandCounter++;\
+    srand(seed);\
+  }
+  
+#define GET_RANDOM_INT(setValue, max, minPercent, maxPercent)\
+  {\
+    if(minPercent > maxPercent){setValue = -1;}\
+    if((minPercent > 100.0) || (maxPercent > 100.0)){setValue = -1;}\
+    if((minPercent < 0.0) || (maxPercent < 0.0)){setValue = -1;}\
+    if(setValue != -1)\
+    {\
+      if(minPercent == maxPercent){setValue = cl_uint(((double)max)*(maxPercent/100.0));}\
+      else\
+      {\
+        setValue = cl_uint(((double)(max))*((minPercent/100.0) + \
+          abs(((maxPercent-minPercent)/100.0)*((double)rand()/((double)RAND_MAX)))));\
+      }\
+    }\
+  }
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Print macros
+***************************************************************************************************/
 #define PRINTF              printf
 #define PRINTERR(...)       fprintf(stderr,__VA_ARGS__)
 #define PRINT_HEX_TO_FILE(filePtr, byteSize, data)\
@@ -108,14 +121,13 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
     }\
     PRINTF("%02X",(unsigned char)(dataLong >> i));\
   }
+/**************************************************************************************************/
 
-/*Checksum*/
-/*For finding primes refer to http://www.archimedes-lab.org/primOmatic.html*/
-#define CHECKSUM01(checksum, data)\
-  {\
-    checksum += ((1705662821 + data)%2147483659);\
-  }
-  
+
+
+/***************************************************************************************************
+  Memory allocation and registration
+***************************************************************************************************/
 /*Memory size and name registration for statistics*/
 #define REGISTER_TIME(kernel_name, time, increment)\
   {\
@@ -164,6 +176,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
     kernels.insert(kernel_name);\
     kernelStats.kernelNames = kernels;\
   }
+  
 /*Memory types*/
 #define MEM_CONSTANT                                          0
 #define MEM_GLOBAL                                            1
@@ -181,7 +194,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
       return SDK_FAILURE;\
     }\
   }
-  
+
 /*Reference host memory to another memory: name1 is referenced to name2 assuming that both have 
   the same charackteristics*/
 #define REFERENCE(name1, name2)\
@@ -195,7 +208,13 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
       return SDK_FAILURE;\
     }\
   }
-  
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  OCL Macros and Constants
+***************************************************************************************************/
 /*Allocate buffer*/
 #define CREATE_BUFFER(flags, buffer, size)\
   {\
@@ -238,7 +257,8 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
     {\
       status = writeEvt.getInfo<cl_int>(CL_EVENT_COMMAND_EXECUTION_STATUS,&eventStatus);\
       if(!sampleCommon->checkVal(status, CL_SUCCESS,\
-        "enqueueWriteBuffer, cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS) failed. (" #buffer ")"))\
+        "enqueueWriteBuffer, \
+        cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS) failed. (" #buffer ")"))\
       {\
         return SDK_FAILURE;\
       }\
@@ -267,7 +287,8 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
     {\
       status = readEvt.getInfo<cl_int>(CL_EVENT_COMMAND_EXECUTION_STATUS, &eventStatus);\
       if(!sampleCommon->checkVal(status, CL_SUCCESS, \
-        "enqueueReadBuffer, cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS) failed. (" #buffer ")"))\
+        "enqueueReadBuffer, \
+        cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS) failed. (" #buffer ")"))\
       {\
         return SDK_FAILURE;\
       }\
@@ -285,36 +306,24 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
     }\
   }
   
-#define SET_RANDOM_SEED(seed)\
-  {\
-    time_t t = time(NULL);\
-    seed = *((unsigned int *)(&t)) + srandCounter;\
-    srandCounter++;\
-    srand(seed);\
-  }
-  
-#define GET_RANDOM_INT(setValue, max, minPercent, maxPercent)\
-  {\
-    if(minPercent > maxPercent){setValue = -1;}\
-    if((minPercent > 100.0) || (maxPercent > 100.0)){setValue = -1;}\
-    if((minPercent < 0.0) || (maxPercent < 0.0)){setValue = -1;}\
-    if(setValue != -1)\
-    {\
-      if(minPercent == maxPercent){setValue = cl_uint(((double)max)*maxPercent);}\
-      else\
-      {\
-        setValue = cl_uint(((double)(max))*((minPercent/100.0) + \
-          abs(((maxPercent-minPercent)/100.0)*((double)rand()/((double)RAND_MAX)))));\
-      }\
-    }\
-  }
-  
 /*Define OpenCL 1.2 consants*/
 #if !defined (CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT)
   #define CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT                 (1 << 7)
 #endif
+/**************************************************************************************************/
 
-/*Logging names and macros*/
+
+  
+/***************************************************************************************************
+  Log and Statistics Macros and Definitions
+***************************************************************************************************/
+/*Log report messages*/
+#if !(defined(LOG_REPORT))
+  #define LOG_REPORT                                          0
+#endif
+#if !(defined(LOG_REPORT_FILE_NAME))
+  #define LOG_REPORT_FILE_NAME                                "log_report.txt"
+#endif
 #define LOG_MODEL_VARIABLES_NEURON_ID                         1
 #define LOG_SIMULATION_FILE_NAME                              "log_simulation.txt"
 #define LOG_MODEL_VARIABLES_FILE_NAME                         "log_model_variable_trace.csv"
@@ -325,7 +334,99 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
                                                               << nrn_ps[i].g_gaba << "," \
                                                               << nrn_ps[i].v_peak << "," \
                                                               << nrn_ps[i].I << std::endl
+/**************************************************************************************************/
 
+
+
+/***************************************************************************************************
+  Device and platform parameters
+***************************************************************************************************/
+/*Wave size*/
+#define WF_SIZE_WI                                            64
+/*Target Device
+  "Cayman"
+  "AMD Engineering Sample"
+  "Tahiti"
+*/
+#define TARGET_DEVICE_NAME                                    "Tahiti"
+/*Target Platform Vendor*/
+#define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Simulation parameters
+***************************************************************************************************/
+/*Network size in terms of bits (1<<TOTAL_NEURON_BITS)*/
+#if !(defined(TOTAL_NEURON_BITS))
+  #define TOTAL_NEURON_BITS                                   17 /*17*/
+#endif
+/*Max number of synapses per neuron*/
+#if !(defined(MAX_SYNAPSES_PER_NEURON))
+  #define MAX_SYNAPSES_PER_NEURON                             (30*64) /*(20*64)*/
+#endif
+/*Synapse deviation ratio from max defined by MAX_SYNAPSES_PER_NEURON*/
+#define SYNAPSE_DEVIATION_RATIO                               0.5
+/*Size of spike packet buffer (spikes) per WF*/
+#if !(defined(SPIKE_DATA_BUFFER_SIZE))
+  #define SPIKE_DATA_BUFFER_SIZE                              127 /*127*/
+#endif
+/*Size of event data buffer*/
+#if !(defined(EVENT_DATA_BUFFER_SIZE))
+  #define EVENT_DATA_BUFFER_SIZE                              (24*1024)
+#endif
+/*The number of spike packets*/
+#if !(defined(SPIKE_PACKETS))
+  #define SPIKE_PACKETS                                       128 /*128*/
+#endif
+/*Solver error tolerance mode (see usage below)*/
+#if !(defined(TOLERANCE_MODE))
+  #define TOLERANCE_MODE                                      2 /*0,1,2*/
+#endif
+/*Max number of time slots (define the longest delay)*/
+#define EVENT_TIME_SLOTS                                      16
+/*Minimum event delay latency*/
+#define MINIMUM_PROPAGATION_DELAY                             1.0f
+/*Enable overwriting spike packet data until defined simulation step. Disabled if 0.
+  (useful for initiating gradually increasing spiking activity during initial steps) */
+#if !(defined(OVERWRITE_SPIKES_UNTILL_STEP))
+  #define OVERWRITE_SPIKES_UNTILL_STEP                        (2*EVENT_TIME_SLOTS)
+#endif
+/*Spike buffer occupancy bounds during overwriting spike packet data*/
+#define OVERWRITE_SPIKES_MIN_MAX_PERCENT                      0.0, 0.9
+/*Enable injecting current until defined simulation step. Disabled if 0.
+  (useful for initiating abruptly increasin spiking activity during initial steps) */
+#define INJECT_CURRENT_UNTILL_STEP                            0
+/*Start time profiling simulation at step*/
+#if !(defined(START_PROFILING_AT_STEP))
+  #if OVERWRITE_SPIKES_UNTILL_STEP < INJECT_CURRENT_UNTILL_STEP
+    #define START_PROFILING_AT_STEP                           (INJECT_CURRENT_UNTILL_STEP)
+  #else
+    #define START_PROFILING_AT_STEP                           (OVERWRITE_SPIKES_UNTILL_STEP)
+  #endif
+#endif
+/*Step size*/
+#define SIMULATION_STEP_SIZE                                  1
+/*Floating point standard*/
+#define DATA_TYPE                                             float
+#define CL_DATA_TYPE                                          cl_float
+/*Enable error try and catch if 1 or disable if 0*/
+#define ERROR_TRY_CATCH_ENABLE                                0
+/*Ignore exceptions related to solver math and relay on their handling by solver routine:
+  PS divergence
+  PS order overflow
+  Detection of more than a single spike per step
+  NR divergence
+  NR order overflow*/
+#define IGNORE_SOLVER_EXCEPTIONS                              1
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Simulation Mode Configuration
+***************************************************************************************************/
 /*Simulation mode:
   0 - Verification and unit tests. For unit tests set a single bit in ENABLE_MASK
   1 - A run with non-blocking return (useful for APP Profiler)
@@ -334,11 +435,16 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   3 - Application-level time profiling without verification and with relaxed math.
   4 - Kernel-level time profiling without verification and with relaxed math.
 */
-#define SIMULATION_MODE                                       3
+
+#if !(defined(SIMULATION_MODE))
+  #define SIMULATION_MODE                                     3
+#endif
 
 #if SIMULATION_MODE == 0                             /*Simulation mode: verification and unit test*/
-//#define ENABLE_MASK                                           BIN_16(0000,0000,1000,0000)
-#define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
+#if !(defined(ENABLE_MASK))
+  //#define ENABLE_MASK                                         BIN_16(1000,0000,0000,0000)
+  #define ENABLE_MASK                                         BIN_16(1111,1111,1000,0000)
+#endif
 /*Functional verification of each kernel*/
 #define KERNEL_VERIFY_ENABLE                                  1
 /*Enable high-level verification of sort results*/
@@ -360,9 +466,14 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 /*Enable gathering statistics*/
 #define STATISTICS_ENABLE                                     1
 /*Run simulation for this many steps*/
-#define SIMULATION_TIME_STEPS                                 (5*EVENT_TIME_SLOTS)
+#if !(defined(SIMULATION_TIME_STEPS))
+  #define SIMULATION_TIME_STEPS                               (5*EVENT_TIME_SLOTS)
+#endif
 #elif SIMULATION_MODE > 0                                          /*Simulation mode: performance*/
-#define ENABLE_MASK                                           BIN_16(1111,1111,1000,0000)
+#if !(defined(ENABLE_MASK))
+  //#define ENABLE_MASK                                         BIN_16(1000,0000,0000,0000)
+  #define ENABLE_MASK                                         BIN_16(1111,1111,1000,0000)
+#endif
 /*Functional verification of each kernel*/
 #define KERNEL_VERIFY_ENABLE                                  0
 /*Enable high-level verification of sort results*/
@@ -407,7 +518,9 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define NETWORK_VERIFY_ENABLE                               0
 #endif
 /*Run simulation for this many steps*/
-#define SIMULATION_TIME_STEPS                                 (10*EVENT_TIME_SLOTS)
+#if !(defined(SIMULATION_TIME_STEPS))
+  #define SIMULATION_TIME_STEPS                               (20*EVENT_TIME_SLOTS)
+#endif
 #endif
 /*
   Enable simulation stages (use ENABLE_MASK above)
@@ -426,62 +539,33 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define GROUP_EVENTS_ENABLE_V03                               (ENABLE_MASK&512)
 #define MAKE_EVENT_PTRS_ENABLE                                (ENABLE_MASK&264)
 #define UPDATE_NEURONS_ENABLE_V00                             (ENABLE_MASK&128)
+/**************************************************************************************************/
 
-/*Target Platform Vendor*/
-#define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."
-/*Target Device
-  "Cayman"
-  "AMD Engineering Sample"
-  "Tahiti"
-*/
-#define TARGET_DEVICE_NAME                                    "Tahiti"
 
-/*String used to tag statistics relevant to all kernels*/
-#define KERNEL_ALL                                            "All Kernels"
 
-/*Simulation parameters*/
-#define SIMULATION_STEP_SIZE                                  1
-
-/*Enable error try and catch*/
-#define ERROR_TRY_CATCH_ENABLE                                0
-#define EVENT_TIME_SLOTS                                      16
-#define TOTAL_NEURON_BITS                                     17
-#define WF_SIZE_WI                                            64
-#define DATA_TYPE                                             float
-#define CL_DATA_TYPE                                          cl_float
-/*Size of spike packet buffer (spikes) per WF*/
-#define SPIKE_DATA_BUFFER_SIZE                                127
-/*Size of event data buffer*/
-#define EVENT_DATA_BUFFER_SIZE                                (16*1024)
-/*Enable overwriting spike packet data until defined simulation step. Disabled if 0.
-  (useful for initiating gradually increasing spiking activity during initial steps) */
-#define OVERWRITE_SPIKES_UNTILL_STEP                          (2*EVENT_TIME_SLOTS)
-/*Enable injecting current until defined simulation step. Disabled if 0.
-  (useful for initiating abruptly increasin spiking activity during initial steps) */
-#define INJECT_CURRENT_UNTILL_STEP                            0
-/*Start time profiling simulation at step*/
-#if OVERWRITE_SPIKES_UNTILL_STEP < INJECT_CURRENT_UNTILL_STEP
-  #define START_PROFILING_AT_STEP                             (INJECT_CURRENT_UNTILL_STEP)
-#else
-  #define START_PROFILING_AT_STEP                             (OVERWRITE_SPIKES_UNTILL_STEP)
-#endif
-
-/*Reference simulation parameters*/
+/***************************************************************************************************
+  Simulation parameters for the CPU implementation used as a verification reference
+***************************************************************************************************/
 /*Synaptic event queue size limit per nrn: */
 #define REFERENCE_EVENT_QUEUE_SIZE                            1000
 #define FLIXIBLE_DELAYS_ENABLE                                1
-/*Ignore exceptions related to solver math and relay on their handling by solver routine:
-  PS divergence
-  PS order overflow
-  Detection of more than a single spike per step
-  NR divergence
-  NR order overflow*/
-#define IGNORE_SOLVER_EXCEPTIONS                              1
+/**************************************************************************************************/
 
 
-/*
-                                      General Restrictions
-*/
+
+/***************************************************************************************************
+  Misceleneous definitions
+***************************************************************************************************/
+/*String used to tag statistics relevant to all kernels*/
+#define KERNEL_ALL                                            "All Kernels"
+#define OCL_COMPILER_OPTIONS_FILE_NAME                        "oclCompilerOptions.txt"
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  General Restrictions
+***************************************************************************************************/
 #if SORT_VERIFY_ENABLE && \
     !(GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
      GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
@@ -491,7 +575,14 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #if (PROFILING_MODE == 1) && KERNEL_VERIFY_ENABLE
   #error (cannot use (PROFILING_MODE = 1) if KERNEL_VERIFY_ENABLE is true)
 #endif
-/*
+/**************************************************************************************************/
+
+
+
+/** ############################################################################################# **
+
+  II. Kernel-specific Parameters, Macros and Definitions
+  
   Configuration interface for each kernel exists for tuning kernels to desired functionality and
   performance. Preprocessor allows to define parameters as literals, which reduces memory use, 
   logic and potentially increases performance.
@@ -503,7 +594,11 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   Host and device directive names are different because host code may be using several variants
   whereas the device code (kernel) is always compiled as a single variant.
   Both types of directives for the same variant have to have the same values.
-*/
+  
+** ############################################################################################# **/
+
+
+
 /***************************************************************************************************
 
   Configuration interface with propagation kernel for synaptic events
@@ -511,25 +606,40 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 ***************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
   /*Verification, Testing*/
+  /*CONTROL: enable verification*/
   #define EXPAND_EVENTS_VERIFY_ENABLE                         KERNEL_VERIFY_ENABLE
+  /*CONTROL: reset data each EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT time step*/
   #define EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT               17
+  
   /*Debugging*/
+  /*CONTROL: enable debugging*/
   #define EXPAND_EVENTS_DEBUG_ENABLE                          (0)&DEBUG_MASK
-  #define EXPAND_EVENTS_DEBUG_BUFFER_SIZE_WORDS               (EXPAND_EVENTS_WG_SIZE_WI*EXPAND_EVENTS_GRID_SIZE_WG)//(1024*1024)
+  /*CONTROL: debug buffer size*/
+  #define EXPAND_EVENTS_DEBUG_BUFFER_SIZE_WORDS               (1024*1024)
+  
   /*Error tracking and codes*/
-  #define EXPAND_EVENTS_ERROR_TRY_CATCH_ENABLE                ERROR_TRY_CATCH_ENABLE /*Options: 0, 1*/
+  /*CONTROL: enable error tracking*/
   #define EXPAND_EVENTS_ERROR_TRACK_ENABLE                    ERROR_TRACK_ENABLE
   #define EXPAND_EVENTS_ERROR_BUFFER_SIZE_WORDS               1
   #define EXPAND_EVENTS_ERROR_CODE_1                          0x1 /*EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE overflow*/
+  
+  /*CONTROL: the number of spike packets*/
+  #define EXPAND_EVENTS_SPIKE_PACKETS                         (SPIKE_PACKETS)
+  #define EXPAND_EVENTS_SPIKE_PACKETS_PER_WG                  1
+  
   /*Kernel parameters*/
   #define EXPAND_EVENTS_KERNEL_FILE_NAME                      "Kernel_ExpandEvents.cl"
   #define EXPAND_EVENTS_KERNEL_NAME                           "expand_events"
-  #define EXPAND_EVENTS_WF_SIZE_WI                            WF_SIZE_WI /*Options: 64*/
-  #define EXPAND_EVENTS_WG_SIZE_WF                            4
+  #define EXPAND_EVENTS_WF_SIZE_WI                            WF_SIZE_WI
+  /*CONTROL: number of WFs in a WG*/
+  #if !(defined(EXPAND_EVENTS_WG_SIZE_WF))
+    #define EXPAND_EVENTS_WG_SIZE_WF                          4 /*Options: 1, 2, 4*/
+  #endif
   #define EXPAND_EVENTS_WG_SIZE_WI                            (EXPAND_EVENTS_WG_SIZE_WF*\
                                                               EXPAND_EVENTS_WF_SIZE_WI)
   #define EXPAND_EVENTS_GRID_SIZE_WG                          (EXPAND_EVENTS_SPIKE_PACKETS/\
                                                               EXPAND_EVENTS_SPIKE_PACKETS_PER_WG)
+  
   /*Spike data structure parameters (data in)*/
   #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE                SPIKE_DATA_BUFFER_SIZE
   #define EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE              2
@@ -537,30 +647,37 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS              (EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + \
                                                               EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE *\
                                                               EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS)
-  #define EXPAND_EVENTS_SPIKE_PACKETS                         128
-  #define EXPAND_EVENTS_SPIKE_PACKETS_PER_WG                  1
-  /*Synaptic data structure parameters*/
-  /*Max number of synapses per neuron*/
-  #define EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE                (10*128)
-  #define EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE                 (EXPAND_EVENTS_TOTAL_NEURONS+1)
-  /*Histogram of target neurons*/
-  #define EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM               1
-  #define EXPAND_EVENTS_HISTOGRAM_BIT_SHIFT                   0 /*Options, LSB: 0; MSB:(EXPAND_EVENTS_TOTAL_NEURON_BITS-EXPAND_EVENTS_HISTOGRAM_BIN_BITS)*/
-  #define EXPAND_EVENTS_HISTOGRAM_BIN_BITS                    4 /*Options: 4-8. Must be aligned with EXPAND_EVENTS_HISTOGRAM_BIN_MASK*/
-  #define EXPAND_EVENTS_HISTOGRAM_BIN_MASK                    0xF /*Must be aligned with EXPAND_EVENTS_HISTOGRAM_BIN_BITS*/
-  #define EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS                  (1<<EXPAND_EVENTS_HISTOGRAM_BIN_BITS)
+
   /*Time slot (bin) buffer parameters (data out)*/
-  #define EXPAND_EVENTS_TIME_SLOTS                            EVENT_TIME_SLOTS /*Options: 16*/
+  /*CONTROL: Max number of time slots (define the longest delay)*/
+  #define EXPAND_EVENTS_TIME_SLOTS                            EVENT_TIME_SLOTS
   #define EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS                EXPAND_EVENTS_GRID_SIZE_WG
   #define EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS            3
   #define EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE   EVENT_DATA_BUFFER_SIZE
+  
   /*NN parameters*/
-  #define EXPAND_EVENTS_TOTAL_NEURON_BITS                     TOTAL_NEURON_BITS /*16*/
+  /*CONTROL: Network size in terms of bits (1<<EXPAND_EVENTS_TOTAL_NEURON_BITS)*/
+  #define EXPAND_EVENTS_TOTAL_NEURON_BITS                     TOTAL_NEURON_BITS
   #define EXPAND_EVENTS_TOTAL_NEURONS                         (1<<EXPAND_EVENTS_TOTAL_NEURON_BITS)
   #define EXPAND_EVENTS_MAX_DELAY                             (EXPAND_EVENTS_TIME_SLOTS-\
                                                               SIMULATION_STEP_SIZE)
-  #define EXPAND_EVENTS_MIN_DELAY                             1.0f
+                                                              
+  /*Synaptic data structure parameters*/
+  /*CONTROL: Max number of synapses per neuron*/
+  #define EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE                (MAX_SYNAPSES_PER_NEURON)
+  #define EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE                 (EXPAND_EVENTS_TOTAL_NEURONS+1)
+  
+  /*Histogram of target neurons*/
+  #define EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM               1
+  #define EXPAND_EVENTS_HISTOGRAM_BIT_SHIFT                   0
+  #define EXPAND_EVENTS_HISTOGRAM_BIN_BITS                    4 /*Must be aligned with EXPAND_EVENTS_HISTOGRAM_BIN_MASK*/
+  #define EXPAND_EVENTS_HISTOGRAM_BIN_MASK                    0xF /*Must be aligned with EXPAND_EVENTS_HISTOGRAM_BIN_BITS*/
+  #define EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS                  (1<<EXPAND_EVENTS_HISTOGRAM_BIN_BITS)
+  
+  /*CONTROL: Minimum event delay latency*/
+  #define EXPAND_EVENTS_MIN_DELAY                             (MINIMUM_PROPAGATION_DELAY)
 #endif
+/**************************************************************************************************/
 
 
 
@@ -643,6 +760,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #error (Set option SCAN_USE_2LEVEL_REDUCE to 1)
 #endif
 #endif
+/**************************************************************************************************/
 
 
 
@@ -849,6 +967,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define GROUP_EVENTS_VALUES_MODE_V03                          2
 #endif/*END VARIANT_03*/
 #endif /*GROUP_EVENTS_ENABLE*/
+/**************************************************************************************************/
 
 
 
@@ -976,6 +1095,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #endif
 #endif
 #endif /*MAKE_EVENT_PTRS_ENABLE*/
+/**************************************************************************************************/
 
 
 
@@ -1054,13 +1174,13 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   2 - PS and NR tolerances are the same and defined on chunk basis in a constant data structure with 
       UPDATE_NEURONS_TOLERANCE_CHUNKS except that for neurons with PS zero tolerance (0.0) the NR
       tolerance is defined by UPDATE_NEURONS_NR_ZERO_TOLERANCE*/
-  #define UPDATE_NEURONS_TOLERANCE_MODE                           2
+  #define UPDATE_NEURONS_TOLERANCE_MODE                           TOLERANCE_MODE
   #define UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD       1
   #define UPDATE_NEURONS_TOLERANCE_CHUNKS                         (1<<8)
   /*Possible UPDATE_NEURONS_PS_TOLERANCE values: const double tols[16] = 
   {1e-1,1e-2,1e-3,1e-4,1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-11,1e-12,1e-13,1e-14,1e-15,1e-16};*/
-  #define UPDATE_NEURONS_PS_TOLERANCE                             (1.0e-7)
-  #define UPDATE_NEURONS_NR_TOLERANCE                             (1.0e-7) /*normally no more than UPDATE_NEURONS_PS_TOLERANCE*/
+  #define UPDATE_NEURONS_PS_TOLERANCE                             (1.0e-8)
+  #define UPDATE_NEURONS_NR_TOLERANCE                             (1.0e-8) /*normally no more than UPDATE_NEURONS_PS_TOLERANCE*/
   #define UPDATE_NEURONS_NR_ZERO_TOLERANCE                        (1.0e-16)
   #define UPDATE_NEURONS_PS_ORDER_LIMIT                           16
   #define UPDATE_NEURONS_NR_ORDER_LIMIT                           32
@@ -1164,5 +1284,6 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_SPIKE_PACKETS_V01                        (UPDATE_NEURONS_WG_SIZE_WF_V01*UPDATE_NEURONS_GRID_SIZE_WG_V01)
 #endif  /*END VARIANT_00*/
 #endif /*UPDATE_NEURONS_ENABLE*/
+/**************************************************************************************************/
 
 #endif /*INC_DEFINITIONS_H*/

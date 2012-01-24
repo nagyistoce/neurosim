@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<all>
+  <!-- Script Configuration -->
+  <config>
+    <!-- Script configuration parameters -->
+    <parameters>
+      <!-- Script configuration parameters for Windows -->
+      <MSWin32>
+        <!-- Target architecture. Options: x86_64 -->
+        <param id="TARGET_ARCHITECTURE">"x86_64"</param>
+        <!-- Windows compiler. Options: vc, mingw -->
+        <param id="WIN_COMPILER">"vc"</param>
+        <!-- Visual compiler directory (depends on target TARGET_ARCHITECTURE) -->
+        <param id="WIN_VC_DIR">"C:/Program Files (x86)/Microsoft Visual Studio 10.0/VC/bin/x86_amd64"</param>
+        <!-- Visual compiler directory (depends on target WIN_VC_DIR) -->
+        <param id="WIN_VC_ENV_SCRIPT">"vcvarsx86_amd64.bat"</param>
+        <!-- Mingw compiler directory -->
+        <param id="WIN_MINGW_DIR">"C:/MinGW64/bin"</param>
+        <!-- Msys tools directory -->
+        <param id="WIN_MSYS_DIR">"C:/msys/bin"</param>
+        <!-- OpenCL SDK directory -->
+        <param id="OCL_DIR">"C:/Program Files (x86)/AMD APP"</param>
+      </MSWin32>
+      <!-- Script configuration parameters for Linux -->
+      <linux>
+        <!-- Target architecture. Options: x86_64 -->
+        <param id="TARGET_ARCHITECTURE">"x86_64"</param>
+        <!-- OpenCL SDK directory -->
+        <param id="OCL_DIR">"C:/Program Files (x86)/AMD APP"</param>
+      </linux>
+    </parameters>
+    <!-- Environmental variables passed to execution -->
+    <environment>
+      <!-- Enable OpenCL 1.2 spec -->
+      <param id="ENABLE_OPENCL_1_2">1</param>
+      <!-- Dump kernel assembly files -->
+      <param id="GPU_DUMP_DEVICE_KERNEL">3</param>
+    </environment>
+  </config>
+
+</all>

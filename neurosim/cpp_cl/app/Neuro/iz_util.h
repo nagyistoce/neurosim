@@ -13,10 +13,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-#include <SDKCommon.hpp>
-#include <SDKApplication.hpp>
-#include <SDKFile.hpp>
-#include <SDKBitMap.hpp>
 
 
 

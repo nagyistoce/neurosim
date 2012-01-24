@@ -13,14 +13,33 @@
 #include "IntegrationTest.hpp"
 
 
-#if LOG_SIMULATION
-#define LOG(message)\
-  {\
-    time_t t; time (&t);\
-    dataToSimulationLogFile << ctime(&t) << " " << message << std::endl;\
-  }
+
+#if LOG_SIMULATION && LOG_REPORT
+  #define LOG(message, type)\
+    if(type == 0)\
+    {\
+      time_t t; time (&t);\
+      *dataToSimulationLogFile << ctime(&t) << " " << message << std::endl;\
+    }\
+    if(type == 1)\
+    {\
+      *dataToReportLogFile << message << std::endl;\
+    }
+#elif LOG_SIMULATION
+  #define LOG(message, type)\
+    if(type == 0)\
+    {\
+      time_t t; time (&t);\
+      *dataToSimulationLogFile << ctime(&t) << " " << message << std::endl;\
+    }
+#elif LOG_REPORT
+  #define LOG(message, type)\
+    if(type == 1)\
+    {\
+      *dataToReportLogFile << message << std::endl;\
+    }
 #else
-#define LOG(message)
+  #define LOG(message, type)
 #endif
 
 
@@ -318,13 +337,12 @@ IntegrationTest::allocateHostData()
   REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSynapsePointer);
   
   /*init synaptic pointer*/
-  double synapseSizeDeviationRatio = 0.7;
   dataSynapsePointer[0] = 0;
   for(cl_uint i = 1; i < EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE; i++)
   {
     dataSynapsePointer[i] = dataSynapsePointer[i-1] + 
-      cl_uint(((double)EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE)*((1.0-synapseSizeDeviationRatio)+
-      abs((synapseSizeDeviationRatio*((double)rand()/((double)RAND_MAX))))));
+      cl_uint(((double)EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE)*((1.0-SYNAPSE_DEVIATION_RATIO)+
+      abs((SYNAPSE_DEVIATION_RATIO*((double)rand()/((double)RAND_MAX))))));
   }
 
   /* allocate memory for synaptic data */
@@ -488,7 +506,7 @@ IntegrationTest::initializeSpikeData
   memset(dataSpikePackets, 0, dataSpikePacketsSizeBytes);
   
   SET_RANDOM_SEED(srandSeed);
-  LOG("initializeSpikeData: set srand seed to " << srandSeed);
+  LOG("initializeSpikeData: set srand seed to " << srandSeed, 0);
   
   cl_uint neuronsPerPacket = EXPAND_EVENTS_TOTAL_NEURONS/EXPAND_EVENTS_SPIKE_PACKETS;
   
@@ -501,7 +519,7 @@ IntegrationTest::initializeSpikeData
     GET_RANDOM_INT(totalSpikes, EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE, 
       spikeBufferMinPercentFill, spikeBufferMaxPercentFill);
     if(totalSpikes == -1){return SDK_FAILURE;}
-    
+
     dataSpikePackets[packet_index] = totalSpikes;
     cl_uint packetNeuronsPerSpikeCount = neuronsPerPacket/totalSpikes;
     
@@ -581,7 +599,7 @@ IntegrationTest::initializeExpandEventsData()
   if(result != SDK_SUCCESS){return result;}
   
   SET_RANDOM_SEED(srandSeed);
-  LOG("initializeExpandEventsData: set srand seed to " << srandSeed);
+  LOG("initializeExpandEventsData: set srand seed to " << srandSeed, 0);
   
   /*init synaptic data*/
   double gabaRatio = 1.0;
@@ -1924,7 +1942,7 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
   int result = SDK_SUCCESS;
   
   SET_RANDOM_SEED(srandSeed);
-  LOG("initializeDataForKernelUpdateNeurons: set srand seed to " << srandSeed);
+  LOG("initializeDataForKernelUpdateNeurons: set srand seed to " << srandSeed, 0);
   
   memset(dataSpikePackets, 0, dataSpikePacketsSizeBytes);
   
@@ -2732,20 +2750,16 @@ IntegrationTest::createKernel
 
     }
 
-    if(isComplierFlagsSpecified())
+    streamsdk::SDKFile flagsFile;
+    std::string flagsPath = OCL_COMPILER_OPTIONS_FILE_NAME;
+    if(!flagsFile.open(flagsPath.c_str()))
     {
-      streamsdk::SDKFile flagsFile;
-      std::string flagsPath = sampleCommon->getPath();
-      flagsPath.append(flags.c_str());
-      if(!flagsFile.open(flagsPath.c_str()))
-      {
-          std::cout << "Failed to load flags file: " << flagsPath << std::endl;
-          return SDK_FAILURE;
-      }
-      flagsFile.replaceNewlineWithSpaces();
-      const char * flags = flagsFile.source().c_str();
-      flagsStr.append(flags);
+      std::cout << "Failed to load flags file: " << flagsPath << std::endl;
+      return SDK_FAILURE;
     }
+    flagsFile.replaceNewlineWithSpaces();
+    const char *flags = flagsFile.source().c_str();
+    flagsStr.append(flags);
 
     std::cout << "Building for devices: ";
     for (std::vector<cl::Device>::iterator d = device.begin(); d != device.end(); d++) 
@@ -2954,7 +2968,7 @@ IntegrationTest::setupCL()
         /*Validate GM allocations*/
         print ? std::cout << "  Global Memory (global scope):" << std::endl, true : false;
         map<std::string, cl_uint> gmSizes = kernelStats.gmSizes[*kernel_name];
-        cl_ulong gmAllSizeBytes = 0;
+        cl_ulong gmAllSizeBytes = 0, gmMaxSizeBytes = 0;
         for
         (
           m = gmSizes.begin(); 
@@ -2966,6 +2980,7 @@ IntegrationTest::setupCL()
           
           size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
           gmAllSizeBytes += size;
+          if(gmMaxSizeBytes < size){gmMaxSizeBytes = size;}
           
           print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0*1024.0) << " MB" 
             << std::endl, true : false;
@@ -2976,11 +2991,22 @@ IntegrationTest::setupCL()
             << " with size identifier " << name << " and size " 
             << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, " 
             << ((float)memMaxAllocactionSize)/(1024.0*1024.0) << "\n";
+            if(*kernel_name == KERNEL_ALL)
+            {
+              LOG("Max GM:" << (((float)size)/(1024.0*1024.0)), 1);
+            }
             return SDK_FAILURE;
           }
         }
         print ? std::cout << "   TOTAL: " << ((float)gmAllSizeBytes)/(1024.0*1024.0) << " MB" 
           << std::endl, true : false;
+          
+        if(*kernel_name == KERNEL_ALL)
+        {
+          LOG("Total GM:" << (((float)gmAllSizeBytes)/(1024.0*1024.0)), 1);
+          LOG("Max GM:" << (((float)gmMaxSizeBytes)/(1024.0*1024.0)), 1);
+        }
+
         if(gmAllSizeBytes > maxGlobalMemSize)
         {
           std::cout << "Total allocation for global memory in kernel " << (*kernel_name) 
@@ -3319,7 +3345,8 @@ IntegrationTest::setupCL()
       UPDATE_NEURONS_KERNEL_FILE_NAME,
       UPDATE_NEURONS_KERNEL_NAME,
 #if COMPILER_FLAGS_NO_OPTIMIZE_ENABLE
-      "-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",
+      /*"-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",*/
+      "-D UPDATE_NEURONS_DEVICE_V00",
 #else
       "-D UPDATE_NEURONS_DEVICE_V00 -cl-denorms-are-zero -cl-mad-enable -cl-no-signed-zeros "
       "-cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math",
@@ -3334,7 +3361,8 @@ IntegrationTest::setupCL()
       UPDATE_NEURONS_KERNEL_FILE_NAME,
       UPDATE_NEURONS_SPIKED_KERNEL_NAME,
 #if COMPILER_FLAGS_NO_OPTIMIZE_ENABLE
-      "-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",
+      /*"-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",*/
+      "-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt",
 #else
       "-D UPDATE_NEURONS_DEVICE_V00 -cl-denorms-are-zero -cl-mad-enable -cl-no-signed-zeros "
       "-cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math",
@@ -3407,17 +3435,17 @@ IntegrationTest::runCLKernels()
       std::cout << "Failed initializeDataForKernelUpdateNeurons" << std::endl; 
     }
 #if (LOG_MODEL_VARIABLES)
-    traceFile = std::ofstream(LOG_MODEL_VARIABLES_FILE_NAME);
-    dataToTraceFile = std::stringstream("", std::ios::out | std::ios::app);
+    traceFile = new std::ofstream(LOG_MODEL_VARIABLES_FILE_NAME);
+    dataToTraceFile = new std::stringstream("", std::ios::out | std::ios::app);
 
-    if(!traceFile.is_open())
+    if(!(*traceFile).is_open())
     {
       std::cerr << "ERROR, runCLKernels: Unable to open trace file";
       return SDK_FAILURE;
     }
 
-    dataToTraceFile << startTimeStamp;
-    dataToTraceFile << LOG_MODEL_VARIABLES_FILE_HEADER << std::endl;
+    *dataToTraceFile << startTimeStamp;
+    *dataToTraceFile << LOG_MODEL_VARIABLES_FILE_HEADER << std::endl;
 #endif
 #endif
 
@@ -3895,7 +3923,7 @@ IntegrationTest::runCLKernels()
 #elif OVERWRITE_SPIKES_UNTILL_STEP > 0
   if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
   {
-    if(initializeSpikeData(0.0, 5.0) != SDK_SUCCESS)
+    if(initializeSpikeData(OVERWRITE_SPIKES_MIN_MAX_PERCENT) != SDK_SUCCESS)
     {
       std::cout << "Failed initializeSpikeData" << std::endl; 
       verified = false; 
@@ -5262,12 +5290,16 @@ IntegrationTest::runCLKernels()
   ){
     if(kernelStats.execTime.find(*kernel_name) == kernelStats.execTime.end()){continue;}
     map<std::string, double> execTime = kernelStats.execTime[*kernel_name];
+    double averageTime = (1000*execTime["Time"]/execTime["Count"]);
     std::cout << *kernel_name << "\t\t" << std::setprecision(3) << execTime["Time"] << "\t\t" 
-      << (cl_uint)execTime["Count"] << "\t" << (1000*execTime["Time"]/execTime["Count"]) 
-      << std::endl;
+      << (cl_uint)execTime["Count"] << "\t" << averageTime << std::endl;
     totalExecTime += execTime["Time"];
+    LOG("Kernel " << *kernel_name << " Total Time:" << execTime["Time"], 1);
+    LOG("Kernel " << *kernel_name << " Average Time:" << averageTime, 1);
+    LOG("Kernel " << *kernel_name << " Execution Count:" << (cl_uint)execTime["Count"], 1);
   }
   std::cout << "Total time: " << totalExecTime << std::endl;
+  LOG("Total Time:" << totalExecTime, 1);
   std::cout.setf(std::ios::scientific,std::ios::floatfield);
 #endif
 
@@ -5304,17 +5336,28 @@ IntegrationTest::initialize()
 #endif
       
 #if (LOG_SIMULATION)
-  simulationLogFile = std::ofstream(LOG_SIMULATION_FILE_NAME, 
+  simulationLogFile = new std::ofstream(LOG_SIMULATION_FILE_NAME, 
     std::ofstream::out | std::ofstream::app);
-  dataToSimulationLogFile = std::stringstream("", std::ios::out | std::ios::app);
+  dataToSimulationLogFile = new std::stringstream("", std::ios::out | std::ios::app);
 
-  if(!simulationLogFile.is_open())
+  if(!(*simulationLogFile).is_open())
   {
     std::cerr << "ERROR, initialize: Unable to open log file";
     return SDK_FAILURE;
   }
   
-  dataToSimulationLogFile << "-------\n" << startTimeStamp;
+  *dataToSimulationLogFile << "-------\n" << startTimeStamp;
+#endif
+
+#if (LOG_REPORT)
+    reportLogFile = new std::ofstream(LOG_REPORT_FILE_NAME);
+    dataToReportLogFile = new std::stringstream("", std::ios::out | std::ios::app);
+
+    if(!(*reportLogFile).is_open())
+    {
+      std::cerr << "ERROR, initialize: Unable to open report file";
+      return SDK_FAILURE;
+    }
 #endif
 
   return SDK_SUCCESS;
@@ -5389,7 +5432,8 @@ IntegrationTest::run()
   sampleCommon->stopTimer(timer);    
   /* Compute kernel time */
   kernelTime = (double)(sampleCommon->readTimer(timer)) / iterations;
-
+  
+  LOG("Result:PASS", 1);
   return SDK_SUCCESS;
 }
 
@@ -8010,7 +8054,7 @@ IntegrationTest::verifyKernelUpdateNeurons
 #if (LOG_MODEL_VARIABLES)
     if(i == LOG_MODEL_VARIABLES_NEURON_ID)
     {
-      dataToTraceFile LOG_MODEL_VARIABLES_FILE_BODY(LOG_MODEL_VARIABLES_NEURON_ID);
+      *dataToTraceFile LOG_MODEL_VARIABLES_FILE_BODY(LOG_MODEL_VARIABLES_NEURON_ID);
     }
 #endif
     /*
@@ -8631,14 +8675,18 @@ IntegrationTest::cleanup()
   if(constantCoefficients)
       free(constantCoefficients);
 #if (LOG_MODEL_VARIABLES)
-  traceFile << dataToTraceFile.str();
-  traceFile.close();
+  *traceFile << (*dataToTraceFile).str();
+  (*traceFile).close();
 #endif
   psClean();
 #endif
 #if (LOG_SIMULATION)
-  simulationLogFile << dataToSimulationLogFile.str();
-  simulationLogFile.close();
+  *simulationLogFile << (*dataToSimulationLogFile).str();
+  (*simulationLogFile).close();
+#endif
+#if (LOG_REPORT)
+  *reportLogFile << (*dataToReportLogFile).str();
+  (*reportLogFile).close();
 #endif
 /**************************************************************************************************/
 
@@ -8678,18 +8726,15 @@ main(int argc, char *argv[])
   if(!test.parseCommandLine(argc, argv))
     return SDK_FAILURE;
 
-  if(test.isDumpBinaryEnabled())
-  {
-    return test.genBinaryImage();
-  }
-  else
-  {
-    if(test.getPlatformStats() !=  SDK_SUCCESS) {test.cleanup(); return SDK_FAILURE;}
-    if(test.setup() !=  SDK_SUCCESS)            {test.cleanup(); return SDK_FAILURE;}
-    if(test.run() !=  SDK_SUCCESS)              {test.cleanup(); return SDK_FAILURE;}
-    test.cleanup();
-    test.printStats();
-  }
+  if(test.getPlatformStats() !=  SDK_SUCCESS)
+    {test.cleanup(); std::cout << "\nRESULT:FAIL\n"; return SDK_FAILURE;}
+  if(test.setup() !=  SDK_SUCCESS)
+    {test.cleanup(); std::cout << "\nRESULT:FAIL\n"; return SDK_FAILURE;}
+  if(test.run() !=  SDK_SUCCESS)
+    {test.cleanup(); std::cout << "\nRESULT:FAIL\n"; return SDK_FAILURE;}
+  std::cout << "\nRESULT:PASS\n";
+  test.cleanup();
+  test.printStats();
 
   return SDK_SUCCESS;
 }
