@@ -13,16 +13,16 @@
 #include "Definitions.h"
 #include "iz_util.h"
 #include "integ_util.h"
+#include <SDKCommon.hpp>
+#include <SDKApplication.hpp>
+#include <SDKFile.hpp>
+#include <SDKBitMap.hpp>
 #include <CL/cl.hpp>
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-#include <SDKCommon.hpp>
-#include <SDKApplication.hpp>
-#include <SDKFile.hpp>
-#include <SDKBitMap.hpp>
 #include <map>
 #include <set>
 #include <vector>
@@ -45,11 +45,11 @@ using std::ofstream;
 
 struct kernelStatistics {
   /*map{kernel_name -> map{alloc_name -> alloc_size}}*/
-  map<std::string, map<std::string, cl_uint>> gmSizes;
-  map<std::string, map<std::string, cl_uint>> cmSizes;
-  map<std::string, map<std::string, cl_uint>> lmSizes;
+  map<std::string, map<std::string, cl_uint> > gmSizes;
+  map<std::string, map<std::string, cl_uint> > cmSizes;
+  map<std::string, map<std::string, cl_uint> > lmSizes;
   set<std::string> kernelNames;
-  map<std::string, map<std::string, double>> execTime;
+  map<std::string, map<std::string, double> > execTime;
   set<std::string> kernelNamesExecTime;
 };
 
@@ -101,13 +101,16 @@ class IntegrationTest : public SDKSample
 #endif
     
 #if (LOG_MODEL_VARIABLES)
-    std::ofstream traceFile;
-    std::stringstream dataToTraceFile;
+    std::ofstream     *traceFile;
+    std::stringstream *dataToTraceFile;
 #endif
-
 #if (LOG_SIMULATION)
-    std::ofstream simulationLogFile;
-    std::stringstream dataToSimulationLogFile;
+    std::ofstream     *simulationLogFile;
+    std::stringstream *dataToSimulationLogFile;
+#endif
+#if (LOG_REPORT)
+    std::ofstream     *reportLogFile;
+    std::stringstream *dataToReportLogFile;
 #endif
 
 /**************************************************************************************************/
@@ -830,7 +833,7 @@ public:
     int setupCL();
     
     int
-    IntegrationTest::createKernel
+    createKernel
     (
       cl::Kernel    &kernel,
       std::string   kernelFileName,

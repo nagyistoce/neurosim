@@ -86,6 +86,23 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "doc", "doc", "{04013E7A-8B0
 		doc\readme.txt = doc\readme.txt
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "log", "log", "{8D7E34B9-397E-4E81-901A-1F185CF5D0B3}"
+	ProjectSection(SolutionItems) = preProject
+		log\report_test_Generic_2012_01_23_22_39_53.csv = log\report_test_Generic_2012_01_23_22_39_53.csv
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{15D7EE65-6162-4261-BFAF-6DD4A1F281E5}"
+	ProjectSection(SolutionItems) = preProject
+		neurosim.pl = neurosim.pl
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "config", "config", "{8963A90B-B36B-490A-9C10-7342E389021E}"
+	ProjectSection(SolutionItems) = preProject
+		config\config.xml = config\config.xml
+		config\test.xml = config\test.xml
+		config\test_Generic.xml = config\test_Generic.xml
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SubversionScc) = preSolution
 		Svn-Managed = True

@@ -2,6 +2,7 @@
 /*
   TODO:
   
+  - PS order limit: continue in local memory if it hits register limit.
   - Restructire spike packet: contiguous neuronID part and contiguous spike time part
   - Spike packet per group instead of per WF?
   - Investigate "missing a spike": It is possible to miss a spike if the membrane potential only has a brief superthreshold excursion and returns to subthreshold values before the end of the subinterval (Hanuschkin et al., http://www.nest-initiative.org).
@@ -573,6 +574,8 @@ void update_neurons
   4) Writes spike times and updated model variables back to GM
   
 */
+/*TODO: this can be further divided into 2 kernels. 
+The last kernel (same as above) can be executed concurently with next propagation kernel.*/
 __kernel 
 void update_spiked_neurons
 (
