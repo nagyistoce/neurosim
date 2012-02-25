@@ -36,7 +36,6 @@
     <None Include="Kernel_MakeEventPointers.cl" />
     <None Include="Kernel_ScanHistogram.cl" />
     <None Include="Kernel_UpdateNeurons.cl" />
-    <None Include="oclCompilerOptions.txt" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}</ProjectGuid>
@@ -189,7 +188,10 @@ copy Kernel_GroupEvents.cl "$(OUTDIR)"\Kernel_GroupEvents.cl
 copy Kernel_MakeEventPointers.cl "$(OUTDIR)"\Kernel_MakeEventPointers.cl
 copy Kernel_UpdateNeurons.cl "$(OUTDIR)"\Kernel_UpdateNeurons.cl
 copy Definitions.h "$(OUTDIR)"\Definitions.h
-copy oclCompilerOptions.txt "$(OUTDIR)"\oclCompilerOptions.txt</Command>
+copy "$(SolutionDir)"\config\oclCompilerOptions.txt "$(OUTDIR)"\oclCompilerOptions.txt
+copy "$(SolutionDir)"\config\oclCompilerOptions.txt oclCompilerOptions.txt
+copy "$(SolutionDir)"\config\neuron_variables_sample.csv "$(OUTDIR)"\neuron_variables_sample.csv
+copy "$(SolutionDir)"\config\neuron_variables_sample.csv neuron_variables_sample.csv</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -112,6 +112,10 @@ class IntegrationTest : public SDKSample
     std::ofstream     *reportLogFile;
     std::stringstream *dataToReportLogFile;
 #endif
+#if (SIMULATION_SNAPSHOT)
+    std::ofstream     *snapshotLogFile;
+    std::stringstream *dataToSnapshotLogFile;
+#endif
 
 /**************************************************************************************************/
 #if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) || SCAN_ENABLE_V01 ||\
@@ -982,7 +986,11 @@ public:
     );
     
     int initializeExpandEventsData();
-    int verifyKernelExpandEvents(cl_uint timeSlot);
+    int verifyKernelExpandEvents
+    (
+      cl_uint timeSlot,
+      bool reset
+    );
     
     int initializeDataForKernelScanHistogramV00(cl_uint timeSlot, cl_uint mode);
     int verifyKernelScanHistogramV00(cl_uint timeSlot);
@@ -990,7 +998,47 @@ public:
     int initializeDataForKernelScanHistogramV01();
     int verifyKernelScanHistogramV01();
     
-    int initializeDataForKernelGroupEventsV00();
+    int 
+    initializeDataForKernelGroupEventsV00
+    (
+      cl_uint   unsortedEventTimeSlotDelta,
+      double  percentTimeSlotDeltaDeviation,
+      double  percentInh
+    );
+    
+    int 
+    initializeEventBuffers
+    (
+      cl_uint   timeSlots,
+      cl_uint   buffers,
+      cl_uint   bufferSize,
+      cl_uint   neurons,
+      cl_uint   unsortedEventTimeSlotDelta,
+      cl_uint   histogramBitShift,
+      cl_uint   histogramBinMask,
+      cl_uint   histogramTotalBins,
+      cl_uint   histogramBinSize,
+      double    minDelay,
+      double    percentDelayBoarder,
+      double    percentTimeSlotDeltaDeviation,
+      double    percentInh,
+      cl_uint   *dataUnsortedEventCounts,
+      cl_uint   *dataUnsortedEventTargets,
+      cl_uint   *dataUnsortedEventDelays,
+      cl_uint   *dataUnsortedEventWeights,
+      cl_uint   *dataHistogram
+    );
+    
+    int 
+    initializeHistogram
+    (
+      cl_uint   timeSlots,
+      cl_uint   histogramTotalBins,
+      cl_uint   histogramBinSize,
+      cl_uint   eventDestinationBufferSize,
+      cl_uint   *dataHistogram
+    );
+    
     int verifyKernelGroupEventsV00(cl_uint keyOffset);
     
     int initializeDataForKernelGroupEventsV01(int step, cl_uint keyOffset);
@@ -1042,11 +1090,12 @@ public:
     
     int verifyKernelMakeEventPtrs();
     
-    void
+    int
     psInit
     (
-      cl_uint totalNeurons,
-      cl_uint injectCurrentUntilStep
+      cl_uint     totalNeurons,
+      cl_uint     injectCurrentUntilStep,
+      const char  *neuronVariablesSampleFile
     );
 
     void psClean();
@@ -1054,12 +1103,13 @@ public:
     int 
     initializeDataForKernelUpdateNeurons
     (
-      bool resetEvents,
-      bool resetParameters,
-      bool resetVariables,
-      cl_uint step
+      bool          resetEvents,
+      bool          resetParameters,
+      bool          resetVariables,
+      cl_uint       step,
+      const char    *neuronVariablesSampleFile
     );
-    
+
     int 
     propagateSpikes
     (
@@ -1075,7 +1125,7 @@ public:
     );
     
     int 
-    injectEvents
+    injectSortedEvents
     (
       bool          verify,
       bool          resetEventBuffer,
@@ -1085,6 +1135,21 @@ public:
       cl_uint       sortedEventsPitch,
       cl_uint       *sortedEvents,
       cl_uint       *pointersToEvents,
+      neuron_iz_ps  *nrn
+    );
+    
+    int 
+    injectUnsortedEvents
+    (
+      cl_uint       timeSlots,
+      cl_uint       buffers,
+      cl_uint       bufferSize,
+      cl_uint       totalNeurons,
+      cl_uint       eventQueueSize,
+      cl_uint       *dataUnsortedEventCounts,
+      cl_uint       *dataUnsortedEventTargets,
+      cl_uint       *dataUnsortedEventWeights,
+      cl_uint       *dataUnsortedEventDelays,
       neuron_iz_ps  *nrn
     );
     
@@ -1127,6 +1192,7 @@ public:
     int
     verifyKernelUpdateNeurons
     (
+      bool          verify,
       cl_uint       step,
       unsigned int  *pointerStruct,
       unsigned int  *sortedEvents,
@@ -1134,7 +1200,9 @@ public:
       unsigned int  *synapseTargets,
       DATA_TYPE     *synapseDelays,
       DATA_TYPE     *synapseWeights,
-      unsigned int  *spikePackets
+      unsigned int  *spikePackets,
+      DATA_TYPE     *modelVariables,
+      unsigned int  *dataSpikePackets
     );
     
     int 
@@ -1166,6 +1234,21 @@ public:
       a = b;
       b = tmp;
     }
+    
+#if SIMULATION_SNAPSHOT
+    int 
+    takeSimulationSnapshot
+    (
+      cl_uint   step,
+      cl_uint   sampleSizeNeurons,
+      cl_uint   *dataUnsortedEventCounts,
+      cl_uint   *dataUnsortedEventWeights,
+      cl_uint   *dataMakeEventPtrsStruct,
+      cl_uint   *dataGroupEventsTik,
+      cl_uint   *dataSpikePackets,
+      cl_float  *modelVariables
+    );
+#endif
 };
 
 #endif // INTEGRATION_TEST_H_

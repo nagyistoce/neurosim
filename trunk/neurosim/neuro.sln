@@ -99,6 +99,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "config", "config", "{8963A90B-B36B-490A-9C10-7342E389021E}"
 	ProjectSection(SolutionItems) = preProject
 		config\config.xml = config\config.xml
+		config\neuron_variables_sample.csv = config\neuron_variables_sample.csv
+		config\oclCompilerOptions.txt = config\oclCompilerOptions.txt
 		config\test.xml = config\test.xml
 		config\test_Generic.xml = config\test_Generic.xml
 	EndProjectSection

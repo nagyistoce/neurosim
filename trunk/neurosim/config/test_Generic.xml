@@ -6,36 +6,38 @@
     <!--  -->
     <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
     <param id="LOG_REPORT">1</param>
+    <param id="TARGET_DEVICE_NAME">'\\"Tahiti\\"'</param> <!-- Cayman, Tahiti -->
+    <param id="PREINITIALIZE_NETWORK_TIME_SLOT_DELTA">50</param>
+    <param id="PREINITIALIZE_NETWORK_TIME_SLOT_DELTA_DEVIATION">25.0</param>
+    <param id="PREINITIALIZE_NETWORK_PERCENT_INHIBITORY">10.0</param>
+    <param id="PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT">0.0</param>
+    <param id="PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT">5.0</param>
+    <param id="PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE">'\\"neuron_variables_sample.csv\\"'</param>
     <param id="OVERWRITE_SPIKES_UNTILL_STEP">(2*16)</param>
-    <param id="START_PROFILING_AT_STEP">(2*16)</param>
-    <param id="SIMULATION_TIME_STEPS">40</param>
+    <param id="INJECT_CURRENT_UNTILL_STEP">0</param>
     <!--  -->
   </common_config>
   
   <!-- Test-specific config parameters -->
   <specific_config>
     <!-- 
-      Template for test-specific config parameters.
-      Each parameter value can be a comma-separated string of values. A value can be a scalar 
-      or an expression accepted by Perl function eval(). The script recursively compiles and runs
-      all combinations of parameters. It runs it at most twice: verification run and performance
-      run (if verification passes). A test-specific set of parameters can be skipped if its 
-      tag="skip".
+      Templates for test-specific config parameters.
+      The script sequentually runs each <exe> section. A section be skipped if it has  a tag="skip".
+      Each <exe> section consits of <config> and <flow> sections.
+      Each parameter value in <config> section can be a comma-separated string of values. A value 
+      can be a scalar or an expression accepted by Perl function eval(). The script recursively 
+      compiles and runs all combinations of parameters. It runs each combination according to the
+      execution flow defined by the <flow> section. That section has nodes. The executable is 
+      compiled and run at each node. The user can specify which node to execute next depending on 
+      the PASS or FAIL outcome of a run. Each node can have parameters. Node parameter names must
+      not be shown in <config> and <common_config> sections.
+      
+      Additional notes:
+      exe name="some_name" - has to be unique.
     -->
-    <exe name="0" tag="skip">
-      <id>template</id>
-      <config>
-        <param id="TOTAL_NEURON_BITS">0</param>
-        <param id="MAX_SYNAPSES_PER_NEURON">0</param>
-        <param id="SPIKE_DATA_BUFFER_SIZE">0</param>
-        <param id="EVENT_DATA_BUFFER_SIZE">0</param>
-        <param id="SPIKE_PACKETS">0</param>
-        <param id="EXPAND_EVENTS_WG_SIZE_WF">0</param>
-      </config>
-    </exe>
-    <!--  -->
-    <exe name="3" tag="general">
-      <id>generic_test</id>
+    <exe name="1" tag="skip">
+      <id>simulation_modes</id>
+      <!-- Configuration -->
       <config>
         <param id="TOTAL_NEURON_BITS">17</param>
         <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
@@ -43,8 +45,167 @@
         <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
         <param id="SPIKE_PACKETS">(2*64)</param>
         <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
-        <param id="TOLERANCE_MODE">0,2</param>
+        <param id="TOLERANCE_MODE">0</param>
       </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Simulation_Mode_0</result>
+          <result id="FAIL">Simulation_Mode_0</result>
+        </node>
+        <node name="Simulation_Mode_0">
+          <param id="SIMULATION_MODE">0</param>
+          <param id="SIMULATION_SNAPSHOT">1</param>
+          <param id="SIMULATION_TIME_STEPS">(16*4+1)</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">0</param>
+          <result id="PASS">Simulation_Mode_1</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Simulation_Mode_1">
+          <param id="SIMULATION_MODE">1</param>
+          <param id="SIMULATION_SNAPSHOT">1</param>
+          <param id="SIMULATION_TIME_STEPS">400</param>
+          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">1</param>
+          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">1</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+          <result id="PASS">Simulation_Mode_2</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Simulation_Mode_2">
+          <param id="SIMULATION_MODE">2</param>
+          <param id="SIMULATION_TIME_STEPS">1200</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+          <param id="START_PROFILING_AT_STEP">200</param>
+          <result id="PASS">Simulation_Mode_3</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Simulation_Mode_3">
+          <param id="SIMULATION_MODE">3</param>
+          <param id="SIMULATION_TIME_STEPS">1200</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+          <param id="START_PROFILING_AT_STEP">200</param>
+          <result id="PASS">Simulation_Mode_4</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Simulation_Mode_4">
+          <param id="SIMULATION_MODE">4</param>
+          <param id="SIMULATION_TIME_STEPS">1200</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+          <param id="START_PROFILING_AT_STEP">200</param>
+          <result id="PASS">Simulation_Mode_5</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Simulation_Mode_5">
+          <param id="SIMULATION_MODE">5</param>
+          <param id="SIMULATION_TIME_STEPS">1000</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    <!--  -->
+    <exe name="2" tag="skip">
+      <id>Snapshot</id>
+      <!-- Configuration -->
+      <config>
+        <param id="TOTAL_NEURON_BITS">17</param>
+        <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">127</param>
+        <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
+        <param id="SPIKE_PACKETS">(2*64)</param>
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+        <param id="TOLERANCE_MODE">0</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Snapshot</result>
+          <result id="FAIL">Snapshot</result>
+        </node>
+        <node name="Snapshot">
+          <param id="SIMULATION_MODE">1</param>
+          <param id="SIMULATION_SNAPSHOT">1</param>
+          <param id="SIMULATION_TIME_STEPS">1000</param>
+          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">1</param>
+          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">1</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    <!--  -->
+    <exe name="3" tag="noskip">
+      <id>quick_validation</id>
+      <!-- Configuration -->
+      <config>
+        <param id="TOTAL_NEURON_BITS">17</param>
+        <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">127</param>
+        <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
+        <param id="SPIKE_PACKETS">(2*64)</param>
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+        <param id="TOLERANCE_MODE">0</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Verify</result>
+          <result id="FAIL">Verify</result>
+        </node>
+        <node name="Verify">
+          <param id="SIMULATION_MODE">1</param>
+          <param id="SIMULATION_SNAPSHOT">0</param>
+          <param id="SIMULATION_TIME_STEPS">400</param>
+          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">1</param>
+          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">1</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+          <result id="PASS">Profile_kernels</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Profile_kernels">
+          <param id="SIMULATION_MODE">4</param>
+          <param id="SIMULATION_TIME_STEPS">1200</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+          <param id="START_PROFILING_AT_STEP">200</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    <!--  -->
+    <exe name="4" tag="skip">
+      <id>Debug</id>
+      <!-- Configuration -->
+      <config>
+        <param id="TOTAL_NEURON_BITS">17</param>
+        <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">127</param>
+        <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
+        <param id="SPIKE_PACKETS">(2*64)</param>
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+        <param id="TOLERANCE_MODE">0</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Debug</result>
+          <result id="FAIL">Debug</result>
+        </node>
+        <node name="Debug">
+          <param id="SIMULATION_MODE">0</param>
+          <param id="SIMULATION_SNAPSHOT">1</param>
+          <param id="SIMULATION_TIME_STEPS">(16*4+1)</param>
+          <param id="PREINITIALIZE_NETWORK_STATE">0</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
     </exe>
     <!--  -->
   </specific_config>
