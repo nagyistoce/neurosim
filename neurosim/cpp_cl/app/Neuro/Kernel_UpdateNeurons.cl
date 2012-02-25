@@ -43,7 +43,7 @@
 #define YP1(i)                            cache[UPDT_RUNTM_SZ_0+i]
 #define YP2(i)                            cache[UPDT_RUNTM_SZ_0+UPDT_RUNTM_SZ_1+i]
 
-#define UPDATE_NEURONS_DT_1_0_OPTIMIZATION  0
+
 
 /*
   Parker-Sochacki integration step for IZ neuron with adaptive order error 

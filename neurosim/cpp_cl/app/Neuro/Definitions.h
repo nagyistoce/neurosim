@@ -1,15 +1,8 @@
 
-/*Compiler options:
+/*
 
--I dir
--D name=definition
--g
--O0
--fbin-source -fbin-llvmir -fbin-amdil -fbin-exe
--fno-bin-source -fno-bin-llvmir -fno-bin-amdil -fno-bin-exe
+  Definitions and macros visible in all source files including kernels
 
-export AMD_OCL_BUILD_OPTIONS_APPEND="-g -O0"
-export AMD_OCL_BUILD_OPTIONS="-g -O0"
 */
 
 #ifndef INC_DEFINITIONS_H
@@ -334,6 +327,15 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
                                                               << nrn_ps[i].g_gaba << "," \
                                                               << nrn_ps[i].v_peak << "," \
                                                               << nrn_ps[i].I << std::endl
+/*Compile methods for taking a snapshot of simulation state*/
+#if !(defined(SIMULATION_SNAPSHOT))
+  #define SIMULATION_SNAPSHOT                                 0
+#endif
+#if SIMULATION_SNAPSHOT
+  #if !(defined(LOG_SNAPSHOT_FILE_NAME))
+    #define LOG_SNAPSHOT_FILE_NAME                            "log_snapshot.txt"
+  #endif
+#endif
 /**************************************************************************************************/
 
 
@@ -348,7 +350,9 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   "AMD Engineering Sample"
   "Tahiti"
 */
-#define TARGET_DEVICE_NAME                                    "Tahiti"
+#if !(defined(TARGET_DEVICE_NAME))
+  #define TARGET_DEVICE_NAME                                  "Tahiti"
+#endif
 /*Target Platform Vendor*/
 #define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."
 /**************************************************************************************************/
@@ -388,16 +392,50 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #define EVENT_TIME_SLOTS                                      16
 /*Minimum event delay latency*/
 #define MINIMUM_PROPAGATION_DELAY                             1.0f
+/*Populate network state with user defined parameters. Useful to start spiking right away.*/
+#if !(defined(PREINITIALIZE_NETWORK_STATE))
+  #define PREINITIALIZE_NETWORK_STATE                         1
+#endif
+#if !(defined(PREINITIALIZE_NETWORK_TIME_SLOT_DELTA))
+  #define PREINITIALIZE_NETWORK_TIME_SLOT_DELTA               50
+#endif
+#if !(defined(PREINITIALIZE_NETWORK_TIME_SLOT_DELTA_DEVIATION))
+  #define PREINITIALIZE_NETWORK_TIME_SLOT_DELTA_DEVIATION     25.0
+#endif
+#if !(defined(PREINITIALIZE_NETWORK_PERCENT_INHIBITORY))
+  #define PREINITIALIZE_NETWORK_PERCENT_INHIBITORY            10.0
+#endif
+#if !(defined(PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT))
+  #define PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT             0.0
+#endif
+#if !(defined(PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT))
+  #define PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT             5.0
+#endif
+#if !(defined(PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE))
+  #define PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE  "neuron_variables_sample.csv"
+#endif
 /*Enable overwriting spike packet data until defined simulation step. Disabled if 0.
   (useful for initiating gradually increasing spiking activity during initial steps) */
-#if !(defined(OVERWRITE_SPIKES_UNTILL_STEP))
-  #define OVERWRITE_SPIKES_UNTILL_STEP                        (2*EVENT_TIME_SLOTS)
+#if PREINITIALIZE_NETWORK_STATE
+  #undef OVERWRITE_SPIKES_UNTILL_STEP
+  #define OVERWRITE_SPIKES_UNTILL_STEP                        0
+#else
+  #if !(defined(OVERWRITE_SPIKES_UNTILL_STEP))
+    #define OVERWRITE_SPIKES_UNTILL_STEP                      (2*EVENT_TIME_SLOTS)
+  #endif
 #endif
 /*Spike buffer occupancy bounds during overwriting spike packet data*/
 #define OVERWRITE_SPIKES_MIN_MAX_PERCENT                      0.0, 0.9
 /*Enable injecting current until defined simulation step. Disabled if 0.
   (useful for initiating abruptly increasin spiking activity during initial steps) */
-#define INJECT_CURRENT_UNTILL_STEP                            0
+#if PREINITIALIZE_NETWORK_STATE
+  #undef INJECT_CURRENT_UNTILL_STEP
+  #define INJECT_CURRENT_UNTILL_STEP                          0
+#else 
+  #if !(defined(INJECT_CURRENT_UNTILL_STEP))
+    #define INJECT_CURRENT_UNTILL_STEP                        0
+  #endif
+#endif
 /*Start time profiling simulation at step*/
 #if !(defined(START_PROFILING_AT_STEP))
   #if OVERWRITE_SPIKES_UNTILL_STEP < INJECT_CURRENT_UNTILL_STEP
@@ -427,13 +465,21 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 /***************************************************************************************************
   Simulation Mode Configuration
 ***************************************************************************************************/
+/*Run simulation for this many steps*/
+#if !(defined(SIMULATION_TIME_STEPS))
+  #define SIMULATION_TIME_STEPS                             (5*EVENT_TIME_SLOTS)
+#endif
+
 /*Simulation mode:
-  0 - Verification and unit tests. For unit tests set a single bit in ENABLE_MASK
-  1 - A run with non-blocking return (useful for APP Profiler)
+  0 - Detailed verification of every kernel and unit tests. For unit tests set a single bit in 
+      ENABLE_MASK. Useful in debugging and thorough verification.
+  1 - Light high-level verification of the whole simulation. The verification takes much less
+      time than mode 0, but still provides verification coverage.
   2 - Application-level time profiling with verification of results between host and device during
       pre-profiling steps
   3 - Application-level time profiling without verification and with relaxed math.
   4 - Kernel-level time profiling without verification and with relaxed math.
+  5 - A run with non-blocking return (useful for APP Profiler)
 */
 
 #if !(defined(SIMULATION_MODE))
@@ -441,87 +487,163 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 #endif
 
 #if SIMULATION_MODE == 0                             /*Simulation mode: verification and unit test*/
-#if !(defined(ENABLE_MASK))
-  //#define ENABLE_MASK                                         BIN_16(1000,0000,0000,0000)
-  #define ENABLE_MASK                                         BIN_16(1111,1111,1000,0000)
-#endif
-/*Functional verification of each kernel*/
-#define KERNEL_VERIFY_ENABLE                                  1
-/*Enable high-level verification of sort results*/
-#define SORT_VERIFY_ENABLE                                    1
-/*Enable high-level verification of model variables, spikes, events for whole network*/
-#define NETWORK_VERIFY_ENABLE                                 1
-/*Log model variables with parameters LOG_MODEL_VARIABLES_* defined above*/
-#define LOG_MODEL_VARIABLES                                   1
-/*Log simulation messages*/
-#define LOG_SIMULATION                                        1
-/*Record error codes from the kernel*/
-#define ERROR_TRACK_ENABLE                                    1
-/*Debug mask, enables each kernel to have debug buffer r/w*/
-#define DEBUG_MASK                                            1
-/*Enable compiler flags that allow device to produce same result as host*/
-#define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                     1
-/*Profiling mode*/
-#define PROFILING_MODE                                        0
-/*Enable gathering statistics*/
-#define STATISTICS_ENABLE                                     1
-/*Run simulation for this many steps*/
-#if !(defined(SIMULATION_TIME_STEPS))
-  #define SIMULATION_TIME_STEPS                               (5*EVENT_TIME_SLOTS)
-#endif
-#elif SIMULATION_MODE > 0                                          /*Simulation mode: performance*/
-#if !(defined(ENABLE_MASK))
-  //#define ENABLE_MASK                                         BIN_16(1000,0000,0000,0000)
-  #define ENABLE_MASK                                         BIN_16(1111,1111,1000,0000)
-#endif
-/*Functional verification of each kernel*/
-#define KERNEL_VERIFY_ENABLE                                  0
-/*Enable high-level verification of sort results*/
-#define SORT_VERIFY_ENABLE                                    0
-/*Log model variables with parameters LOG_MODEL_VARIABLES_* defined above*/
-#define LOG_MODEL_VARIABLES                                   0
-/*Log simulation messages*/
-#define LOG_SIMULATION                                        0
-/*Record error codes from the kernel*/
-#define ERROR_TRACK_ENABLE                                    0
-/*Debug mask, enables each kernel to have debug buffer r/w*/
-#define DEBUG_MASK                                            0
-/*Enable gathering statistics*/
-#define STATISTICS_ENABLE                                     0
-#if SIMULATION_MODE == 1
-  /*Profiling mode*/
-  #define PROFILING_MODE                                      0
-  /*Enable compiler flags that allow device to produce same result as host*/
-  #define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                   0
-  /*Enable high-level verification of model variables, spikes, events for whole network*/
-  #define NETWORK_VERIFY_ENABLE                               0
-#elif SIMULATION_MODE == 2
-  /*Profiling mode*/
-  #define PROFILING_MODE                                      1
-  /*Enable compiler flags that allow device to produce same result as host*/
-  #define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                   1
+  #if !(defined(ENABLE_MASK))
+    //#define ENABLE_MASK                                       BIN_16(1000,0000,0000,0000)
+    #define ENABLE_MASK                                       BIN_16(1111,1111,1000,0000)
+  #endif
+  /*Functional verification of each kernel*/
+  #define KERNEL_VERIFY_ENABLE                                1
+  /*Functional high-level verification of simulation results at the end of step. It is done every
+    KERNEL_ENDSTEP_VERIFY_EVERY_STEPS's step*/
+  #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
+  #define KERNEL_ENDSTEP_VERIFY_EVERY_STEPS                   1
+  #endif
+  /*Enable high-level verification of sort results*/
+  #define SORT_VERIFY_ENABLE                                  1
   /*Enable high-level verification of model variables, spikes, events for whole network*/
   #define NETWORK_VERIFY_ENABLE                               1
-#elif SIMULATION_MODE == 3
+  /*Log model variables with parameters LOG_MODEL_VARIABLES_* defined above*/
+  #define LOG_MODEL_VARIABLES                                 1
+  /*Log simulation messages*/
+  #define LOG_SIMULATION                                      1
+  /*Enable recording error codes from the kernels*/
+  #define ERROR_TRACK_ENABLE                                  1
+  /*Access error codes from the kernels every: */
+  #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
+  #define ERROR_TRACK_ACCESS_EVERY_STEPS                      1
+  #endif
+  /*Debug mask, enables each kernel to have debug buffer r/w*/
+  #define DEBUG_MASK                                          1
+  /*Enable compiler flags that allow device to produce same result as host*/
+  #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
   /*Profiling mode*/
+  #define PROFILING_MODE                                      0
+  /*Enable gathering statistics*/
+  #define STATISTICS_ENABLE                                   1
+
+#elif SIMULATION_MODE == 1
+  /*Has to be a full mask for this mode*/
+  #undef  ENABLE_MASK
+  #define ENABLE_MASK                                         BIN_16(1111,1111,1000,0000)
+  #define KERNEL_VERIFY_ENABLE                                0
+  #define SORT_VERIFY_ENABLE                                  0
+  #define LOG_MODEL_VARIABLES                                 0
+  #define LOG_SIMULATION                                      0
+  #define DEBUG_MASK                                          0
+  #define STATISTICS_ENABLE                                   0
+  #define PROFILING_MODE                                      0
+  #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
+  #define NETWORK_VERIFY_ENABLE                               1
+  #define ERROR_TRACK_ENABLE                                  1
+  /**/
+  #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
+  #define KERNEL_ENDSTEP_VERIFY_EVERY_STEPS                   1
+  #endif
+  /**/
+  #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
+  #define ERROR_TRACK_ACCESS_EVERY_STEPS                      1
+  #endif
+  
+#elif SIMULATION_MODE == 2
+  #if !(defined(ENABLE_MASK))
+    //#define ENABLE_MASK                                       BIN_16(1000,0000,0000,0000)
+    #define ENABLE_MASK                                       BIN_16(1111,1111,1000,0000)
+  #endif
+  #define KERNEL_VERIFY_ENABLE                                0
+  #define SORT_VERIFY_ENABLE                                  0
+  #define LOG_MODEL_VARIABLES                                 0
+  #define LOG_SIMULATION                                      0
+  #define DEBUG_MASK                                          0
+  #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      1
-  /*Enable compiler flags that allow device to produce same result as host*/
-  #define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                   0
-  /*Enable high-level verification of model variables, spikes, events for whole network*/
+  #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
+  #define NETWORK_VERIFY_ENABLE                               1
+  #define ERROR_TRACK_ENABLE                                  0
+  /**/
+  #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
+  #define KERNEL_ENDSTEP_VERIFY_EVERY_STEPS                   0
+  #endif
+  /**/
+  #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
+  #define ERROR_TRACK_ACCESS_EVERY_STEPS                      0
+  #endif
+  
+#elif SIMULATION_MODE == 3
+  #if !(defined(ENABLE_MASK))
+    //#define ENABLE_MASK                                       BIN_16(1000,0000,0000,0000)
+    #define ENABLE_MASK                                       BIN_16(1111,1111,1000,0000)
+  #endif
+  #define KERNEL_VERIFY_ENABLE                                0
+  #define SORT_VERIFY_ENABLE                                  0
+  #define LOG_MODEL_VARIABLES                                 0
+  #define LOG_SIMULATION                                      0
+  #define DEBUG_MASK                                          0
+  #define STATISTICS_ENABLE                                   0
+  #define PROFILING_MODE                                      1
+  #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      1
   #define NETWORK_VERIFY_ENABLE                               0
+  #define ERROR_TRACK_ENABLE                                  0
+  /**/
+  #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
+  #define KERNEL_ENDSTEP_VERIFY_EVERY_STEPS                   0
+  #endif
+  /**/
+  #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
+  #define ERROR_TRACK_ACCESS_EVERY_STEPS                      0
+  #endif
+  
 #elif SIMULATION_MODE == 4
-  /*Profiling mode*/
+  #if !(defined(ENABLE_MASK))
+    //#define ENABLE_MASK                                       BIN_16(1000,0000,0000,0000)
+    #define ENABLE_MASK                                       BIN_16(1111,1111,1000,0000)
+  #endif
+  #define KERNEL_VERIFY_ENABLE                                0
+  #define SORT_VERIFY_ENABLE                                  0
+  #define LOG_MODEL_VARIABLES                                 0
+  #define LOG_SIMULATION                                      0
+  #define DEBUG_MASK                                          0
+  #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      2
-  /*Enable compiler flags that allow device to produce same result as host*/
-  #define COMPILER_FLAGS_NO_OPTIMIZE_ENABLE                   0
-  /*Enable high-level verification of model variables, spikes, events for whole network*/
+  #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      1
   #define NETWORK_VERIFY_ENABLE                               0
+  #define ERROR_TRACK_ENABLE                                  0
+  /**/
+  #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
+  #define KERNEL_ENDSTEP_VERIFY_EVERY_STEPS                   0
+  #endif
+  /**/
+  #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
+  #define ERROR_TRACK_ACCESS_EVERY_STEPS                      0
+  #endif
+  
+#elif SIMULATION_MODE == 5
+  #if !(defined(ENABLE_MASK))
+    //#define ENABLE_MASK                                       BIN_16(1000,0000,0000,0000)
+    #define ENABLE_MASK                                       BIN_16(1111,1111,1000,0000)
+  #endif
+  #define KERNEL_VERIFY_ENABLE                                0
+  #define SORT_VERIFY_ENABLE                                  0
+  #define LOG_MODEL_VARIABLES                                 0
+  #define LOG_SIMULATION                                      0
+  #define DEBUG_MASK                                          0
+  #define STATISTICS_ENABLE                                   0
+  #define PROFILING_MODE                                      0
+  #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
+  #define NETWORK_VERIFY_ENABLE                               0
+  #define ERROR_TRACK_ENABLE                                  0
+  /**/
+  #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
+  #define KERNEL_ENDSTEP_VERIFY_EVERY_STEPS                   0
+  #endif
+  /**/
+  #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
+  #define ERROR_TRACK_ACCESS_EVERY_STEPS                      0
+  #endif
+  
+#else
+  #error Unknown simulation mode
 #endif
-/*Run simulation for this many steps*/
-#if !(defined(SIMULATION_TIME_STEPS))
-  #define SIMULATION_TIME_STEPS                               (20*EVENT_TIME_SLOTS)
-#endif
-#endif
+
 /*
   Enable simulation stages (use ENABLE_MASK above)
   Options: 
@@ -641,6 +763,7 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
                                                               EXPAND_EVENTS_SPIKE_PACKETS_PER_WG)
   
   /*Spike data structure parameters (data in)*/
+  #define EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT                 0.0, 10.0
   #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE                SPIKE_DATA_BUFFER_SIZE
   #define EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE              2
   #define EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS            2
@@ -1110,9 +1233,6 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
 */
   /*Verification*/
   #define UPDATE_NEURONS_VERIFY_ENABLE                            KERNEL_VERIFY_ENABLE
-  /*Debugging*/
-  #define UPDATE_NEURONS_DEBUG_ENABLE                             (0)&DEBUG_MASK
-  #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (UPDATE_NEURONS_TOTAL_NEURONS*UPDATE_NEURONS_MODEL_VARIABLES)
   /*Error tracking and codes*/
   /*CONTROL: enable error logging at kernel level*/
   #define UPDATE_NEURONS_ERROR_TRACK_ENABLE                       ERROR_TRACK_ENABLE
@@ -1136,8 +1256,6 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_STRUCT_ELEMENT_SIZE                      2
   /*Event input buffer element size*/
   #define UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS                   3
-  /*CONTROL: Source data size for unit test.t*/
-  #define UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE                 (8*UPDATE_NEURONS_TOTAL_NEURONS)
   /*CONTROL: each WI processes this number of neurons*/
   #define UPDATE_NEURONS_ELEMENTS_PER_WI                          1
   /*Size of time delay buffer*/
@@ -1164,6 +1282,13 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_TOTAL_NEURONS                            (1<<UPDATE_NEURONS_TOTAL_NEURON_BITS)
   #define UPDATE_NEURONS_MAX_DELAY                                (UPDATE_NEURONS_TIME_SLOTS-SIMULATION_STEP_SIZE)
   #define UPDATE_NEURONS_MIN_DELAY                                1.0f
+  
+  /*Debugging*/
+  #define UPDATE_NEURONS_DEBUG_ENABLE                             (0)&DEBUG_MASK
+  #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (UPDATE_NEURONS_TOTAL_NEURONS*1024)
+  
+  /*CONTROL: Source data size for unit test.t*/
+  #define UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE                 (8*UPDATE_NEURONS_TOTAL_NEURONS)
   
   /*Simulation parameters*/
   /*Tolerance mode: 
@@ -1196,6 +1321,10 @@ export AMD_OCL_BUILD_OPTIONS="-g -O0"
   #define UPDATE_NEURONS_TAU_GABA                                 10.0f
   #define UPDATE_NEURONS_C                                        200.0f
   #define UPDATE_NEURONS_a                                        0.03f
+  
+  /*Optimizations*/
+  #define UPDATE_NEURONS_DT_1_0_OPTIMIZATION                      1
+  
 /*
                                                Restrictions
 */

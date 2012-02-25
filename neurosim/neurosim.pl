@@ -1,7 +1,10 @@
 #!/tool/pandora/bin/perl5.8.0
 
 =for
-
+  TODO:
+  - release vs debug configurations
+  - mingw support
+  - compiler warnings cleanup
 =cut
 
 package neurosim;
@@ -26,6 +29,8 @@ use constant WIN_COMPILER_MINGW                               => "mingw";
 use constant TARGET_ARC_X86_64                                => "x86_64";
 use constant OS_WINDOWS                                       => "MSWin32";
 use constant OS_LINUX                                         => "linux";
+use constant NODE_COMPILE                                     => "Node Compile";
+use constant NODE_EXECUTE                                     => "Node Execute";
 
 # Globals:
 our $CONFIG;
@@ -104,21 +109,23 @@ our $APP_BIN_DIR = "$APP_SRC_DIR/bin/release/$TARGET_ARCHITECTURE";
 our @APP_INCL_DIR = ("include", "include/$UTIL_NAME", "include/GL");
 our $APP_INCL_DIR = "";
 our @APP_SRC_NAMES = ("iz_util.c", "integ_util.c", "IntegrationTest.cpp");
-our @APP_KERNEL_NAMES = ("Kernel_ExpandEvents.cl", "Kernel_GroupEvents.cl", 
+our @APP_KERNEL_FILE_NAMES = ("Kernel_ExpandEvents.cl", "Kernel_GroupEvents.cl", 
   "Kernel_MakeEventPointers.cl", "Kernel_ScanHistogram.cl", "Kernel_SortSynapticEvents.cl", 
   "Kernel_UpdateNeurons.cl");
-our @APP_MISC_FILES = ("Definitions.h", $OCL_COMPILER_OPTIONS_FILE);
+our @APP_DEFINITION_FILE_NAMES = ("Definitions.h");
+our @APP_CONFIG_FILE_NAMES = ("neuron_variables_sample.csv", $OCL_COMPILER_OPTIONS_FILE);
 our $APP_COMPILER_OPS = "";
 our $APP_LINK_OPS = "";
 our $APP_LIB_CONFIG = "";
 our $APP_INSTALL_DIR = "$SCRIPT_ROOT_DIR/bin/$TARGET_ARCHITECTURE";
 our @APP_CURRENT_CONFIG_KEYS = ();
 our (%APP_CURRENT_CONFIG); %APP_CURRENT_CONFIG = ();
+our $APP_FLOW = {};
 our (%APP_COMMON_CONFIG); %APP_COMMON_CONFIG = ();
+our (%APP_REPORT); %APP_REPORT = ();
 our $APP_COMMON_CONFIG_OPTS = "";
 our $APP_REPORT_LOG = "log_report.txt";
 our %APP_CURRENT_INFO = ("Test ID"  =>  "",  "SubTest ID"  =>  "");
-our %APP_REPORT = ("Compile V"  =>  "",  "Verify"  =>  "", "Compile M"  =>  "", "Run"  =>  "");
 
 # OS-specific builds
 if( $OS eq OS_WINDOWS )
@@ -392,10 +399,12 @@ sub main
       $APP_COMMON_CONFIG_OPTS .= " ".$D." ".$k."=".$v;
       $APP_COMMON_CONFIG{$k} = $v;
     }
-    
+
     # Insert test-specific report keys
     my @temp = keys %{$config->{report_config}->{report_tags}->{param}};
     @APP_REPORT{@temp} = ("") x @temp;
+    
+    #print Dumper($config->{specific_config});
       
     # sort executables numerically and iterate:
     foreach my $exe_name (sort {$a<=>$b} keys %{$config->{specific_config}->{exe}})
@@ -410,12 +419,34 @@ sub main
       }
       #print Dumper($exe);
       
-      # Parse current configuration
-      my $hash = $exe->{config}->{param};
-      #print Dumper($hash);
-      @APP_CURRENT_CONFIG_KEYS = sort(keys %{$hash});
-      @APP_CURRENT_CONFIG{@APP_CURRENT_CONFIG_KEYS} = (0) x @APP_CURRENT_CONFIG_KEYS;
+      # Parse flow configuration
+      $APP_FLOW = $exe->{flow}->{node};
+      my @flow_keys = keys %{$APP_FLOW};
+      @flow_keys = grep {$_ ne 'Start'} @flow_keys;
+      # Correct nodes with single parameters
+      foreach my $node (@flow_keys)
+      {
+        #print ref($APP_FLOW->{$node}->{param});
+        if(defined($APP_FLOW->{$node}->{param}->{id}))
+        {
+          my $id = $APP_FLOW->{$node}->{param}->{id};
+          my $content = $APP_FLOW->{$node}->{param}->{content};
+          $APP_FLOW->{$node}->{param} = {$id => {'content' => $content}};
+        }
+      }
       
+      # Add node keys to report hash
+      @temp = map{NODE_COMPILE.' '.$_} @flow_keys;
+      @APP_REPORT{@temp} = ("") x @temp;
+      @temp = map{NODE_EXECUTE.' '.$_} @flow_keys;
+      @APP_REPORT{@temp} = ("") x @temp;
+
+      # Parse current configuration
+      my $config_hash = $exe->{config}->{param};
+      #print Dumper($config_hash);
+      @APP_CURRENT_CONFIG_KEYS = sort(keys %{$config_hash});
+      @APP_CURRENT_CONFIG{@APP_CURRENT_CONFIG_KEYS} = (0) x @APP_CURRENT_CONFIG_KEYS;
+
       $APP_CURRENT_INFO{"Test ID"} = $test->{id};
       $APP_CURRENT_INFO{"SubTest ID"} = $exe->{id};
 
@@ -429,7 +460,7 @@ sub main
       # Execute configuration sequence recursively
       if(scalar(@APP_CURRENT_CONFIG_KEYS) > 0)
       {
-        &compileAndRunAppRecursively(0, $hash);
+        &compileAndRunAppRecursively(0, $config_hash);
       }
     }
   }
@@ -448,7 +479,7 @@ sub compileAndRunAppRecursively
   
   if($p == scalar(@APP_CURRENT_CONFIG_KEYS))
   {
-    return &compileAndRunApp;
+    return &executeFlow;
   }
   else
   {
@@ -463,13 +494,14 @@ sub compileAndRunAppRecursively
 
 
 ####################################################################################################
-# compileAndRunApp
-# Compiles and runs app according to current combination of parameters from subtest
+# executeFlow
+# Executes flow
 ####################################################################################################
-sub compileAndRunApp
+sub executeFlow
 {
-  my $config = "";
   my $ts = POSIX::strftime("%Y_%m_%d_%H_%M_%S", localtime);
+  my $node = $APP_FLOW->{Start}->{result}->{PASS}->{content};
+  my $config = "";
   
   foreach my $k (@APP_CURRENT_CONFIG_KEYS)
   {
@@ -481,35 +513,31 @@ sub compileAndRunApp
   # reset report
   @APP_REPORT{(keys %APP_REPORT)} = ("") x (keys %APP_REPORT);
   
-  # Make a 1st run in verification mode
-  if(!&compileApp($config." ".$D." SIMULATION_MODE=0 ".$APP_COMMON_CONFIG_OPTS))
+  while(1)
   {
-    # mark as failed to compile
-    $APP_REPORT{"Compile V"} = "FAIL";
-    # get values sorted by keys
-    my @result = (@APP_CURRENT_INFO{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_INFO}, 
-                  @APP_COMMON_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_COMMON_CONFIG}, 
-                  @APP_CURRENT_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_CONFIG}, 
-                  @APP_REPORT{sort {lc($a) cmp lc($b)} keys %APP_REPORT});
-    # log message
-    logMsg(join(',', $ts, @result));
-    return 0;
-  }
-  else
-  {
-    # mark as passed to compile
-    $APP_REPORT{"Compile V"} = "PASS";
-    &runApp;
-    
-    if(&parseResults)
+    # Parse param config for current node
+    my $flow_config = "";
+    foreach my $k (keys %{$APP_FLOW->{$node}->{param}})
     {
-      # mark as passed to verify
-      $APP_REPORT{Verify} = "PASS";
+      $flow_config .= (" ".$D." ".$k."=".$APP_FLOW->{$node}->{param}->{$k}->{content});
+    }
+
+    # Execute node
+    print "Executing node: ".$node."\n";
+    my $result = &compileAndRunApp($config.$flow_config, $node, $ts);
+    
+    # Get next node based on results
+    if($result == 1)
+    {
+      $node = $APP_FLOW->{$node}->{result}->{PASS}->{content};
+    }
+    elsif($result == 0)
+    {
+      $node = $APP_FLOW->{$node}->{result}->{FAIL}->{content};
+      print "Failed to execute node: ".$node."\n";
     }
     else
     {
-      # mark as failed to verify
-      $APP_REPORT{"Verify"} = "FAIL";
       # get values sorted by keys
       my @result = (@APP_CURRENT_INFO{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_INFO}, 
                     @APP_COMMON_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_COMMON_CONFIG}, 
@@ -517,57 +545,64 @@ sub compileAndRunApp
                     @APP_REPORT{sort {lc($a) cmp lc($b)} keys %APP_REPORT});
       # log message
       logMsg(join(',', $ts, @result));
+      
+      die "\nUnexpected result: ".$result."\n";
+    }
+    
+    if($node eq 'Exit')
+    {
+      # get values sorted by keys
+      my @result = (@APP_CURRENT_INFO{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_INFO}, 
+                    @APP_COMMON_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_COMMON_CONFIG}, 
+                    @APP_CURRENT_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_CONFIG}, 
+                    @APP_REPORT{sort {lc($a) cmp lc($b)} keys %APP_REPORT});
+      # log message
+      logMsg(join(',', $ts, @result));
+      print "Exiting flow\n";
+      return $result;
+    }
+  }
+}
+
+
+
+####################################################################################################
+# compileAndRunApp
+# Compiles and runs app according to current combination of parameters from subtest
+####################################################################################################
+sub compileAndRunApp
+{
+  my $config = $_[0];
+  my $node = $_[1];
+  my $ts = $_[2];
+  
+  # Make a run in verification mode
+  if(!&compileApp($config." ".$APP_COMMON_CONFIG_OPTS))
+  {
+    # mark as failed to compile
+    $APP_REPORT{NODE_COMPILE.' '.$node} = "FAIL";
+    return 0;
+  }
+  else
+  {
+    # mark as passed to compile
+    $APP_REPORT{NODE_COMPILE.' '.$node} = "PASS";
+    &runApp;
+    
+    if(&parseResults)
+    {
+      # mark as passed to execute
+      $APP_REPORT{NODE_EXECUTE.' '.$node} = "PASS";
+    }
+    else
+    {
+      # mark as failed to execute
+      $APP_REPORT{NODE_EXECUTE.' '.$node} = "FAIL";
       return 0;
     }
   }
 
-  # Compile and run the same config for measurements
-  if(!&compileApp($config." ".$D." SIMULATION_MODE=4 ".$APP_COMMON_CONFIG_OPTS))
-  {
-    # mark as failed to compile
-    $APP_REPORT{"Compile M"} = "FAIL";
-    # get values sorted by keys
-    my @result = (@APP_CURRENT_INFO{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_INFO}, 
-                  @APP_COMMON_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_COMMON_CONFIG}, 
-                  @APP_CURRENT_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_CONFIG}, 
-                  @APP_REPORT{sort {lc($a) cmp lc($b)} keys %APP_REPORT});
-    # log message
-    logMsg(join(',', $ts, @result));
-    return 0;
-  }
-  else
-  {
-    # mark as passed to compile
-    $APP_REPORT{"Compile M"} = "PASS";
-    &runApp;
-    
-    if(&parseResults)
-    {
-      # mark as passed to verify
-      $APP_REPORT{"Run"} = "PASS";
-      # get values sorted by keys
-      my @result = (@APP_CURRENT_INFO{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_INFO}, 
-                    @APP_COMMON_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_COMMON_CONFIG}, 
-                    @APP_CURRENT_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_CONFIG}, 
-                    @APP_REPORT{sort {lc($a) cmp lc($b)} keys %APP_REPORT});
-      # log message
-      logMsg(join(',', $ts, @result));
-      return 1;
-    }
-    else
-    {
-      # mark as failed to run
-      $APP_REPORT{"Run"} = "FAIL";
-      # get values sorted by keys
-      my @result = (@APP_CURRENT_INFO{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_INFO}, 
-                    @APP_COMMON_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_COMMON_CONFIG}, 
-                    @APP_CURRENT_CONFIG{sort {lc($a) cmp lc($b)} keys %APP_CURRENT_CONFIG}, 
-                    @APP_REPORT{sort {lc($a) cmp lc($b)} keys %APP_REPORT});
-      # log message
-      logMsg(join(',', $ts, @result));
-      return 0;
-    }
-  }
+  return 1;
 }
 
 
@@ -654,9 +689,22 @@ sub compileApp
     print "The application was not installed in \"$APP_INSTALL_DIR/$APP_NAME.exe\"\n";
     return 0;
   }
-  for my $n ((@APP_MISC_FILES, @APP_KERNEL_NAMES)) 
+  
+  for my $n ((@APP_DEFINITION_FILE_NAMES, @APP_KERNEL_FILE_NAMES)) 
   {
     $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\" \"$APP_INSTALL_DIR/$n\"";
+    print "$temp\n";
+    system( $temp );
+    if( not(-e "$APP_INSTALL_DIR/$n") ) 
+    {
+      print "The file $n was not installed in \"$APP_INSTALL_DIR/$n\"\n";
+      return 0;
+    }
+  }
+  
+  for my $n (@APP_CONFIG_FILE_NAMES) 
+  {
+    $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/config/$n\" \"$APP_INSTALL_DIR/$n\"";
     print "$temp\n";
     system( $temp );
     if( not(-e "$APP_INSTALL_DIR/$n") ) 
