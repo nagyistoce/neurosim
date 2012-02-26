@@ -161,8 +161,8 @@
           <param id="SIMULATION_MODE">1</param>
           <param id="SIMULATION_SNAPSHOT">0</param>
           <param id="SIMULATION_TIME_STEPS">400</param>
-          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">1</param>
-          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">1</param>
+          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">100</param>
+          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">100</param>
           <param id="PREINITIALIZE_NETWORK_STATE">1</param>
           <result id="PASS">Profile_kernels</result>
           <result id="FAIL">Exit</result>
