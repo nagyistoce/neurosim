@@ -3807,6 +3807,10 @@ IntegrationTest::runCLKernels()
 #if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
   ENQUEUE_WRITE_BUFFER(CL_FALSE, psToleranceBuffer, psToleranceSizeBytes, psTolerance);
 #endif
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsErrorBuffer, dataUpdateNeuronsErrorSizeBytes, 
+      dataUpdateNeuronsError);
+#endif
   ENQUEUE_WRITE_BUFFER(CL_FALSE, constantCoefficientsBuffer, constantCoefficientsSizeBytes, 
     constantCoefficients);
   ENQUEUE_WRITE_BUFFER(CL_FALSE, modelVariablesBuffer, modelVariablesSizeBytes, 
@@ -4103,7 +4107,11 @@ IntegrationTest::runCLKernels()
 #if (SIMULATION_MODE == 0 || ERROR_TRACK_ENABLE)
     currentTimeSlot = currentTimeStep%EVENT_TIME_SLOTS;
 #if ERROR_TRACK_ENABLE
+#if ERROR_TRACK_ACCESS_EVERY_STEPS > KERNEL_ENDSTEP_VERIFY_EVERY_STEPS
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
+#else
+    if(!((currentTimeStep+1)%KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
+#endif
 #endif
     {
       std::cout << "\nExecuting step " << currentTimeStep << "(" << currentTimeSlot << ") out of " 
@@ -5316,44 +5324,32 @@ IntegrationTest::runCLKernels()
 #endif
 /*END debugging*/
 
-/*Error tracking: clear error mask on the host and device*/
-#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsErrorBuffer, dataUpdateNeuronsErrorSizeBytes, 
-      dataUpdateNeuronsError);
-#endif
-/*END error tracking*/
-
 /*Get dataMakeEventPtrsStruct from device for profiling: pre-profiling steps in mode 1 require 
 dataMakeEventPtrsStruct to have the same contents for device and host. Host reads it before
 device modifies it.*/
 #if (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 &&\
     GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE &&\
     EXPAND_EVENTS_ENABLE)
+#if (UPDATE_NEURONS_VERIFY_ENABLE || (KERNEL_ENDSTEP_VERIFY_EVERY_STEPS > 0)) ||\
+    (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0) || SIMULATION_SNAPSHOT
 #if UPDATE_NEURONS_VERIFY_ENABLE || (KERNEL_ENDSTEP_VERIFY_EVERY_STEPS > 0)
     if(!((currentTimeStep+1)%KERNEL_ENDSTEP_VERIFY_EVERY_STEPS) || (currentTimeStep == 0)
+#else
+    if(false
+#endif
 #if OVERWRITE_SPIKES_UNTILL_STEP
     || (currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
-#elif INJECT_CURRENT_UNTILL_STEP
+#endif
+#if INJECT_CURRENT_UNTILL_STEP
     || (currentTimeStep < INJECT_CURRENT_UNTILL_STEP)
+#endif
+#if SIMULATION_SNAPSHOT
+    || (takeSimSnapshot)
 #endif
     ){
       ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
         dataMakeEventPtrsStruct);
     }
-#elif (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0)
-#if OVERWRITE_SPIKES_UNTILL_STEP
-    if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
-    {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
-        dataMakeEventPtrsStruct);
-    }
-#elif INJECT_CURRENT_UNTILL_STEP
-    if(currentTimeStep < INJECT_CURRENT_UNTILL_STEP)
-    {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
-        dataMakeEventPtrsStruct);
-    }
-#endif
 #endif
 #endif
 /*END Get dataMakeEventPtrsStruct*/
@@ -5431,8 +5427,8 @@ device modifies it.*/
       if(dataUpdateNeuronsError[0] != 0)
       {
         std::cout << "UPDATE_NEURONS_ERROR_TRACK_ENABLE: received error code from the device: ";
-        PRINT_HEX(4, dataUpdateNeuronsError[0]);
-        std::cout << std::endl;
+        PRINT_HEX(4, dataUpdateNeuronsError[0]); std::cout << std::endl;
+        
         if((!ignoreSolverFailuresDevice && dataUpdateNeuronsError[0] != 0) || 
            (ignoreSolverFailuresDevice && 
            ((UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK&dataUpdateNeuronsError[0]) != 0))
@@ -5443,6 +5439,8 @@ device modifies it.*/
         {
           std::cout << "UPDATE_NEURONS_ERROR_TRACK_ENABLE: ignoring solver failures\n";
           memset(dataUpdateNeuronsError, 0, UPDATE_NEURONS_ERROR_BUFFER_SIZE_WORDS*sizeof(cl_uint));
+          ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsErrorBuffer, 
+            dataUpdateNeuronsErrorSizeBytes, dataUpdateNeuronsError);
         }
       }
     }
@@ -5460,7 +5458,8 @@ device modifies it.*/
       (currentTimeStep == 0);
 #if OVERWRITE_SPIKES_UNTILL_STEP
     verify |= (currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP);
-#elif INJECT_CURRENT_UNTILL_STEP
+#endif
+#if INJECT_CURRENT_UNTILL_STEP
     verify |= (currentTimeStep < INJECT_CURRENT_UNTILL_STEP);
 #endif
     if(verify)
@@ -5601,19 +5600,8 @@ device modifies it.*/
       }
     }
 #endif
-/*END verification during inject of spikes or currents*/
-
-/*Read data for simulatin snapshot (these reads must be present in all branches of this #if-#endif)*/
-#elif SIMULATION_SNAPSHOT
-    if(takeSimSnapshot)
-    {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-        dataSpikePackets);
-      ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
-        modelVariables);
-    }
 #endif
-/*END: simulation snapshot*/
+/*END verification during inject of spikes or currents*/
 
 /*Unit test verification*/
 #else
@@ -5651,6 +5639,13 @@ device modifies it.*/
     EXPAND_EVENTS_ENABLE && UPDATE_NEURONS_ENABLE_V00)
   if(takeSimSnapshot)
   {
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
+      dataSpikePackets);
+    ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+      modelVariables);
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+      dataGroupEventsTik);
+        
     takeSimulationSnapshot
     (
       currentTimeStep,
@@ -8536,7 +8531,8 @@ IntegrationTest::verifyKernelUpdateNeurons
     
     if(underTestType1 != reference)
     {
-      std::cerr << "ERROR, verifyKernelUpdateNeurons, mismatch of variable v for neuron " << i 
+      std::cerr << "ERROR, verifyKernelUpdateNeurons, step " << step 
+        << ", mismatch of variable v for neuron " << i 
         << ": " << underTestType1 << " != " << reference << " ("; PRINT_HEX(4, underTestType1); 
         std::cerr << " != "; PRINT_HEX(4, reference); std::cerr << ")" << std::endl;
       result = SDK_FAILURE;
@@ -8546,7 +8542,8 @@ IntegrationTest::verifyKernelUpdateNeurons
     reference = nrn_ps[i].u;
     if(underTestType1 != reference)
     {
-      std::cerr << "ERROR, verifyKernelUpdateNeurons, mismatch of variable u for neuron " << i 
+      std::cerr << "ERROR, verifyKernelUpdateNeurons, step " << step 
+        << ", mismatch of variable u for neuron " << i 
         << ": " << underTestType1 << " != " << reference << " ("; PRINT_HEX(4, underTestType1); 
         std::cerr << " != "; PRINT_HEX(4, reference); std::cerr << ")" << std::endl;
       result = SDK_FAILURE;
@@ -8556,7 +8553,8 @@ IntegrationTest::verifyKernelUpdateNeurons
     reference = nrn_ps[i].g_ampa;
     if(underTestType1 != reference)
     {
-      std::cerr << "ERROR, verifyKernelUpdateNeurons, mismatch of variable g_ampa for neuron " << i 
+      std::cerr << "ERROR, verifyKernelUpdateNeurons, step " << step 
+        << ", mismatch of variable g_ampa for neuron " << i 
         << ": " << underTestType1 << " != " << reference << " ("; PRINT_HEX(4, underTestType1); 
         std::cerr << " != "; PRINT_HEX(4, reference); std::cerr << ")" << std::endl;
       result = SDK_FAILURE;
@@ -8566,7 +8564,8 @@ IntegrationTest::verifyKernelUpdateNeurons
     reference = nrn_ps[i].g_gaba;
     if(underTestType1 != reference)
     {
-      std::cerr << "ERROR, verifyKernelUpdateNeurons, mismatch of variable g_gaba for neuron " << i 
+      std::cerr << "ERROR, verifyKernelUpdateNeurons, step " << step 
+        << ", mismatch of variable g_gaba for neuron " << i 
         << ": " << underTestType1 << " != " << reference << " ("; PRINT_HEX(4, underTestType1); 
         std::cerr << " != "; PRINT_HEX(4, reference); std::cerr << ")" << std::endl;
       result = SDK_FAILURE;
