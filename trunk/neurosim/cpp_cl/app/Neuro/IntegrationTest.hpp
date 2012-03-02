@@ -846,6 +846,15 @@ public:
       size_t        blockSizeX,
       size_t        blockSizeY
     );
+    
+    
+    bool 
+    findTargetDevice
+    (
+      vector<cl::Device>                  platformDevices,
+      const char                          *targetDevices,
+      std::vector<cl::Device>::iterator   *d
+    );
 
     /**
     * Set values for kernels' arguments, enqueue calls to the kernels
@@ -905,6 +914,7 @@ public:
       cl_uint enableValues,
       cl_uint totalBuffers,
       cl_uint bufferSize,
+      cl_uint destinationBufferSize,
       cl_uint elementSizeWords,
       cl_uint histogramBinSize,
       cl_uint histogramTotalBins,
@@ -954,6 +964,7 @@ public:
       cl_uint value2CarryEnable,
       cl_uint stepShiftEnable,
       cl_uint elementSizeWords,
+      cl_uint destinationBufferSize,
       cl_uint histogramBinSize,
       cl_uint histogramTotalBins,
       cl_uint histogramBitMask,
@@ -1062,10 +1073,10 @@ public:
       double structBufferSizeMargin,
       double gabaRatio,
       cl_uint totalEvents,
-      cl_uint pitch,
       cl_uint wfWorkSize,
       cl_uint structSize,
       cl_uint structPitch,
+      cl_uint eventBufferSize,
       cl_uint *sortedEvents
     );
     
@@ -1074,7 +1085,6 @@ public:
     (
       bool    verify,
       cl_uint totalSortedEvents,
-      cl_uint sortedEventsPitch,
       cl_uint totalPointers,
       cl_uint pointersPitch,
       cl_uint *sortedEvents,
@@ -1132,7 +1142,7 @@ public:
       cl_uint       totalNeurons,
       cl_uint       eventQueueSize,
       cl_uint       pointersPitch,
-      cl_uint       sortedEventsPitch,
+      cl_uint       sortedEventsSize,
       cl_uint       *sortedEvents,
       cl_uint       *pointersToEvents,
       neuron_iz_ps  *nrn
@@ -1194,6 +1204,7 @@ public:
     (
       bool          verify,
       cl_uint       step,
+      cl_uint       sortedEventsSize,
       unsigned int  *pointerStruct,
       unsigned int  *sortedEvents,
       unsigned int  *synapsePointer,
@@ -1212,7 +1223,7 @@ public:
       bool          correctWeightPositionMismatch,
       unsigned int  totalNeurons,
       unsigned int  structElementSize,
-      unsigned int  eventsElementSize,
+      unsigned int  sortedEventsSize,
       unsigned int  *pointerStruct,
       unsigned int  *sortedEvents,
       neuron_iz_ps  *nrn

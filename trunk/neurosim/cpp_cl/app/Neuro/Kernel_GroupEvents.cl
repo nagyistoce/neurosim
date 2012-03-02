@@ -404,16 +404,13 @@ void group_events
 
   /*Broadcast total events to all WIs in the group*/
   barrier(CLK_LOCAL_MEM_FENCE);
-  uint total_synaptic_events = lmlocalHistogramScratchPad[0];
+  uint limit_address = lmlocalHistogramScratchPad[0];
 
-  /*Compute limit address*/
-  uint limit_address = (total_synaptic_events)*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-  
   /*Compute total chunks for grid*/
-  uint total_synaptic_event_chunks = total_synaptic_events/(GROUP_EVENTS_WG_SIZE_WI*
+  uint total_synaptic_event_chunks = limit_address/(GROUP_EVENTS_WG_SIZE_WI*
     GROUP_EVENTS_ELEMENTS_PER_WI);
   if(total_synaptic_event_chunks*(GROUP_EVENTS_WG_SIZE_WI*
-    GROUP_EVENTS_ELEMENTS_PER_WI) < total_synaptic_events)
+    GROUP_EVENTS_ELEMENTS_PER_WI) < limit_address)
   {
     total_synaptic_event_chunks++;
   }
@@ -482,7 +479,6 @@ void group_events
       wi_id*GROUP_EVENTS_ELEMENTS_PER_WI + 
       /*Chunk for this WG*/
       i*GROUP_EVENTS_ELEMENTS_PER_WI*GROUP_EVENTS_WG_SIZE_WI;
-    addr *= GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
     
     /*WI: load data for my block: keys are data elements, 
     values are pointers to original address of these data elements*/
@@ -492,17 +488,19 @@ void group_events
 #endif
 		for(uint i=0; i<GROUP_EVENTS_ELEMENTS_PER_WI; i++)
     {
-      uint gm_address = addr + i*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
+      uint gm_address = addr + i;
 #if defined(GROUP_EVENTS_CHECK_BOUNDARY)
-			dataKeys[i] = ( gm_address < limit_address )? 
-        gm_source_events[gm_address + GROUP_EVENTS_SOURCE_KEY_OFFSET] : 0xffffffff;
+			dataKeys[i] = ( gm_address < limit_address )? gm_source_events[gm_address + 
+        GROUP_EVENTS_SOURCE_KEY_OFFSET*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE] : 0xffffffff;
 #else
-			dataKeys[i] = gm_source_events[gm_address + GROUP_EVENTS_SOURCE_KEY_OFFSET];
+			dataKeys[i] = gm_source_events[gm_address + GROUP_EVENTS_SOURCE_KEY_OFFSET*
+        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE];
 #endif
 #if GROUP_EVENTS_VALUES_MODE == 1
       dataValues[i] = gm_address;
 #elif GROUP_EVENTS_VALUES_MODE == 2
-      dataValues[i] = gm_source_events[gm_address+1];
+      dataValues[i] = gm_source_events[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + 
+        gm_address];
 #endif
     }
 #endif
@@ -565,14 +563,8 @@ void group_events
       Every GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER threads share a single counter buffer*/
 			for(uint i=0; i<GROUP_EVENTS_ELEMENTS_PER_WI; i++)
       {
-#if (GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE == 0)
 #if defined(GROUP_EVENTS_CHECK_BOUNDARY)
 				if( addr + i < limit_address )
-#endif
-#else
-#if defined(GROUP_EVENTS_CHECK_BOUNDARY)
-				if( addr + i*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS < limit_address )
-#endif
 #endif
         {
           atomic_inc( &lmSortData[(setIdx)*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS + keys[i]] );
@@ -650,16 +642,9 @@ void group_events
 			{
 				uint bin = keys[ie];
 				uint wg_offset_in_global_scope = lmlocalHistogramReference[bin];
-#if (GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE == 0)
 #if defined(GROUP_EVENTS_CHECK_BOUNDARY)
 				if( addr + ie < limit_address )
 #endif
-#else
-#if defined(GROUP_EVENTS_CHECK_BOUNDARY)
-				if( addr + ie*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS < limit_address )
-#endif
-#endif
-
 				{
 #if (GROUP_EVENTS_LOCAL_SORT_ENABLE)
           uint data_id_in_wg_scope = GROUP_EVENTS_ELEMENTS_PER_WI*wi_id + ie;
@@ -675,7 +660,6 @@ void group_events
           /*Compute WG, which is going to work on this data element in the next scan/sort*/
           uint hist_out_wg = myIdx/wg_chunk_size;
 #endif
-          myIdx *= GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
 
 #if GROUP_EVENTS_VALUES_MODE
 #if GROUP_EVENTS_RELOCATE_VALUES
@@ -683,17 +667,17 @@ void group_events
           uint value_ptr = dataValues[ie];
           uint value1 = gm_event_delays[value_ptr];
           uint value2 = gm_event_weights[value_ptr];
-          gm_destination_events[myIdx+1] = value1;
-          gm_destination_events[myIdx+2] = value2;
+          gm_destination_events[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + myIdx] = value1;
+          gm_destination_events[2*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + myIdx] = value2;
 #else /*!GROUP_EVENTS_RELOCATE_VALUES*/
 #if GROUP_EVENTS_REPLACE_KEY
           uint new_key_ptr = dataValues[ie];
           uint new_key = gm_event_targets[new_key_ptr];
           gm_destination_events[myIdx] = new_key;
-          gm_destination_events[myIdx+1] = dataValues[ie];
+          gm_destination_events[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE+myIdx] = dataValues[ie];
 #else /*!GROUP_EVENTS_REPLACE_KEY*/
           gm_destination_events[myIdx] = dataKeys[ie];
-          gm_destination_events[myIdx+1] = dataValues[ie];
+          gm_destination_events[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE+myIdx] = dataValues[ie];
 #endif /*END: GROUP_EVENTS_REPLACE_KEY*/
 #endif  /*END GROUP_EVENTS_RELOCATE_VALUES*/
 #else /*!GROUP_EVENTS_VALUES_MODE*/

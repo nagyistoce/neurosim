@@ -6,8 +6,6 @@
       private (or store to LM and then bulk-store to to GM)
     - may need to replace a banch of WI_ID_WF_SCOPE(wi_id) and other ones used in the code 
       with variables calculated ones.
-    - instead of count/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS need to operate on elements of
-      MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS
 */
 
 //TODO: map MAKE_EVENT_PTRS_.. to the ones w/o
@@ -50,7 +48,6 @@ void glue_event_pointers
 	uint wi_id = get_local_id(0);
 	uint wg_id = get_group_id(0);
   uint wi_id_wf_scope = (wi_id%GLUE_EVENT_PTRS_WF_SIZE_WI);
-  uint local_wf_id = (wi_id/GLUE_EVENT_PTRS_WF_SIZE_WI);
 
   for
   (
@@ -90,8 +87,7 @@ void glue_event_pointers
       if(valSource != MAKE_EVENT_PTRS_GLUE_DEFAULT_VALUE)
       {
         gm_event_pointers[keyDest*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE] = valDest;
-        gm_event_pointers[keyDest*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1] = 
-          (valSource-valDest)/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
+        gm_event_pointers[keyDest*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1] = (valSource-valDest);
         break;
       }
     }
@@ -145,14 +141,11 @@ void make_event_pointers
 
   /*Broadcast total events to all WIs in the WG*/
   barrier(CLK_LOCAL_MEM_FENCE);
-  uint total_synaptic_events = lm_generic[0];
-  
-  /*Compute limit address*/
-  uint limit_address = total_synaptic_events*MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
+  uint limit_address = lm_generic[0];
 
   /*Compute total chunks in the grid*/
-  uint total_synaptic_event_chunks = total_synaptic_events/ELEMENTS_PER_WF;
-  if(total_synaptic_event_chunks*ELEMENTS_PER_WF < total_synaptic_events)
+  uint total_synaptic_event_chunks = limit_address/ELEMENTS_PER_WF;
+  if(total_synaptic_event_chunks*ELEMENTS_PER_WF < limit_address)
   {
     total_synaptic_event_chunks++;
   }
@@ -181,8 +174,7 @@ void make_event_pointers
   /*WF chunk boundary overlap from preceeding segment (last element of preceeding WF)*/
   else if(WI_ID_WF_SCOPE(wi_id) == 0)
   {
-    uint addr = MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS*(
-      chunk_start*ELEMENTS_PER_WF - 1);
+    uint addr = (chunk_start*ELEMENTS_PER_WF - 1);
     lm_generic[LOCAL_WF_ID(wi_id)*MAKE_EVENT_PTRS_WF_LM_SHARE_SIZE] = gm_sorted_events[addr];
   }
 
@@ -231,17 +223,17 @@ void make_event_pointers
 	for(c = chunk_start, j = 0; c < chunk_end; c++, j++)
   {
     sign *= -1;
-    uint addr = MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS*(
+    uint addr = 
       /*Chunk for this WF*/
       c*ELEMENTS_PER_WF + 
       /*WI within chunk*/
-      WI_ID_WF_SCOPE(wi_id)*MAKE_EVENT_PTRS_ELEMENTS_PER_WI);
+      WI_ID_WF_SCOPE(wi_id)*MAKE_EVENT_PTRS_ELEMENTS_PER_WI;
 
     /*WI: load elementes in private space for detecting boundaries between elements*/
     uint dataKeys[MAKE_EVENT_PTRS_ELEMENTS_PER_WI];
 		for(uint i=0; i<MAKE_EVENT_PTRS_ELEMENTS_PER_WI; i++)
     {
-      uint gm_address = addr + i*MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
+      uint gm_address = addr + i;
       /*TODO The limit address condition can be met only for the last WF in the loop.
         Its check this way by each WF is not great and could potentially be improved.
         May be with similar to 
@@ -358,7 +350,7 @@ void make_event_pointers
     /*WI: store the rest of pointers to LM*/
 		for(uint i=1; i<MAKE_EVENT_PTRS_ELEMENTS_PER_WI; i++)
     {
-      uint gm_address = addr + i*MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
+      uint gm_address = addr + i;
       if(dataKeys[i] != dataKeys[i-1] && gm_address < limit_address )
       {
 #if (MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE)
@@ -400,8 +392,7 @@ void make_event_pointers
         uint address = lm_last_element[offset + 1];
         uint count = lm_generic[generalLmWfOffset + 1] - address;
         gm_event_pointers[neuronId*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE] = address;
-        gm_event_pointers[neuronId*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1] = 
-          count/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
+        gm_event_pointers[neuronId*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1] = count;
       }
     }
     
@@ -413,8 +404,7 @@ void make_event_pointers
       uint address = lm_generic[offset + 1];
       uint count = lm_generic[offset + MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1] - address;
       gm_event_pointers[neuronId*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE] = address;
-      gm_event_pointers[neuronId*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1] = 
-        count/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
+      gm_event_pointers[neuronId*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1] = count;
     }
     
     /*First WI in a WF stores last element for the next iteration*/
@@ -473,7 +463,7 @@ void make_event_pointers
     // TODO it might be better to store them to local first and then to global
 		for(uint i=1; i<MAKE_EVENT_PTRS_ELEMENTS_PER_WI; i++)
     {
-      uint gm_address = addr + i*MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
+      uint gm_address = addr + i;
       if(dataKeys[i] != dataKeys[i-1] && gm_address < limit_address )
       {
         uint offset = globalWfOffset + wiWfOffset;

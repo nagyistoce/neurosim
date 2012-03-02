@@ -420,7 +420,7 @@ void update_neurons
     DATA_TYPE in_t_now = 1.0f;
     if(stp_pass)
     {
-      in_t_now = gm_events[neuronEventPtrStart+1];
+      in_t_now = gm_events[neuronEventPtrStart + UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE];
     }
     
     /*Compute time difference btwn events: */
@@ -514,13 +514,13 @@ void update_neurons
     {
       if(stp_pass)
       {
-        DATA_TYPE w = gm_events[neuronEventPtrStart+2];
+        DATA_TYPE w = gm_events[neuronEventPtrStart + 2*UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE];
         uint g_select = (w > 0);
         g_ampa += g_select*w;
         g_gaba -= (!g_select)*w;
       }
       
-      neuronEventPtrStart += UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS;
+      neuronEventPtrStart++;
       ev_count--;
     }
   }
@@ -678,7 +678,7 @@ void update_spiked_neurons
     DATA_TYPE in_t_now = 1.0f;
     if(stp_pass)
     {
-      in_t_now = gm_events[neuronEventPtrStart+1];
+      in_t_now = gm_events[neuronEventPtrStart + UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE];
     }
     
     /*Compute time difference btwn events: */
@@ -837,13 +837,13 @@ void update_spiked_neurons
     {
       if(stp_pass)
       {
-        DATA_TYPE w = gm_events[neuronEventPtrStart+2];
+        DATA_TYPE w = gm_events[neuronEventPtrStart + 2*UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE];
         uint g_select = (w > 0);
         g_ampa += g_select*w;
         g_gaba -= (!g_select)*w;
       }
       
-      neuronEventPtrStart += UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS;
+      neuronEventPtrStart++;
       ev_count--;
     }
   }

@@ -519,7 +519,8 @@ sub executeFlow
     my $flow_config = "";
     foreach my $k (keys %{$APP_FLOW->{$node}->{param}})
     {
-      $flow_config .= (" ".$D." ".$k."=".$APP_FLOW->{$node}->{param}->{$k}->{content});
+      my $val = eval($APP_FLOW->{$node}->{param}->{$k}->{content});
+      $flow_config .= (" ".$D." ".$k."=".$val);
     }
 
     # Execute node
