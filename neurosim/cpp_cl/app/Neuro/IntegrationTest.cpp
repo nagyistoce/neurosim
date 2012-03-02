@@ -210,11 +210,17 @@ IntegrationTest::allocateHostData()
 #if MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS
   #error (MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
 #endif
+#if GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE
+  #error (GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE)
+#endif
 #endif
 #if (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03) && UPDATE_NEURONS_ENABLE_V00
 #if UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS
   #error (UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
+#endif
+#if UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE
+  #error (UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE)
 #endif
 #endif
 #if MAKE_EVENT_PTRS_ENABLE && UPDATE_NEURONS_ENABLE_V00
@@ -1096,6 +1102,7 @@ IntegrationTest::initializeGrouppedEvents
   cl_uint enableValues,
   cl_uint totalBuffers,
   cl_uint bufferSize,
+  cl_uint destinationBufferSize,
   cl_uint elementSizeWords,
   cl_uint histogramBinSize,
   cl_uint histogramTotalBins,
@@ -1217,11 +1224,10 @@ IntegrationTest::initializeGrouppedEvents
 #endif
       
       /*Store event at its group location (grouped by bins)*/
-      dest_offset *= elementSizeWords;
       dataGroupedEvents[dest_offset] = key;
       if(enableValues)
       {
-        dataGroupedEvents[dest_offset+1] = ptr;
+        dataGroupedEvents[destinationBufferSize + dest_offset] = ptr;
       }
       /*Increment ptr for next data item*/
       dataOffsetGroupEventsCopy[bin_offset]++;
@@ -1349,6 +1355,7 @@ IntegrationTest::initializeDataForKernelGroupEventsV01(int step, cl_uint keyOffs
       1,
       GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
       GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
+      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
       GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
       GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
       GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
@@ -1508,6 +1515,7 @@ IntegrationTest::initializeDataForKernelGroupEventsV02_V03
       1,
       GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
       GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
+      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
       GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
       GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
       GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
@@ -1565,15 +1573,15 @@ IntegrationTest::initializeSortedEvents
   double structBufferSizeMargin,
   double gabaRatio,
   cl_uint totalEvents,
-  cl_uint pitch,
   cl_uint wfWorkSize,
   cl_uint structSize,
   cl_uint structPitch,
+  cl_uint eventBufferSize,
   cl_uint *sortedEvents
 )
 /**************************************************************************************************/
 {
-#define PRINT_initializeSortedEvents  1
+#define PRINT_initializeSortedEvents  0
   
   bool enableGaba = true;
   int result = SDK_SUCCESS;
@@ -1602,7 +1610,7 @@ IntegrationTest::initializeSortedEvents
         ((double)rand()/((double)RAND_MAX)))));
 
       /*neuron ID*/
-      sortedEvents[(j-1)*pitch] = currentId;
+      sortedEvents[(j-1)] = currentId;
       
       currentId++;
       if(currentId >= maxEventId){currentId = maxEventId;}
@@ -1611,7 +1619,7 @@ IntegrationTest::initializeSortedEvents
       {
         /*event time*/
         cl_float time = cl_float(abs(0.1*((double)rand()/((double)RAND_MAX))));
-        sortedEvents[(j-1)*pitch + 1] = *((cl_uint *)(&time));
+        sortedEvents[(j-1) + eventBufferSize] = *((cl_uint *)(&time));
       }
       if(mode > 1)
       {
@@ -1624,20 +1632,20 @@ IntegrationTest::initializeSortedEvents
           weight = -67.0f/1.4f;
         }
         weight = cl_float(weight*((double)rand()/((double)RAND_MAX)));
-        sortedEvents[(j-1)*pitch + 2] = *((cl_uint *)(&weight));
+        sortedEvents[(j-1) + 2*eventBufferSize] = *((cl_uint *)(&weight));
       }
       totalBoundaries++;
     }
     currentWindow--;
     
-    sortedEvents[j*pitch] = sortedEvents[(j-1)*pitch];
+    sortedEvents[j] = sortedEvents[(j-1)];
       
     if(mode > 0)
     {
       /*event time*/
-      cl_float time = *((cl_float *)(&sortedEvents[(j-1)*pitch + 1]));
+      cl_float time = *((cl_float *)(&sortedEvents[(j-1) + eventBufferSize]));
       time += cl_float(abs((0.99-time)*((double)rand()/((double)RAND_MAX))));
-      sortedEvents[j*pitch + 1] = *((cl_uint *)(&time));
+      sortedEvents[j + eventBufferSize] = *((cl_uint *)(&time));
       if(time > 1.0)
       {
         std::cerr << "ERROR, initializeSortedEvents, event time exceeds max" << std::endl;
@@ -1654,7 +1662,7 @@ IntegrationTest::initializeSortedEvents
         weight = -67.0f/1.4f;
       }
       weight = cl_float(weight*((double)rand()/((double)RAND_MAX)));
-      sortedEvents[j*pitch + 2] = *((cl_uint *)(&weight));
+      sortedEvents[j + 2*eventBufferSize] = *((cl_uint *)(&weight));
     }
 
     /*Detect allocation for the next WF*/
@@ -1778,10 +1786,10 @@ IntegrationTest::initializeDataForKernelMakeEventPtrs
     10.0,
     gabaRatio,
     totalEvents,
-    MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
     0,
     0,
     0,
+    dataGroupEventsTikSize/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
     dataGroupEventsTik
   );
   
@@ -1812,10 +1820,10 @@ IntegrationTest::initializeDataForKernelMakeEventPtrs
     5.0,
     gabaRatio,
     totalEvents,
-    MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
     wfWorkSize,
     MAKE_EVENT_PTRS_STRUCT_SIZE,
     MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE,
+    dataGroupEventsTikSize/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
     dataGroupEventsTik
   );
 #endif
@@ -1836,7 +1844,6 @@ IntegrationTest::initializeEventPointers
 (
   bool    verify,
   cl_uint totalSortedEvents,
-  cl_uint sortedEventsPitch,
   cl_uint totalPointers,
   cl_uint pointersPitch,
   cl_uint *sortedEvents,
@@ -1848,44 +1855,42 @@ IntegrationTest::initializeEventPointers
   
   pointersToEvents[sortedEvents[0]*pointersPitch] = 0;
 
-  cl_uint count = 1, offset = 0;
-  for(cl_uint j = 1; j < totalSortedEvents; j++)
+  cl_uint count = 1, j = 1;
+  for(j = 1; j < totalSortedEvents; j++)
   {
-    offset = j*sortedEventsPitch;
-
     /*Detect boundary*/
-    if(sortedEvents[offset] > sortedEvents[offset-sortedEventsPitch])
+    if(sortedEvents[j] > sortedEvents[j-1])
     {
-      if(sortedEvents[offset] >= totalPointers)
+      if(sortedEvents[j] >= totalPointers)
       {
         std::cerr << "ERROR, initializeEventPointers, pointer data structure overflow: " 
-          << sortedEvents[offset] << " >= " << totalPointers << std::endl;
+          << sortedEvents[j] << " >= " << totalPointers << std::endl;
         result = SDK_FAILURE;
         break;
       }
       else
       {
-        pointersToEvents[sortedEvents[offset]*pointersPitch] = offset;
-        pointersToEvents[sortedEvents[offset-sortedEventsPitch]*pointersPitch + 1] = count;
+        pointersToEvents[sortedEvents[j]*pointersPitch] = j;
+        pointersToEvents[sortedEvents[j-1]*pointersPitch + 1] = count;
         count = 0;
       }
     }
     else if(verify)
     {
-      if(sortedEvents[offset] < sortedEvents[offset-sortedEventsPitch])
+      if(sortedEvents[j] < sortedEvents[j-1])
       {
         std::cerr << "ERROR, initializeEventPointers, detected violation of key sort order " 
-          << sortedEvents[offset] << " < " 
-          << sortedEvents[offset-sortedEventsPitch] << std::endl;
+          << sortedEvents[j] << " < " 
+          << sortedEvents[j-1] << std::endl;
         result = SDK_FAILURE;
         break;
       }
-      if(*((cl_float *)(&sortedEvents[offset+1])) < 
-        *((cl_float *)(&sortedEvents[offset-sortedEventsPitch+1])))
+      if(*((cl_float *)(&sortedEvents[j + totalSortedEvents])) < 
+        *((cl_float *)(&sortedEvents[j-1 + totalSortedEvents])))
       {
         std::cerr << "ERROR, initializeEventPointers, detected violation of value sort order " 
-          << *((cl_float *)(&sortedEvents[offset+1])) << " < " 
-          << *((cl_float *)(&sortedEvents[offset-sortedEventsPitch+1])) << std::endl;
+          << *((cl_float *)(&sortedEvents[j + totalSortedEvents])) << " < " 
+          << *((cl_float *)(&sortedEvents[j-1 + totalSortedEvents])) << std::endl;
         result = SDK_FAILURE;
         break;
       }
@@ -1896,7 +1901,7 @@ IntegrationTest::initializeEventPointers
   
   if(totalSortedEvents)
   {
-    pointersToEvents[sortedEvents[offset]*pointersPitch + 1] = count;
+    pointersToEvents[sortedEvents[j-1]*pointersPitch + 1] = count;
   }
   
   return result;
@@ -2118,11 +2123,11 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
       30.0,
       5.0,
       gabaRatio,
-      UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE,
-      UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+      dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
       0,
       0,
       0,
+      dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
       dataGroupEventsTik
     );
     if(result != SDK_SUCCESS){return result;}
@@ -2132,8 +2137,7 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
     result = initializeEventPointers
     (
       true,
-      UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE,
-      UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+      dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
       UPDATE_NEURONS_TOTAL_NEURONS,
       UPDATE_NEURONS_STRUCT_ELEMENT_SIZE,
       dataGroupEventsTik,
@@ -2896,14 +2900,13 @@ IntegrationTest::createKernel
       strcat ( sourceCode, kernelFile.source().data() );
       //std::cout << "Source code:\n" << sourceCode << std::endl;
       cl::Program::Sources programSource(1, std::make_pair(sourceCode, sourceCodeSize));
-      
+
       program = cl::Program(context, programSource, &err);
       if(!sampleCommon->checkVal(
           err,
           CL_SUCCESS,
           "Program::Program(Source) failed."))
           return SDK_FAILURE;
-
     }
 
     streamsdk::SDKFile flagsFile;
@@ -2986,6 +2989,40 @@ IntegrationTest::createKernel
 
 
 
+/*Find target device from the list of target devices*/
+bool 
+IntegrationTest::findTargetDevice
+(
+  vector<cl::Device>                  platformDevices,
+  const char                          *targetDevices,
+  std::vector<cl::Device>::iterator   *d
+){
+  bool found = false;
+  char *str = (char *) calloc(0xFFFF, sizeof(char));
+  strcpy(str, targetDevices);
+  char *pch;
+  pch = strtok (str, ",");
+  
+  while (pch != NULL)
+  {
+    for(*d = platformDevices.begin(); *d != platformDevices.end(); ++(*d)) 
+    {
+      std::string deviceName = (*(*d)).getInfo<CL_DEVICE_NAME>();
+      
+      if(strcmp(deviceName.c_str(), pch) == 0)
+      {
+        found = true; break;
+      }
+    }
+    if(found){break;}
+    pch = strtok (NULL, ",");
+  }
+  
+  free(str);
+  return found;
+}
+
+
 
 int 
 IntegrationTest::setupCL()
@@ -3008,16 +3045,16 @@ IntegrationTest::setupCL()
         return SDK_FAILURE;
     }
 
-    /*Find target platform specified by PLATFORM_VENDOR*/
+    /*Find target platform*/
     found = false;
     std::vector<cl::Platform>::iterator i;
     for (i = platforms.begin(); i != platforms.end(); ++i) 
     {
-      if(!strcmp((*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), TARGET_PLATFORM_VENDOR))
+      /*if(!strcmp((*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), TARGET_PLATFORM_VENDOR))
       {
-        found = true;
-        break;
-      }
+        found = true; break;
+      }*/
+      found = true; break;
     }
     
     if(!found)
@@ -3028,28 +3065,19 @@ IntegrationTest::setupCL()
     }
     
     (*i).getDevices(CL_DEVICE_TYPE_ALL, &devices);
-
-    /*Find target device specified by TARGET_DEVICE_NAME and its type*/
-    found = false;
+ 
     std::vector<cl::Device>::iterator d;
-    for (d = devices.begin(); d != devices.end(); ++d) 
-    {
-      std::string deviceName = (*d).getInfo<CL_DEVICE_NAME>();
-      if(!strcmp(deviceName.c_str(), TARGET_DEVICE_NAME))
-      {
-        dType = (*d).getInfo<CL_DEVICE_TYPE>();
-        myDeviceId = (*d).getInfo<CL_DEVICE_VENDOR_ID>();
-        found = true;
-        break;
-      }
-    }
+    found = findTargetDevice(devices, TARGET_DEVICE_NAME, &d);
     
     if(!found)
     {
-      std::cout << "Unable to find target device " << TARGET_DEVICE_NAME 
+      std::cout << "Unable to find target devices " << TARGET_DEVICE_NAME 
         << " on platform from vendor "  << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
       return SDK_FAILURE;
     }
+    
+    dType = (*d).getInfo<CL_DEVICE_TYPE>();
+    myDeviceId = (*d).getInfo<CL_DEVICE_VENDOR_ID>();
 
     cl_context_properties cps[3] = 
     { 
@@ -3075,22 +3103,12 @@ IntegrationTest::setupCL()
     }
     
     int deviceCount = (int)devices.size();
-    
-    /*Find target device specified by TARGET_DEVICE_NAME within created context*/
-    found = false;
-    for (d = devices.begin(); d != devices.end(); ++d) 
-    {
-      std::string deviceName = (*d).getInfo<CL_DEVICE_NAME>();
-      if(!strcmp(deviceName.c_str(), TARGET_DEVICE_NAME))
-      {
-        found = true;
-        break;
-      }
-    }
+
+    found = findTargetDevice(devices, TARGET_DEVICE_NAME, &d);
     
     if(!found)
     {
-      std::cout << "Unable to find target device " << TARGET_DEVICE_NAME 
+      std::cout << "Unable to find target devices " << TARGET_DEVICE_NAME 
         << " within created context on platform from vendor "  
         << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
       return SDK_FAILURE;
@@ -4780,7 +4798,7 @@ IntegrationTest::runCLKernels()
         dataErrorGroupEvents);
       if(dataErrorGroupEvents[0] != 0)
       {
-        std::cout << "GROUP_EVENTS_ERROR_TRACK_ENABLE, verifyKernelGroupEventsV02: "
+        std::cout << "GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV02: "
           << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
         verified = false; 
         break;
@@ -4981,7 +4999,7 @@ IntegrationTest::runCLKernels()
         dataErrorGroupEvents);
       if(dataErrorGroupEvents[0] != 0)
       {
-        std::cout << "GROUP_EVENTS_ERROR_TRACK_ENABLE, verifyKernelGroupEventsV01: "
+        std::cout << "GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV01: "
           << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
         verified = false; 
         break;
@@ -5146,7 +5164,6 @@ IntegrationTest::runCLKernels()
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V01)
     /*Use milder mode if UPDATE_NEURONS_ENABLE_V00*/
     cl_uint mode = (currentTimeStep!=0)*(1 + !UPDATE_NEURONS_ENABLE_V00);
-    mode = 0;
     if(initializeDataForKernelMakeEventPtrs(mode, currentTimeStep-1) != SDK_SUCCESS)
     {
       std::cout 
@@ -5483,6 +5500,7 @@ device modifies it.*/
         (
           true,
           currentTimeStep,
+          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
           dataGroupEventsTik,
           dataSynapsePointer,
@@ -5512,6 +5530,7 @@ device modifies it.*/
           (
             verify,
             currentTimeStep,
+            dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
             dataMakeEventPtrsStruct,
             dataGroupEventsTik,
             dataSynapsePointer,
@@ -5553,6 +5572,7 @@ device modifies it.*/
         (
           true,
           currentTimeStep,
+          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
           dataGroupEventsTik,
           dataSynapsePointer,
@@ -5583,6 +5603,7 @@ device modifies it.*/
         (
           true,
           currentTimeStep,
+          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
           dataGroupEventsTik,
           dataSynapsePointer,
@@ -5613,8 +5634,9 @@ device modifies it.*/
         (
           true,
           currentTimeStep,
-          NULL,
-          NULL,
+          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+          dataMakeEventPtrsStruct,
+          dataGroupEventsTik,
           NULL,
           NULL,
           NULL,
@@ -6380,10 +6402,9 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
 #endif
       
       /*Store event at its group location (grouped by bins)*/
-      dest_offset *= GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
       dataGroupEventsTikVerify[dest_offset] = key;
 #if GROUP_EVENTS_VALUES_MODE_V00
-      dataGroupEventsTikVerify[dest_offset+1] = ptr;
+      dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE+dest_offset] = ptr;
 #endif
       /*Increment ptr for next data item*/
       dataOffsetGroupEventsCopy[bin_offset]++;
@@ -6415,23 +6436,26 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
     /*Verify correct bin and checksum in that bin for current time slot*/
     for(cl_uint p = start; p < end; p++)
     {
-      cl_uint ptr = p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-      cl_uint v_key = (dataGroupEventsTikVerify[ptr]>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
+      cl_uint v_key = (dataGroupEventsTikVerify[p]>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
         GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-      cl_uint a_key = (dataGroupEventsTik[ptr]>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
+      cl_uint a_key = (dataGroupEventsTik[p]>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
         GROUP_EVENTS_HISTOGRAM_BIN_MASK;
       
       verify_error_count_target_neuron += (v_key != j);
       actual_error_count_target_neuron += (a_key != j);
-      CHECKSUM01(verify_checksum_target_neuron, dataGroupEventsTikVerify[ptr]);
-      //verify_checksum_target_neuron += dataGroupEventsTikVerify[ptr];
-      CHECKSUM01(actual_checksum_target_neuron, dataGroupEventsTik[ptr]);
-      //actual_checksum_target_neuron += dataGroupEventsTik[ptr];
+      CHECKSUM01(verify_checksum_target_neuron, dataGroupEventsTikVerify[p]);
+      //verify_checksum_target_neuron += dataGroupEventsTikVerify[p];
+      CHECKSUM01(actual_checksum_target_neuron, dataGroupEventsTik[p]);
+      //actual_checksum_target_neuron += dataGroupEventsTik[p];
 #if GROUP_EVENTS_VALUES_MODE_V00
-      CHECKSUM01(verify_checksum_value_01, dataGroupEventsTikVerify[ptr+1]);
-      //verify_checksum_value_01 += dataGroupEventsTikVerify[ptr+1];
-      CHECKSUM01(actual_checksum_value_01, dataGroupEventsTik[ptr+1]);
-      //actual_checksum_value_01 += dataGroupEventsTik[ptr+1];
+      CHECKSUM01(verify_checksum_value_01, dataGroupEventsTikVerify[p + 
+        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]);
+      //verify_checksum_value_01 += dataGroupEventsTikVerify[p + 
+      //  GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE];
+      CHECKSUM01(actual_checksum_value_01, dataGroupEventsTik[p + 
+        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]);
+      //actual_checksum_value_01 += dataGroupEventsTik[p + 
+      //  GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE];
 #endif
     }
     
@@ -6606,6 +6630,7 @@ IntegrationTest::verifyKernelGroupEvents
   cl_uint value2CarryEnable,
   cl_uint stepShiftEnable,
   cl_uint elementSizeWords,
+  cl_uint destinationBufferSize,
   cl_uint histogramBinSize,
   cl_uint histogramTotalBins,
   cl_uint histogramBitMask,
@@ -6648,21 +6673,20 @@ IntegrationTest::verifyKernelGroupEvents
     /*Verify correct bin and checksum in that bin for current time slot*/
     for(cl_uint p = start; p < end; p++)
     {
-      cl_uint ptr = p*elementSizeWords;
       cl_uint v_key = 0;
       cl_uint a_key = 0;
       if(stepShiftEnable)
       {
-        v_key = (dataGroupedEventsVerify[ptr]>>(histogramBitShift*step)) & 
+        v_key = (dataGroupedEventsVerify[p]>>(histogramBitShift*step)) & 
         histogramBitMask;
-        a_key = (dataGroupedEvents[ptr]>>(histogramBitShift*step)) & 
+        a_key = (dataGroupedEvents[p]>>(histogramBitShift*step)) & 
         histogramBitMask;
       }
       else
       {
-        v_key = (dataGroupedEventsVerify[ptr]>>histogramBitShift) & 
+        v_key = (dataGroupedEventsVerify[p]>>histogramBitShift) & 
         histogramBitMask;
-        a_key = (dataGroupedEvents[ptr]>>histogramBitShift) & 
+        a_key = (dataGroupedEvents[p]>>histogramBitShift) & 
         histogramBitMask;
       }
       
@@ -6671,23 +6695,23 @@ IntegrationTest::verifyKernelGroupEvents
         verify_error_count_target_neuron += (v_key != j);
         actual_error_count_target_neuron += (a_key != j);
       }
-      CHECKSUM01(verify_checksum_target_neuron, dataGroupedEventsVerify[ptr]);
-      //verify_checksum_target_neuron += dataGroupedEventsVerify[ptr];
-      CHECKSUM01(actual_checksum_target_neuron, dataGroupedEvents[ptr]);
-      //actual_checksum_target_neuron += dataGroupedEvents[ptr];
+      CHECKSUM01(verify_checksum_target_neuron, dataGroupedEventsVerify[p]);
+      //verify_checksum_target_neuron += dataGroupedEventsVerify[p];
+      CHECKSUM01(actual_checksum_target_neuron, dataGroupedEvents[p]);
+      //actual_checksum_target_neuron += dataGroupedEvents[p];
       if(value1CarryEnable)
       {
-        CHECKSUM01(verify_checksum_value_01, dataGroupedEventsVerify[ptr+1]);
-        //verify_checksum_value_01 += dataGroupedEventsVerify[ptr+1];
-        CHECKSUM01(actual_checksum_value_01, dataGroupedEvents[ptr+1]);
-        //actual_checksum_value_01 += dataGroupedEvents[ptr+1];
+        CHECKSUM01(verify_checksum_value_01, dataGroupedEventsVerify[destinationBufferSize + p]);
+        //verify_checksum_value_01 += dataGroupedEventsVerify[destinationBufferSize + p];
+        CHECKSUM01(actual_checksum_value_01, dataGroupedEvents[destinationBufferSize + p]);
+        //actual_checksum_value_01 += dataGroupedEvents[destinationBufferSize + p];
       }
       if(value2CarryEnable)
       {
-        CHECKSUM01(verify_checksum_value_02, dataGroupedEventsVerify[ptr+2]);
-        //verify_checksum_value_02 += dataGroupedEventsVerify[ptr+2];
-        CHECKSUM01(actual_checksum_value_02, dataGroupedEvents[ptr+2]);
-        //actual_checksum_value_02 += dataGroupedEvents[ptr+2];
+        CHECKSUM01(verify_checksum_value_02, dataGroupedEventsVerify[2*destinationBufferSize + p]);
+        //verify_checksum_value_02 += dataGroupedEventsVerify[2*destinationBufferSize + p];
+        CHECKSUM01(actual_checksum_value_02, dataGroupedEvents[2*destinationBufferSize + p]);
+        //actual_checksum_value_02 += dataGroupedEvents[2*destinationBufferSize + p];
       }
     }
     
@@ -6847,9 +6871,8 @@ IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
   for(cl_uint e = 0; e < event_total; e++)
   {
     /*Access event*/
-    cl_uint p = e*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-    cl_uint key = dataGroupEventsTik[p];
-    cl_uint value = dataGroupEventsTik[p + 1];
+    cl_uint key = dataGroupEventsTik[e];
+    cl_uint value = dataGroupEventsTik[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + e];
     
     /*Compute WG which is working on this element*/
     cl_uint wg_id = e/(total_wg_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI));
@@ -6912,12 +6935,11 @@ IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
 #endif
     
     /*Store event at its group location (grouped by bins)*/
-    dest_offset *= GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
     dataGroupEventsTikVerify[dest_offset] = key;
 #if GROUP_EVENTS_VALUES_MODE_V01 == 1
-    dataGroupEventsTikVerify[dest_offset+1] = e;
+    dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = e;
 #elif GROUP_EVENTS_VALUES_MODE_V01 == 2
-    dataGroupEventsTikVerify[dest_offset+1] = value;
+    dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = value;
 #endif
     /*Increment ptr for next data item*/
     dataOffsetGroupEventsCopy[bin_offset]++;
@@ -6935,6 +6957,7 @@ IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
     0,
     GROUP_EVENTS_ENABLE_STEP_SHIFT_V01,
     GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
+    GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
     GROUP_EVENTS_HISTOGRAM_BIN_MASK,
@@ -7013,9 +7036,8 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
   for(cl_uint e = 0; e < event_total; e++)
   {
     /*Access event*/
-    cl_uint p = e*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-    cl_uint key = dataGroupEventsTik[p];
-    cl_uint value = dataGroupEventsTik[p + 1];
+    cl_uint key = dataGroupEventsTik[e];
+    cl_uint value = dataGroupEventsTik[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + e];
     cl_uint new_key = dataUnsortedEventTargets[value+keyOffset];
     
     /*Compute WG which is working on this element*/
@@ -7079,9 +7101,8 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
 #endif
     
     /*Store event at its group location (grouped by bins)*/
-    dest_offset *= GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
     dataGroupEventsTikVerify[dest_offset] = new_key;
-    dataGroupEventsTikVerify[dest_offset+1] = value;
+    dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = value;
 
     /*Increment ptr for next data item*/
     dataOffsetGroupEventsCopy[bin_offset]++;
@@ -7099,6 +7120,7 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
     0,
     GROUP_EVENTS_ENABLE_STEP_SHIFT_V02,
     GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
+    GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
     GROUP_EVENTS_HISTOGRAM_BIN_MASK,
@@ -7164,9 +7186,8 @@ IntegrationTest::verifyKernelGroupEventsV03(cl_uint step)
   for(cl_uint e = 0; e < event_total; e++)
   {
     /*Access event*/
-    cl_uint p = e*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-    cl_uint key = dataGroupEventsTik[p];
-    cl_uint valuePtr = dataGroupEventsTik[p+1];
+    cl_uint key = dataGroupEventsTik[e];
+    cl_uint valuePtr = dataGroupEventsTik[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + e];
 
     /*Compute WG which is working on this element*/
     cl_uint wg_id = e/(total_wg_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI));
@@ -7201,10 +7222,11 @@ IntegrationTest::verifyKernelGroupEventsV03(cl_uint step)
     cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
     
     /*Store event at its group location (grouped by bins)*/
-    dest_offset *= GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
     dataGroupEventsTikVerify[dest_offset] = key;
-    dataGroupEventsTikVerify[dest_offset+1] = dataUnsortedEventDelays[valuePtr];
-    dataGroupEventsTikVerify[dest_offset+2] = dataUnsortedEventWeights[valuePtr];
+    dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = 
+      dataUnsortedEventDelays[valuePtr];
+    dataGroupEventsTikVerify[2*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = 
+      dataUnsortedEventWeights[valuePtr];
     
     /*Increment ptr for next data item*/
     dataOffsetGroupEventsCopy[bin_offset]++;
@@ -7222,6 +7244,7 @@ IntegrationTest::verifyKernelGroupEventsV03(cl_uint step)
     1,
     GROUP_EVENTS_ENABLE_STEP_SHIFT_V03,
     GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
+    GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
     GROUP_EVENTS_HISTOGRAM_BIN_MASK,
@@ -7253,7 +7276,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
 #if MAKE_EVENT_PTRS_ENABLE
   /*Load total event for the test*/
   cl_uint totalEvents = dataHistogramGroupEventsTok[MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET];
-  
+
   /*Compute total chunks in the grid*/
   cl_uint totalEventChunks = totalEvents/
     (MAKE_EVENT_PTRS_WF_SIZE_WI*MAKE_EVENT_PTRS_ELEMENTS_PER_WI);
@@ -7313,31 +7336,30 @@ IntegrationTest::verifyKernelMakeEventPtrs()
       
       for(cl_uint j = 0; j < totalEvents; j++)
       {
-        cl_uint offset = j*MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
         /*Detect boundary*/
-        if(dataGroupEventsTik[offset] != previousElement)
+        if(dataGroupEventsTik[j] != previousElement)
         {
-          cl_uint offsetVerify = dataMakeEventPtrsStruct[dataGroupEventsTik[offset]*
+          cl_uint offsetVerify = dataMakeEventPtrsStruct[dataGroupEventsTik[j]*
             MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE];
             
           cl_uint countVerify = dataMakeEventPtrsStruct[previousElement*
             MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1];
           
           /*Verify pointer*/
-          error = (offset != offsetVerify);
+          error = (j != offsetVerify);
           /*Verify count*/
-          error = (j-previousElementOffset != countVerify);
-            
+          error |= (j-previousElementOffset != countVerify);
+
           if(error)
           {
             std::cerr << "ERROR, verifyKernelMakeEventPtrs, mismatched data for neuron ID " 
-              << dataGroupEventsTik[offset] << ": pointer (" << offsetVerify << " vs " << offset 
+              << dataGroupEventsTik[j] << ": pointer (" << offsetVerify << " vs " << j 
               << "), count (" << countVerify << " vs " << j-previousElementOffset << ")"
               << std::endl;
             result = SDK_FAILURE;
           }
           
-          previousElement = dataGroupEventsTik[offset];
+          previousElement = dataGroupEventsTik[j];
           previousElementOffset = j;
           totalCountsVerifyOriginal++;
           if(error){break;}
@@ -7353,7 +7375,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
   
   /*Verify that empty structs (including dummy struct) have 0 counts and limit address stored*/
   cl_uint totalCountsVerifyStruct = 0;
-  cl_uint limitAddress = totalEvents*MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
+  cl_uint limitAddress = totalEvents;
   
   for(cl_uint i = 0; i < MAKE_EVENT_PTRS_STRUCTS+1; i++)
   {
@@ -7376,22 +7398,19 @@ IntegrationTest::verifyKernelMakeEventPtrs()
   /*Verify that each key in the data has a pointer in pointer structure*/
   cl_uint totalCountsVerifyOriginal = 0;
   cl_uint j = 0;
-  cl_uint offset = j*MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
   cl_uint wfWorkSize = chunksPerWf*(MAKE_EVENT_PTRS_WF_SIZE_WI*MAKE_EVENT_PTRS_ELEMENTS_PER_WI);
   cl_uint wf = j/wfWorkSize;
   cl_uint count = dataMakeEventPtrsStruct[0];
   cl_uint offsetPtr = (wfDataIter[wf]++)*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE;
-  cl_uint error = (dataGroupEventsTik[offset] != dataMakeEventPtrsStruct[1 + offsetPtr]) && count;
-  error += (offset != dataMakeEventPtrsStruct[1 + offsetPtr + 1]) && count;
+  cl_uint error = (dataGroupEventsTik[j] != dataMakeEventPtrsStruct[1 + offsetPtr]) && count;
+  error += (j != dataMakeEventPtrsStruct[1 + offsetPtr + 1]) && count;
   
   if(!error && (result != SDK_FAILURE))
   {
     for(j = 1; j < totalEvents; j++)
     {
-      offset = j*MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
       /*Detect boundary*/
-      if(dataGroupEventsTik[offset] != 
-        dataGroupEventsTik[offset-MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS])
+      if(dataGroupEventsTik[j] != dataGroupEventsTik[j-1])
       {
         totalCountsVerifyOriginal++;
         
@@ -7416,9 +7435,9 @@ IntegrationTest::verifyKernelMakeEventPtrs()
         /*Verify pointer*/
         wf = j/wfWorkSize;
         offsetPtr = (wfDataIter[wf]++)*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE;
-        error = (dataGroupEventsTik[offset] != 
+        error = (dataGroupEventsTik[j] != 
           dataMakeEventPtrsStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*wf + 1 + offsetPtr]);
-        error += (offset != 
+        error += (j != 
           dataMakeEventPtrsStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*wf + 1 + offsetPtr + 1]);
         if(error){break;}
       }
@@ -7431,9 +7450,9 @@ IntegrationTest::verifyKernelMakeEventPtrs()
   {
     offsetPtr = (wfDataIter[wf]-1)*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE;
     std::cerr << "ERROR, verifyKernelMakeEventPtrs, unmatched pointer for WF " << wf
-      << ", global element ID " << j << ": key " << dataGroupEventsTik[offset] << " vs " 
+      << ", global element ID " << j << ": key " << dataGroupEventsTik[j] << " vs " 
       << dataMakeEventPtrsStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*wf + 1 + offsetPtr] 
-      << ", value " << offset << " vs " 
+      << ", value " << j << " vs " 
       << dataMakeEventPtrsStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*wf + 1 + offsetPtr + 1] 
       << std::endl;
     result = SDK_FAILURE;
@@ -7469,7 +7488,7 @@ IntegrationTest::injectSortedEvents
   cl_uint       totalNeurons,
   cl_uint       eventQueueSize,
   cl_uint       pointersPitch,
-  cl_uint       sortedEventsPitch,
+  cl_uint       sortedEventsSize,
   cl_uint       *sortedEvents,
   cl_uint       *pointersToEvents,
   neuron_iz_ps  *nrn
@@ -7510,25 +7529,26 @@ IntegrationTest::injectSortedEvents
 
     for(cl_uint j = 0; j < count; j++)
     {
-      cl_uint  p = ptr + j*sortedEventsPitch;
-      /*
-      if(verify && (p/sortedEventsPitch > totalSortedEvents))
+      cl_uint  p = ptr + j;
+
+      if(verify && (p > sortedEventsSize))
       {
-        std::cerr << "ERROR, injectSortedEvents, detected address violation in access to sortedEvents: " 
-          << p/sortedEventsPitch << " > " << totalSortedEvents << std::endl;
+        std::cerr 
+          << "ERROR, injectSortedEvents, detected address violation in access to sortedEvents: " 
+          << p << " > " << sortedEventsSize << std::endl;
         result = SDK_FAILURE;
         break;
       }
-      */
-      cl_float t = (*((cl_float *)(&sortedEvents[p+1])));
-      cl_float w = (*((cl_float *)(&sortedEvents[p+2])));
+
+      cl_float t = (*((cl_float *)(&sortedEvents[p + sortedEventsSize])));
+      cl_float w = (*((cl_float *)(&sortedEvents[p + 2*sortedEventsSize])));
       
       if(verify)
       {
-        if((p != ptr) && (t < *((cl_float *)(&sortedEvents[p-sortedEventsPitch+1]))))
+        if((p != ptr) && (t < *((cl_float *)(&sortedEvents[p-1 + sortedEventsSize]))))
         {
           std::cerr << "ERROR, injectSortedEvents, detected violation of time sort order for neuron ID " 
-            << nId << ": " << t << " < " << *((cl_float *)(&sortedEvents[p-sortedEventsPitch+1])) 
+            << nId << ": " << t << " < " << *((cl_float *)(&sortedEvents[p-1 + sortedEventsSize])) 
             << std::endl;
           result = SDK_FAILURE;
           break;
@@ -7751,7 +7771,7 @@ IntegrationTest::verifyEvents
   bool          correctWeightPositionMismatch,
   unsigned int  totalNeurons,
   unsigned int  structElementSize,
-  unsigned int  eventsElementSize,
+  unsigned int  sortedEventsSize,
   unsigned int  *pointerStruct,
   unsigned int  *sortedEvents,
   neuron_iz_ps  *nrn
@@ -7786,11 +7806,9 @@ IntegrationTest::verifyEvents
         break;
       }
       
-      unsigned int nD = sortedEvents[entryAddress + e*eventsElementSize];
-      DATA_TYPE tD = *((DATA_TYPE *)(&sortedEvents[entryAddress + 
-        e*eventsElementSize + 1]));
-      DATA_TYPE wD = *((DATA_TYPE *)(&sortedEvents[entryAddress + 
-        e*eventsElementSize + 2]));
+      unsigned int nD = sortedEvents[entryAddress + e];
+      DATA_TYPE tD = *((DATA_TYPE *)(&sortedEvents[entryAddress + e + sortedEventsSize]));
+      DATA_TYPE wD = *((DATA_TYPE *)(&sortedEvents[entryAddress + e + 2*sortedEventsSize]));
       
       /*Verify neuron IDs*/
       if(nH != nD)
@@ -7816,10 +7834,9 @@ IntegrationTest::verifyEvents
         unsigned int timeCount = 0;
         for(unsigned int i = e; i < entryCount; i++)
         {
-          unsigned int nD1 = sortedEvents[entryAddress + i*eventsElementSize];
+          unsigned int nD1 = sortedEvents[entryAddress + i];
           DATA_TYPE tH1 = nrn[nH].in_t[i];
-          DATA_TYPE tD1 = *((DATA_TYPE *)(&sortedEvents[entryAddress + 
-            i*eventsElementSize + 1]));
+          DATA_TYPE tD1 = *((DATA_TYPE *)(&sortedEvents[entryAddress + i + sortedEventsSize]));
             
           if((nD1 == nH) && (tD1 == tD) && (tH1 == tH)){timeCount++;}
           else{break;}
@@ -7839,8 +7856,8 @@ IntegrationTest::verifyEvents
             for(unsigned int j = 0; j < timeCount; j++)
             {
               unsigned int p2 = e+j;
-              DATA_TYPE wD1 = *((DATA_TYPE *)(&sortedEvents[entryAddress + 
-                p2*eventsElementSize + 2]));
+              DATA_TYPE wD1 = *((DATA_TYPE *)(&sortedEvents[entryAddress + p2 + 
+                2*sortedEventsSize]));
                 
               if((wH1 == wD1) && !weightCheck[j])
               {
@@ -7859,8 +7876,8 @@ IntegrationTest::verifyEvents
           {
             if(!weightCheck[i])
             {
-              DATA_TYPE w = *((DATA_TYPE *)(&sortedEvents[entryAddress + 
-                (e+i)*eventsElementSize + 2]));
+              DATA_TYPE w = *((DATA_TYPE *)(&sortedEvents[entryAddress + (e+i) + 
+                2*sortedEventsSize]));
                 
               std::cerr << "ERROR, verifyEvents, unable to find matched weight for neuron " << nH 
                 << ": " << w << std::endl;
@@ -7879,7 +7896,7 @@ IntegrationTest::verifyEvents
               {
                 unsigned int p = e+i;
                 nrn[nH].in_w[p] = 
-                  *((DATA_TYPE *)(&sortedEvents[entryAddress + p*eventsElementSize + 2]));
+                  *((DATA_TYPE *)(&sortedEvents[entryAddress + p + 2*sortedEventsSize]));
               }
             }
             
@@ -8396,6 +8413,7 @@ IntegrationTest::verifyKernelUpdateNeurons
 (
   bool          verify,
   cl_uint       step,
+  cl_uint       sortedEventsSize,
   unsigned int  *pointerStruct,
   unsigned int  *sortedEvents,
   unsigned int  *synapsePointer,
@@ -8473,7 +8491,7 @@ IntegrationTest::verifyKernelUpdateNeurons
         true,
         UPDATE_NEURONS_TOTAL_NEURONS,
         UPDATE_NEURONS_STRUCT_ELEMENT_SIZE,
-        UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+        sortedEventsSize,
         pointerStruct,
         sortedEvents,
         nrn_ps
@@ -8482,7 +8500,7 @@ IntegrationTest::verifyKernelUpdateNeurons
     }
 #endif
   }
-  else
+  else if((pointerStruct != NULL) && (sortedEvents != NULL))
   {
     result = injectSortedEvents
     (
@@ -8491,9 +8509,9 @@ IntegrationTest::verifyKernelUpdateNeurons
       UPDATE_NEURONS_TOTAL_NEURONS,
       REFERENCE_EVENT_QUEUE_SIZE,
       UPDATE_NEURONS_STRUCT_ELEMENT_SIZE,
-      UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
-      dataGroupEventsTik,
-      dataMakeEventPtrsStruct,
+      sortedEventsSize,
+      sortedEvents,
+      pointerStruct,
       nrn_ps
     );
     if(result != SDK_SUCCESS){return result;}
@@ -8578,7 +8596,7 @@ IntegrationTest::verifyKernelUpdateNeurons
     }
 #endif
     /*
-    cl_uint underTestType2 = dataMakeEventPtrsStruct[i*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1];
+    cl_uint underTestType2 = pointerStruct[i*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1];
     if(underTestType2 != 0)
     {
       std::cerr << "ERROR, verifyKernelUpdateNeurons, event count was not reset for neuron " << i
@@ -8685,26 +8703,30 @@ IntegrationTest::verifySortedEvents
   /*Check sort order*/
   for
   (
-    cl_uint i = GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS; 
-    i < dataUnsortedEventsSnapShotSize; 
-    i += GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS
+    cl_uint i = 1; 
+    i < dataUnsortedEventsSnapShotSize/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS; 
+    i++
   ){
     /*Verify sorted order for keys*/
-    if(sortedEvents[keyOffset+i] < sortedEvents[keyOffset+i-GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS])
+    cl_uint v1 = sortedEvents[keyOffset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i];
+    cl_uint v2 = sortedEvents[keyOffset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i-1];
+    
+    if(v1 < v2)
     {
       std::cout << "verifySortedEvents " << currentTimeStep 
-        << ": failed to verify sort order for key element " 
-        << i/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS << ": " << sortedEvents[keyOffset+i] 
-        << "<" << sortedEvents[keyOffset+i-GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS] << std::endl;
+        << ": failed to verify sort order for key element " << i << ": " << v1 << "<" << v2 
+        << std::endl;
       result = SDK_FAILURE;
       break;
     }
+    
     /*Verify sorted order for values*/
-    if(sortedEvents[keyOffset+i] == sortedEvents[keyOffset+i-GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS])
+    if(v1 == v2)
     {
-      cl_float time1 = *((cl_float *)(&sortedEvents[val1Offset+i]));
-      cl_float time2 = *((cl_float *)(&sortedEvents[val1Offset+i-
-        GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS]));
+      cl_float time1 = 
+        *((cl_float *)(&sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i]));
+      cl_float time2 = 
+        *((cl_float *)(&sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i-1]));
       
       if(time1 < 0.0f || time1 > (float)(GROUP_EVENTS_MAX_DELAY-GROUP_EVENTS_MIN_DELAY))
       {
@@ -8718,16 +8740,16 @@ IntegrationTest::verifySortedEvents
       if(time1 < time2)
       {
         std::cout << "verifySortedEvents " << currentTimeStep 
-          << ": failed to verify sort order for value element " 
-          << i/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS << ": " << time1 << "<" << time2 
-          << std::endl;
+          << ": failed to verify sort order for value element " << i << ": " << time1 << "<" 
+          << time2 << std::endl;
         result = SDK_FAILURE;
         break;
       }
     }
     /*
-    std::cout  << sortedEvents[keyOffset+i] << "->" 
-      << *((cl_float *)(&sortedEvents[val1Offset+i])) << ", ";
+    std::cout  << v1 << "->" 
+      << *((cl_float *)(&sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i])) 
+      << ", ";
     */
   }
   
@@ -8762,11 +8784,11 @@ IntegrationTest::verifySortedEvents
     for
     (
       cl_uint p = 0; 
-      p < dataUnsortedEventsSnapShotSize; 
-      p+=GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS
+      p < dataUnsortedEventsSnapShotSize/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS; 
+      p++
     ){
-    
-      cl_uint testedElementKey = dataUnsortedEventsSnapShot[keyOffset+p];
+      cl_uint testedElementKey = 
+        dataUnsortedEventsSnapShot[keyOffset + p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS];
       cl_uint entryCount = 0;
       cl_uint entryAddress = 0xFFFFFFFF;
       cl_uint nextEntryAddress = 0xFFFFFFFF;
@@ -8775,7 +8797,7 @@ IntegrationTest::verifySortedEvents
 
       entryAddress = *(pointerStruct + testedElementKey*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE);
       entryCount = *(pointerStruct + testedElementKey*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1);
-      nextEntryAddress = entryAddress + entryCount*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
+      nextEntryAddress = entryAddress + entryCount;
 
 #elif MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 1
 
@@ -8845,16 +8867,19 @@ IntegrationTest::verifySortedEvents
       (
         cl_uint a = entryAddress; 
         a < nextEntryAddress; 
-        a+=GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS
+        a++
       ){
-        if(testedElementKey == sortedEvents[keyOffset+a])
+        if(testedElementKey == 
+           sortedEvents[keyOffset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + a])
         {
-          if(dataUnsortedEventsSnapShot[val1Offset+p] == sortedEvents[val1Offset+a])
+          if(dataUnsortedEventsSnapShot[val1Offset + p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS] 
+             == sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + a])
           {
-            if(dataUnsortedEventsSnapShot[val2Offset+p] == sortedEvents[val2Offset+a])
+            if(dataUnsortedEventsSnapShot[val2Offset + p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS] 
+               == sortedEvents[val2Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + a])
             {
               result = SDK_SUCCESS;
-              sortedEventsCheck[a/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS] = 1;
+              sortedEventsCheck[a] = 1;
               break;
             }
           }
@@ -8864,16 +8889,15 @@ IntegrationTest::verifySortedEvents
       if(result == SDK_FAILURE)
       {
         std::cout << "verifySortedEvents " << currentTimeStep << ": not able to find in "
-          << "sorted data a combination of "
-          << "key-value(s) for key " << p/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS 
-          << "(" << dataUnsortedEventsSnapShot[keyOffset+p] 
+          << "sorted data a combination of " << "key-value(s) for key " << p << "(" 
+          << dataUnsortedEventsSnapShot[keyOffset + p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS] 
           << ") from unsorted data" << std::endl;
         break;
       }
 #if PRINT_VERIFY_SORTED_EVENTS
-      if((p/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)%printFreq == 0)
+      if((p)%printFreq == 0)
       {
-        std::cout  << ((p/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)/printFreq) << ",";
+        std::cout  << ((p)/printFreq) << ",";
       }
 #endif
     }
@@ -8895,10 +8919,11 @@ IntegrationTest::verifySortedEvents
     {
       if(!sortedEventsCheck[i])
       {
-        cl_uint ptr = i*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
         std::cerr << "verifySortedEvents " << currentTimeStep << ": found unrecognized element ("
-        << i << "): (" << sortedEvents[keyOffset+ptr] << ")->(" << sortedEvents[val1Offset+ptr] 
-        << "," << sortedEvents[val2Offset+ptr] << ")" << std::endl;
+        << i << "): (" << sortedEvents[keyOffset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i] 
+        << ")->(" << sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i] 
+        << "," << sortedEvents[val2Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i] << ")" 
+        << std::endl;
         //result = SDK_FAILURE;
         //break;
       }
@@ -9083,9 +9108,8 @@ IntegrationTest::takeSimulationSnapshot
   }
 #endif
 /**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-#if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+#if GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02 &&\
+    GROUP_EVENTS_ENABLE_V03 && MAKE_EVENT_PTRS_ENABLE && UPDATE_NEURONS_ENABLE_V00
 
   *dataToSnapshotLogFile << "\n\nEVENTS\n\n";
   *dataToSnapshotLogFile << "Parameter Name,Parameter Value" << std::endl;
@@ -9105,12 +9129,11 @@ IntegrationTest::takeSimulationSnapshot
     /*Iterate over events*/
     for(unsigned int e = 0; e < entryCount; e++)
     {
-      unsigned int nD = dataGroupEventsTik[entryAddress + 
-        e*UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS];
-      DATA_TYPE tD = *((DATA_TYPE *)(&dataGroupEventsTik[entryAddress + 
-        e*UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS + 1]));
-      DATA_TYPE wD = *((DATA_TYPE *)(&dataGroupEventsTik[entryAddress + 
-        e*UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS + 2]));
+      unsigned int nD = dataGroupEventsTik[entryAddress + e];
+      DATA_TYPE tD = *((DATA_TYPE *)(&dataGroupEventsTik[entryAddress + e +
+        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]));
+      DATA_TYPE wD = *((DATA_TYPE *)(&dataGroupEventsTik[entryAddress + e +
+        2*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]));
       
       if(wD > 0){totalEventsExc++;}
       else{totalEventsInh++;}
@@ -9122,10 +9145,9 @@ IntegrationTest::takeSimulationSnapshot
     << "Total Excitatory Events," << totalEventsExc << std::endl
     << "Events Per Neuron Max," << eventsPerNeuronMax << std::endl
     << "Events Per Neuron Min," << eventsPerNeuronMin << std::endl;
-#endif    
 #endif
 /**************************************************************************************************/
-#if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+#if EXPAND_EVENTS_ENABLE && UPDATE_NEURONS_ENABLE_V00
   *dataToSnapshotLogFile << "\n\nSPIKES\n\n";
   *dataToSnapshotLogFile << "Parameter Name,Parameter Value" << std::endl;
   

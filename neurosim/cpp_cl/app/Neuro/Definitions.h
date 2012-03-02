@@ -345,16 +345,12 @@
 ***************************************************************************************************/
 /*Wave size*/
 #define WF_SIZE_WI                                            64
-/*Target Device
-  "Cayman"
-  "AMD Engineering Sample"
-  "Tahiti"
-*/
+/*Target devices in the order of preference*/
 #if !(defined(TARGET_DEVICE_NAME))
-  #define TARGET_DEVICE_NAME                                  "Tahiti"
+  #define TARGET_DEVICE_NAME                                  "Tahiti,Cayman"
 #endif
-/*Target Platform Vendor*/
-#define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."
+/*Target Platform Vendor
+#define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."*/
 /**************************************************************************************************/
 
 
@@ -932,7 +928,8 @@
   #define GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS                   128
   #define GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS               3
   #define GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE           EVENT_DATA_BUFFER_SIZE
-  #define GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE           (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS*GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE*10/10) /*Max: GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE x GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS*/
+  #define GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE           (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS*\
+                                                                GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE)
   #define GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG            1
   /*NN parameters*/
   #define GROUP_EVENTS_TOTAL_NEURON_BITS                        TOTAL_NEURON_BITS /*16*/
@@ -1161,7 +1158,11 @@
                                                                     MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE)
   /*Unit test related parameters*/
   /*CONTROL: Source data size for unit test. Can be viewed as elements per neuron*/
-  #define MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE                 (8*MAKE_EVENT_PTRS_TOTAL_NEURONS)
+  #define MAKE_EVENT_PTRS_SYNAPTIC_EVENT_BUFFERS                    128
+  #if !(defined(MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE))
+  #define MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE                  (MAKE_EVENT_PTRS_SYNAPTIC_EVENT_BUFFERS*\
+                                                                    EVENT_DATA_BUFFER_SIZE)
+  #endif
   /*CONTROL: Max neuron ID for unit test.*/
   #define MAKE_EVENT_PTRS_TEST_MAX_NEURON_ID                       (MAKE_EVENT_PTRS_TOTAL_NEURONS-1)
   
@@ -1238,12 +1239,12 @@
   #define UPDATE_NEURONS_ERROR_TRACK_ENABLE                       ERROR_TRACK_ENABLE
   #define UPDATE_NEURONS_ERROR_BUFFER_SIZE_WORDS                  1
   #define UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK            0x00000012
-  #define UPDATE_NEURONS_ERROR_CODE_1                             1
-  #define UPDATE_NEURONS_ERROR_CODE_2                             2
-  #define UPDATE_NEURONS_ERROR_CODE_3                             4
-  #define UPDATE_NEURONS_ERROR_CODE_4                             8
-  #define UPDATE_NEURONS_ERROR_CODE_5                             16
-  #define UPDATE_NEURONS_ERROR_CODE_6                             32
+  #define UPDATE_NEURONS_ERROR_CODE_1                             1   /*UPDATE_NEURONS_PS_ORDER_LIMIT was hit*/
+  #define UPDATE_NEURONS_ERROR_CODE_2                             2   /*A neuron spiked more than once*/
+  #define UPDATE_NEURONS_ERROR_CODE_3                             4   /*UPDATE_NEURONS_NR_ORDER_LIMIT was hit*/
+  #define UPDATE_NEURONS_ERROR_CODE_4                             8   /*NR diverged*/
+  #define UPDATE_NEURONS_ERROR_CODE_5                             16  /*Spike packet size limit was hit*/
+  #define UPDATE_NEURONS_ERROR_CODE_6                             32  /*PS divergence*/
   /*Kernel file and name*/
   #define UPDATE_NEURONS_KERNEL_FILE_NAME                         "Kernel_UpdateNeurons.cl"
   #define UPDATE_NEURONS_KERNEL_NAME                              "update_neurons"
@@ -1287,9 +1288,12 @@
   #define UPDATE_NEURONS_DEBUG_ENABLE                             (0)&DEBUG_MASK
   #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (UPDATE_NEURONS_TOTAL_NEURONS*1024)
   
-  /*CONTROL: Source data size for unit test.t*/
-  #define UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE                 (8*UPDATE_NEURONS_TOTAL_NEURONS)
-  
+  /*CONTROL: Source data size for unit test*/
+  #define UPDATE_NEURONS_SYNAPTIC_EVENT_BUFFERS                   128
+  #if !(defined(UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE))
+  #define UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE                 (UPDATE_NEURONS_SYNAPTIC_EVENT_BUFFERS*\
+                                                                  EVENT_DATA_BUFFER_SIZE)
+  #endif
   /*Simulation parameters*/
   /*Tolerance mode: 
   0 - zero PS tolerance (0.0), UPDATE_NEURONS_PS_TOLERANCE is ignored,
