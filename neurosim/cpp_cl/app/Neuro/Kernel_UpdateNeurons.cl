@@ -310,6 +310,9 @@ void gpu_ps_update
   2) Iterates through synaptic events and updates model variables.
   3) Detects spiking neurons and computes spike times
   4) Writes spike times and updated model variables back to GM
+  5) Shifting from NN chunk allocation from per-WF to per-WG basis and implementing WF-based
+     consummer model could result in better workload. Global consummer model could be even
+     better if overhead is not big.
 
 */
 __kernel 
@@ -330,6 +333,7 @@ void update_neurons
   __constant    DATA_TYPE       *cm_coefficients,
   __global      DATA_TYPE       *gm_model_parameters,
   __global      DATA_TYPE       *gm_model_variables,
+  __global      uint            *gm_spike_counts,
   __global      uint            *gm_spikes,
   __global      uint            *gm_event_ptr,
   __global      DATA_TYPE       *gm_events,
@@ -340,12 +344,13 @@ void update_neurons
   uint wg_id = get_group_id(0);
 
   /*Each WF has a spike packet*/
+  __local uint lmSpikePacketCounts[UPDATE_NEURONS_WG_SIZE_WF];
   __local uint lmSpikePackets[UPDATE_NEURONS_WG_SIZE_WF*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS];
 
   /*Init spike counts*/
   if(WI_ID_WF_SCOPE(wi_id) == 0)
   {
-    lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id)] = 0;
+    lmSpikePacketCounts[LOCAL_WF_ID(wi_id)] = 0;
   }
 
   /*Compute total chunks in the grid*/
@@ -369,6 +374,7 @@ void update_neurons
   if(wfEndChunk > totalChunks){wfEndChunk = totalChunks;}
   
   /*A WF works on allocated for it chunk of neurons*/
+  /*TODO: instead of predetermined do first come first served using an atimic -> better balancing*/
 	for(uint j = 0; j < (wfEndChunk-wfStartChunk); j++)
   {
     uint neuronId = (wfStartChunk + j)*ELEMENTS_PER_WF + WI_ID_WF_SCOPE(wi_id);
@@ -485,8 +491,8 @@ void update_neurons
       /*Record spike and schedule events:*/
       /*TODO: find if storing directly to GM is faster (totals are still accumulated in LM)*/
       uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id);
-      uint index = spikePacketOffset + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
-        atomic_inc(lmSpikePackets+spikePacketOffset)*UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
+      uint index = spikePacketOffset + atomic_inc(lmSpikePacketCounts+LOCAL_WF_ID(wi_id))*
+        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
       if(index > spikePacketOffset + UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS - 
         UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
@@ -536,9 +542,8 @@ void update_neurons
     }
   }
 
-  uint spikePacketOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id);
-  uint spikePacketSizeWords = (*(lmSpikePackets + spikePacketOffset))* 
-    UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS + UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE;
+  uint spikePacketSizeWords = (*(lmSpikePacketCounts + LOCAL_WF_ID(wi_id)))* 
+    UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
 
   /*Store spike packet*/
 #if UPDATE_NEURONS_WF_SIZE_WI >= UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS
@@ -561,6 +566,12 @@ void update_neurons
       lmSpikePackets[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*LOCAL_WF_ID(wi_id) + i];
   }
 #endif
+
+  /*Store spike counts*/
+  if(WI_ID_WF_SCOPE(wi_id) == 0)
+  {
+    gm_spike_counts[GLOBAL_WF_ID(wg_id, wi_id)] = lmSpikePacketCounts[LOCAL_WF_ID(wi_id)];
+  }
 }
 
 
@@ -594,6 +605,7 @@ void update_spiked_neurons
   __constant    DATA_TYPE       *cm_coefficients,
   __global      DATA_TYPE       *gm_model_parameters,
   __global      DATA_TYPE       *gm_model_variables,
+  __global      uint            *gm_spike_counts,
   __global      uint            *gm_spikes,
   __global      uint            *gm_event_ptr,
   __global      DATA_TYPE       *gm_events,
@@ -616,13 +628,13 @@ void update_spiked_neurons
   uint  totalSpikes =  lmSpikePackets[LOCAL_WF_ID(wi_id)];*/
   
   /*TODO: verify if this short version is faster than the one above*/
-  uint  totalSpikes =  gm_spikes[UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id)];
+  uint  totalSpikes =  gm_spike_counts[GLOBAL_WF_ID(wg_id, wi_id)];
 
   /*A WF works on allocated for it spike packet*/
   for(uint j = WI_ID_WF_SCOPE(wi_id); j < totalSpikes; j += UPDATE_NEURONS_WF_SIZE_WI)
   {
     uint spikeOffset = UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS*GLOBAL_WF_ID(wg_id, wi_id) +
-      UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + j*UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
+      j*UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS;
     uint  neuronId = gm_spikes[spikeOffset];
     DATA_TYPE start_gpu = as_float(gm_spikes[spikeOffset + 1]);
 

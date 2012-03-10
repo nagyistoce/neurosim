@@ -18,8 +18,8 @@
   #define LOG(message, type)\
     if(type == 0)\
     {\
-      time_t t; time (&t);\
-      *dataToSimulationLogFile << ctime(&t) << " " << message << std::endl;\
+      time_t t; time (&t); char *s=ctime(&t); s[strlen(s)-1]=0;\
+      *dataToSimulationLogFile << s << " " << message << std::endl;\
     }\
     if(type == 1)\
     {\
@@ -29,7 +29,7 @@
   #define LOG(message, type)\
     if(type == 0)\
     {\
-      time_t t; time (&t);\
+      time_t t; time (&t); char *s=ctime(&t); s[strlen(s)-1]=0;\
       *dataToSimulationLogFile << ctime(&t) << " " << message << std::endl;\
     }
 #elif LOG_REPORT
@@ -316,13 +316,18 @@ IntegrationTest::allocateHostData()
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   {
+  /* allocate memory for spike data */
 #if EXPAND_EVENTS_ENABLE
   size = (EXPAND_EVENTS_SPIKE_PACKETS*EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS);
+  CALLOC(dataSpikePacketCounts, cl_uint, EXPAND_EVENTS_SPIKE_PACKETS);
+  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSpikePacketCounts);
 #endif
 #if UPDATE_NEURONS_ENABLE_V00
   size = (UPDATE_NEURONS_SPIKE_PACKETS_V00*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS);
+  CALLOC(dataSpikePacketCounts, cl_uint, UPDATE_NEURONS_SPIKE_PACKETS_V00);
+  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSpikePacketCounts);
 #endif
-  /* allocate memory for spike data */
+  
   CALLOC(dataSpikePackets, cl_uint, size);
   REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSpikePackets);
   }
@@ -510,6 +515,7 @@ IntegrationTest::initializeSpikeData
 {
 #if EXPAND_EVENTS_ENABLE
   memset(dataSpikePackets, 0, dataSpikePacketsSizeBytes);
+  memset(dataSpikePacketCounts, 0, dataSpikePacketCountsSizeBytes);
   
   SET_RANDOM_SEED(srandSeed);
   LOG("initializeSpikeData: set srand seed to " << srandSeed, 0);
@@ -526,7 +532,7 @@ IntegrationTest::initializeSpikeData
       spikeBufferMinPercentFill, spikeBufferMaxPercentFill);
     if(totalSpikes == -1){return SDK_FAILURE;}
 
-    dataSpikePackets[packet_index] = totalSpikes;
+    dataSpikePacketCounts[packet] = totalSpikes;
     if(totalSpikes <= 0){continue;}
     
     cl_uint packetNeuronsPerSpikeCount = neuronsPerPacket/totalSpikes;
@@ -542,12 +548,11 @@ IntegrationTest::initializeSpikeData
         cl_float spike_time = 
           cl_float(abs(cl_float(SIMULATION_STEP_SIZE)*((double)rand()/((double)RAND_MAX))));
           
-        dataSpikePackets[packet_index + 
-          EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i] 
+        dataSpikePackets[packet_index + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i] 
           = spiked_neuron;
           
         *((cl_float *)(&dataSpikePackets[packet_index + 
-          EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1])) 
+          EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1])) 
           = spike_time;
           
         currentNeuronIdStart += packetNeuronsPerSpikeCount;
@@ -563,12 +568,11 @@ IntegrationTest::initializeSpikeData
           cl_float(abs(cl_float(SIMULATION_STEP_SIZE)*((double)rand()/((double)RAND_MAX))));
         
         
-        dataSpikePackets[packet_index + 
-          EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i] 
+        dataSpikePackets[packet_index + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i] 
           = spiked_neuron;
           
         *((cl_float *)(&dataSpikePackets[packet_index + 
-          EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1])) 
+          EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1])) 
           = spike_time;
       }
     }
@@ -2104,6 +2108,7 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
   LOG("initializeDataForKernelUpdateNeurons: set srand seed to " << srandSeed, 0);
   
   memset(dataSpikePackets, 0, dataSpikePacketsSizeBytes);
+  memset(dataSpikePacketCounts, 0, dataSpikePacketCountsSizeBytes);
   
   if(resetVariables || resetParameters)
   {
@@ -2332,324 +2337,192 @@ IntegrationTest::getPlatformStats()
   }
 
   // Iteratate over platforms
-  std::cout << "Number of platforms:\t\t\t\t " 
-            << platforms.size() 
-            << std::endl;
-  for (std::vector<cl::Platform>::iterator i = platforms.begin(); 
-       i != platforms.end(); 
-       ++i) {
-      std::cout << "  Plaform Profile:\t\t\t\t "    
-                << (*i).getInfo<CL_PLATFORM_PROFILE>().c_str() 
-                << std::endl; 
-      std::cout << "  Plaform Version:\t\t\t\t "    
-                << (*i).getInfo<CL_PLATFORM_VERSION>().c_str() 
-                << std::endl; 
-      std::cout << "  Plaform Name:\t\t\t\t\t "     
-                << (*i).getInfo<CL_PLATFORM_NAME>().c_str() 
-                << std::endl; 
-      std::cout << "  Plaform Vendor:\t\t\t\t "   
-                << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << std::endl; 
-      if ((*i).getInfo<CL_PLATFORM_EXTENSIONS>().size() > 0) {
-          std::cout << "  Plaform Extensions:\t\t\t " 
-                    << (*i).getInfo<CL_PLATFORM_EXTENSIONS>().c_str() 
-                    << std::endl; 
-      }
+  LOG("Number of platforms:\t\t\t\t " << platforms.size(), 0);
+
+  for
+  (
+    std::vector<cl::Platform>::iterator i = platforms.begin(); 
+    i != platforms.end(); 
+    ++i
+  ){
+    LOG("  Plaform Profile:\t\t\t\t " << (*i).getInfo<CL_PLATFORM_PROFILE>().c_str(), 0);
+    LOG("  Plaform Version:\t\t\t\t " << (*i).getInfo<CL_PLATFORM_VERSION>().c_str(), 0);
+    LOG("  Plaform Name:\t\t\t\t\t " << (*i).getInfo<CL_PLATFORM_NAME>().c_str(), 0);
+    LOG("  Plaform Vendor:\t\t\t\t " << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), 0);
+    if ((*i).getInfo<CL_PLATFORM_EXTENSIONS>().size() > 0) 
+    {
+      LOG("  Plaform Extensions:\t\t\t " << (*i).getInfo<CL_PLATFORM_EXTENSIONS>().c_str(), 0);
+    }
   }
+  LOG(std::endl << std:: endl, 0);
 
-  std::cout << std::endl << std:: endl;
   // Now Iteratate over each platform and its devices
-  for (std::vector<cl::Platform>::iterator p = platforms.begin(); 
-       p != platforms.end(); 
-       ++p) {
-
-      std::cout << "  Plaform Name:\t\t\t\t\t "     
-                << (*p).getInfo<CL_PLATFORM_NAME>().c_str() 
-                << std::endl; 
-
-      std::vector<cl::Device> devices;
-      (*p).getDevices(CL_DEVICE_TYPE_ALL, &devices);
+  for 
+  (
+    std::vector<cl::Platform>::iterator p = platforms.begin(); 
+    p != platforms.end(); 
+    ++p
+  ){
+    LOG("  Plaform Name:\t\t\t\t\t " << (*p).getInfo<CL_PLATFORM_NAME>().c_str(), 0);
+       
+    std::vector<cl::Device> devices;
+    (*p).getDevices(CL_DEVICE_TYPE_ALL, &devices);
+    
+    LOG("Number of devices:\t\t\t\t " << devices.size(), 0);
   
-      std::cout << "Number of devices:\t\t\t\t " << devices.size() << std::endl;
-      for (std::vector<cl::Device>::iterator i = devices.begin(); 
-           i != devices.end(); 
-           ++i) {
-          
-          std::cout << "  Device Type:\t\t\t\t\t " ;
-          cl_device_type dtype = (*i).getInfo<CL_DEVICE_TYPE>();
-          switch (dtype) 
-          {
-            case CL_DEVICE_TYPE_ACCELERATOR:
-                std::cout << "CL_DEVICE_TYPE_ACCRLERATOR" << std::endl;
-                break;
-            case CL_DEVICE_TYPE_CPU:
-                std::cout << "CL_DEVICE_TYPE_CPU" << std::endl;
-                break;
-            case CL_DEVICE_TYPE_DEFAULT:
-                std::cout << "CL_DEVICE_TYPE_DEFAULT" << std::endl;
-                break;
-            case CL_DEVICE_TYPE_GPU:
-                std::cout << "CL_DEVICE_TYPE_GPU" << std::endl;
-                break;
-          }
-
-          std::cout << "  Device ID:\t\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_VENDOR_ID>() 
-                    << std::endl;
-          
-          std::cout << "  Max compute units:\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() 
-                    << std::endl;
-          
-          std::cout << "  Max work items dimensions:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>() 
-                    << std::endl;
-          
-          cl::detail::param_traits<cl::detail::cl_device_info,CL_DEVICE_MAX_WORK_ITEM_SIZES>::
-            param_type witems = (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
-          for (cl_uint x = 0; x < (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>(); x++) 
-          {
-              std::cout << "    Max work items[" 
-                        << x << "]:\t\t\t\t " 
-                        << witems[x] 
-                        << std::endl;
-          }
-
-          std::cout << "  Max work group size:\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() 
-                    << std::endl;
-          
-          std::cout << "  Preferred vector width char:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR>() 
-                    << std::endl;
-
-          std::cout << "  Preferred vector width short:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT>() 
-                    << std::endl;
-          
-          std::cout << "  Preferred vector width int:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT>() 
-                    << std::endl;
-          
-          std::cout << "  Preferred vector width long:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG>() 
-                    << std::endl;
-          
-          std::cout << "  Preferred vector width float:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT>() 
-                    << std::endl;
-          
-          std::cout << "  Preferred vector width double:\t\t " 
-                    << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE>() 
-                    << std::endl;
-          
-          std::cout << "  Max clock frequency:\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>() 
-                    << "Mhz"
-                    << std::endl;
-          
-          std::cout << "  Address bits:\t\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_ADDRESS_BITS>() 
-                    << std::endl;        
-          
-          std::cout << "  Max memeory allocation:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>() 
-                    << std::endl;        
-          
-          std::cout << "  Image support:\t\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_IMAGE_SUPPORT>() ? "Yes" : "No")
-                    << std::endl;        
-          
-          if ((*i).getInfo<CL_DEVICE_IMAGE_SUPPORT>()) {
-              std::cout << "  Max number of images read arguments:\t " 
-                        << (*i).getInfo<CL_DEVICE_MAX_READ_IMAGE_ARGS>()
-                        << std::endl;        
-
-              std::cout << "  Max number of images write arguments:\t " 
-                        << (*i).getInfo<CL_DEVICE_MAX_WRITE_IMAGE_ARGS>()
-                        << std::endl;        
-              
-              std::cout << "  Max image 2D width:\t\t\t " 
-                        << (*i).getInfo<CL_DEVICE_IMAGE2D_MAX_WIDTH>()
-                        << std::endl;        
-
-              std::cout << "  Max image 2D height:\t\t\t " 
-                        << (*i).getInfo<CL_DEVICE_IMAGE2D_MAX_HEIGHT>()
-                        << std::endl;        
-              
-              std::cout << "  Max image 3D width:\t\t\t " 
-                        << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_WIDTH>()
-                        << std::endl;        
-
-              std::cout << "  Max image 3D height:\t " 
-                        << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_HEIGHT>()
-                        << std::endl;        
-              
-              std::cout << "  Max image 3D depth:\t\t\t " 
-                        << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_DEPTH>()
-                        << std::endl;        
-
-              std::cout << "  Max samplers within kernel:\t\t " 
-                        << (*i).getInfo<CL_DEVICE_MAX_SAMPLERS>()
-                        << std::endl;        
-          }
-
-          std::cout << "  Max size of kernel argument:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_MAX_PARAMETER_SIZE>()
-                    << std::endl;        
-          
-          std::cout << "  Alignment (bits) of base address:\t\t " 
-                    << (*i).getInfo<CL_DEVICE_MEM_BASE_ADDR_ALIGN>()
-                    << std::endl;        
-          
-          std::cout << "  Minimum alignment (bytes) for any datatype:\t " 
-                    << (*i).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>()
-                    << std::endl;        
-
-          std::cout << "  Single precision floating point capability" << std::endl;
-          std::cout << "    Denorms:\t\t\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & 
-                        CL_FP_DENORM ? "Yes" : "No")
-                    << std::endl;
-          std::cout << "    Quiet NaNs:\t\t\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & 
-                        CL_FP_INF_NAN ? "Yes" : "No")
-                    << std::endl;
-          std::cout << "    Round to nearest even:\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
-                        CL_FP_ROUND_TO_NEAREST ? "Yes" : "No")
-                    << std::endl;
-          std::cout << "    Round to zero:\t\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
-                        CL_FP_ROUND_TO_ZERO ? "Yes" : "No")
-                    << std::endl;
-          std::cout << "    Round to +ve and infinity:\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
-                        CL_FP_ROUND_TO_INF ? "Yes" : "No")
-                    << std::endl;
-          std::cout << "    IEEE754-2008 fused multiply-add:\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
-                        CL_FP_FMA ? "Yes" : "No")
-                    << std::endl;
-          std::cout << "    Correctly rounded div and sqrt:\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
-                        CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT ? "Yes" : "No")
-                    << std::endl;
-                    
-
-          std::cout << "  Cache type:\t\t\t\t\t " ;
-          switch ((*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHE_TYPE>()) {
-          case CL_NONE:
-              std::cout << "None" << std::endl;
-              break;
-          case CL_READ_ONLY_CACHE:
-              std::cout << "Read only" << std::endl;
-              break;
-          case CL_READ_WRITE_CACHE:
-              std::cout << "Read/Write" << std::endl;
-              break;
-          }
-          
-          std::cout << "  Cache line size:\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE>()
-                    << std::endl;
-          
-          std::cout << "  Cache size:\t\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHE_SIZE>()
-                    << std::endl;
-          
-          std::cout << "  Global memory size:\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()
-                    << std::endl;
-          
-          std::cout << "  Constant buffer size:\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>()
-                    << std::endl;
-          
-          std::cout << "  Max number of constant args:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_MAX_CONSTANT_ARGS>()
-                    << std::endl;
-
-          std::cout << "  Local memory type:\t\t\t\t " ;
-          switch ((*i).getInfo<CL_DEVICE_LOCAL_MEM_TYPE>()) {
-          case CL_LOCAL:
-              std::cout << "Scratchpad" << std::endl;
-              break;
-          case CL_GLOBAL:
-              std::cout << "Global" << std::endl;
-              break;
-          }
-          
-
-          std::cout << "  Local memory size:\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>()
-                    << std::endl;
-          
-          std::cout << "  Profiling timer resolution:\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_PROFILING_TIMER_RESOLUTION>() 
-                    << std::endl;
-          
-          std::cout << "  Device endianess:\t\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_ENDIAN_LITTLE>() ? "Little" : "Big") 
-                    << std::endl;
-          
-          std::cout << "  Available:\t\t\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_AVAILABLE>() ? "Yes" : "No")
-                    << std::endl;
-   
-          std::cout << "  Compiler available:\t\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_COMPILER_AVAILABLE>() ? "Yes" : "No")
-                    << std::endl;
-          
-          std::cout << "  Execution capabilities:\t\t\t\t " << std::endl;
-          std::cout << "    Execute OpenCL kernels:\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_EXECUTION_CAPABILITIES>() & 
-                        CL_EXEC_KERNEL ? "Yes" : "No")
-                    << std::endl;
-          std::cout << "    Execute native function:\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_EXECUTION_CAPABILITIES>() & 
-                        CL_EXEC_NATIVE_KERNEL ? "Yes" : "No")
-                    << std::endl;
-          
-          std::cout << "  Queue properties:\t\t\t\t " << std::endl;
-          std::cout << "    Out-of-Order:\t\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_QUEUE_PROPERTIES>() & 
-                        CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE ? "Yes" : "No")
-                    << std::endl;
-          std::cout << "    Profiling :\t\t\t\t\t " 
-                    << ((*i).getInfo<CL_DEVICE_QUEUE_PROPERTIES>() & 
-                        CL_QUEUE_PROFILING_ENABLE ? "Yes" : "No")
-                    << std::endl;
-          
-          
-          std::cout << "  Platform ID:\t\t\t\t\t " 
-                << (*i).getInfo<CL_DEVICE_PLATFORM>()
-                    << std::endl;
-          
-          std::cout << "  Name:\t\t\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_NAME>().c_str()
-                    << std::endl;
-          
-          std::cout << "  Vendor:\t\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_VENDOR>().c_str()
-                    << std::endl;
-          
-          std::cout << "  Driver version:\t\t\t\t " 
-                    << (*i).getInfo<CL_DRIVER_VERSION>().c_str()
-                    << std::endl;
-          
-          std::cout << "  Profile:\t\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_PROFILE>().c_str()
-                    << std::endl;
-          
-          std::cout << "  Version:\t\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_VERSION>().c_str()
-                    << std::endl;
-
-          std::cout << "  Extensions:\t\t\t\t\t " 
-                    << (*i).getInfo<CL_DEVICE_EXTENSIONS>().c_str()
-                    << std::endl;
+    for (std::vector<cl::Device>::iterator i = devices.begin(); i != devices.end(); ++i) 
+    {
+      LOG("  Device Type:\t\t\t\t\t ", 0);
+      cl_device_type dtype = (*i).getInfo<CL_DEVICE_TYPE>();
+      switch (dtype) 
+      {
+        case CL_DEVICE_TYPE_ACCELERATOR:
+          LOG("CL_DEVICE_TYPE_ACCRLERATOR", 0);
+        break;
+        case CL_DEVICE_TYPE_CPU:
+          LOG("CL_DEVICE_TYPE_CPU", 0);
+        break;
+        case CL_DEVICE_TYPE_DEFAULT:
+          LOG("CL_DEVICE_TYPE_DEFAULT", 0);
+        break;
+        case CL_DEVICE_TYPE_GPU:
+          LOG("CL_DEVICE_TYPE_GPU", 0);
+        break;
       }
-      std::cout << std::endl << std::endl;
+
+      LOG("  Device ID:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_VENDOR_ID>(), 0);
+      LOG("  Max compute units:\t\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>(), 0);
+      LOG("  Max work items dimensions:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>(), 0);
+
+      
+      cl::detail::param_traits<cl::detail::cl_device_info,CL_DEVICE_MAX_WORK_ITEM_SIZES>::
+        param_type witems = (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
+      for (cl_uint x = 0; x < (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>(); x++) 
+      {
+        LOG("    Max work items[" << x << "]:\t\t\t\t " << witems[x], 0);
+      }
+
+      LOG("  Max work group size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>(), 0);
+      LOG("  Preferred vector width char:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR>(), 0);
+      LOG("  Preferred vector width short:\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT>(), 0);
+      LOG("  Preferred vector width int:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT>(), 0);
+      LOG("  Preferred vector width long:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG>(), 0);
+      LOG("  Preferred vector width float:\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT>(), 0);
+      LOG("  Preferred vector width double:\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE>(), 0);
+      LOG("  Max clock frequency:\t\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>() 
+        << "Mhz", 0);
+      LOG("  Address bits:\t\t\t\t " << (*i).getInfo<CL_DEVICE_ADDRESS_BITS>(), 0);
+      LOG("  Max memeory allocation:\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>(), 0);
+      LOG("  Image support:\t\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_IMAGE_SUPPORT>() ? "Yes" : "No"), 0);
+      
+      if ((*i).getInfo<CL_DEVICE_IMAGE_SUPPORT>()) 
+      {
+        LOG("  Max number of images read arguments:\t\t " 
+          << (*i).getInfo<CL_DEVICE_MAX_READ_IMAGE_ARGS>(), 0);
+        LOG("  Max number of images write arguments:\t " 
+          << (*i).getInfo<CL_DEVICE_MAX_WRITE_IMAGE_ARGS>(), 0);
+        LOG("  Max image 2D width:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE2D_MAX_WIDTH>(), 0);
+        LOG("  Max image 2D height:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE2D_MAX_HEIGHT>(), 0);
+        LOG("  Max image 3D width:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_WIDTH>(), 0);
+        LOG("  Max image 3D height:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_HEIGHT>(), 0);
+        LOG("  Max image 3D depth:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_DEPTH>(), 0);
+        LOG("  Max samplers within kernel:\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_MAX_SAMPLERS>(), 0);      
+      }
+
+      LOG("  Max size of kernel argument:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_MAX_PARAMETER_SIZE>(), 0);
+      LOG("  Alignment (bits) of base address:\t\t " 
+        << (*i).getInfo<CL_DEVICE_MEM_BASE_ADDR_ALIGN>(), 0);
+      LOG("  Minimum alignment (bytes) for any datatype:\t " 
+        << (*i).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>(), 0);
+      LOG("  Single precision floating point capability", 0);
+      LOG("    Denorms:\t\t\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & 
+        CL_FP_DENORM ? "Yes" : "No"), 0);
+      LOG("    Quiet NaNs:\t\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & 
+        CL_FP_INF_NAN ? "Yes" : "No"), 0);
+      LOG("    Round to nearest even:\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
+        CL_FP_ROUND_TO_NEAREST ? "Yes" : "No"), 0);
+      LOG("    Round to zero:\t\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
+        CL_FP_ROUND_TO_ZERO ? "Yes" : "No"), 0);
+      LOG("    Round to +ve and infinity:\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
+        CL_FP_ROUND_TO_INF ? "Yes" : "No"), 0);
+      LOG("    IEEE754-2008 fused multiply-add:\t\t " 
+        << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & CL_FP_FMA ? "Yes" : "No"), 0);
+      LOG("    Correctly rounded div and sqrt:\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
+        CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT ? "Yes" : "No"), 0);
+      LOG("  Cache type:\t\t\t\t\t ", 0);
+
+      switch ((*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHE_TYPE>()) 
+      {
+        case CL_NONE:
+          LOG("None", 0);
+        break;
+        case CL_READ_ONLY_CACHE:
+          LOG("Read only", 0);
+        break;
+        case CL_READ_WRITE_CACHE:
+          LOG("Read/Write", 0);
+        break;
+      }
+      LOG("  Cache line size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE>(), 0);
+      LOG("  Cache size:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHE_SIZE>(), 0);
+      LOG("  Global memory size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>(), 0);
+      LOG("  Constant buffer size:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>(), 0);
+      LOG("  Max number of constant args:\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_CONSTANT_ARGS>(), 0);
+      LOG("  Local memory type:\t\t\t\t ", 0);
+
+      switch ((*i).getInfo<CL_DEVICE_LOCAL_MEM_TYPE>()) 
+      {
+        case CL_LOCAL:
+          LOG("Scratchpad", 0);
+        break;
+        case CL_GLOBAL:
+          LOG("Scratchpad", 0);
+        break;
+      }
+      
+      LOG("  Local memory size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>(), 0);
+      LOG("  Profiling timer resolution:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_PROFILING_TIMER_RESOLUTION>(), 0);
+      LOG("  Device endianess:\t\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_ENDIAN_LITTLE>() ? "Little" : "Big") , 0);
+      LOG("  Available:\t\t\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_AVAILABLE>() ? "Yes" : "No"), 0);
+      LOG("  Compiler available:\t\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_COMPILER_AVAILABLE>() ? "Yes" : "No"), 0);
+      LOG("  Execution capabilities:\t\t\t\t ", 0);
+      LOG("    Execute OpenCL kernels:\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_EXECUTION_CAPABILITIES>() & CL_EXEC_KERNEL ? "Yes" : "No"), 0);
+      LOG("    Execute native function:\t\t\t " << ((*i).getInfo<CL_DEVICE_EXECUTION_CAPABILITIES>() 
+        & CL_EXEC_NATIVE_KERNEL ? "Yes" : "No"), 0);
+      LOG("  Queue properties:\t\t\t\t ", 0);
+      LOG("    Out-of-Order:\t\t\t\t " << ((*i).getInfo<CL_DEVICE_QUEUE_PROPERTIES>() & 
+        CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE ? "Yes" : "No"), 0);
+      LOG("    Profiling :\t\t\t\t\t " << ((*i).getInfo<CL_DEVICE_QUEUE_PROPERTIES>() & 
+        CL_QUEUE_PROFILING_ENABLE ? "Yes" : "No"), 0);
+      LOG("  Platform ID:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_PLATFORM>(), 0);
+      LOG("  Name:\t\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_NAME>().c_str(), 0);
+      LOG("  Vendor:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_VENDOR>().c_str(), 0);
+      LOG("  Driver version:\t\t\t\t " << (*i).getInfo<CL_DRIVER_VERSION>().c_str(), 0);
+      LOG("  Profile:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_PROFILE>().c_str(), 0);
+      LOG("  Version:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_VERSION>().c_str(), 0);
+      LOG("  Extensions:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_EXTENSIONS>().c_str(), 0);
+    }
   }
 
   return SDK_SUCCESS;
@@ -3067,7 +2940,8 @@ IntegrationTest::setupCL()
     (*i).getDevices(CL_DEVICE_TYPE_ALL, &devices);
  
     std::vector<cl::Device>::iterator d;
-    found = findTargetDevice(devices, TARGET_DEVICE_NAME, &d);
+
+    FIND_TARGET_DEVICE(devices, TARGET_DEVICE_NAME, d, found);
     
     if(!found)
     {
@@ -3076,6 +2950,8 @@ IntegrationTest::setupCL()
       return SDK_FAILURE;
     }
     
+    std::cout << "Found device " << (*d).getInfo<CL_DEVICE_NAME>() << "\n";
+        
     dType = (*d).getInfo<CL_DEVICE_TYPE>();
     myDeviceId = (*d).getInfo<CL_DEVICE_VENDOR_ID>();
 
@@ -3104,7 +2980,7 @@ IntegrationTest::setupCL()
     
     int deviceCount = (int)devices.size();
 
-    found = findTargetDevice(devices, TARGET_DEVICE_NAME, &d);
+    FIND_TARGET_DEVICE(devices, TARGET_DEVICE_NAME, d, found);
     
     if(!found)
     {
@@ -3339,6 +3215,7 @@ IntegrationTest::setupCL()
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
     {
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_WRITE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes);
     }
 #endif
     
@@ -3759,6 +3636,8 @@ IntegrationTest::runCLKernels()
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
     dataSpikePackets);
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+    dataSpikePacketCounts);
 #endif
 
 #if EXPAND_EVENTS_ENABLE
@@ -3860,6 +3739,7 @@ IntegrationTest::runCLKernels()
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
   SET_KERNEL_ARG(kernelExpandEvents, dataHistogramBuffer, argNumExpandEvents++);
 #endif
+  SET_KERNEL_ARG(kernelExpandEvents, dataSpikePacketCountsBuffer, argNumExpandEvents++);
   SET_KERNEL_ARG(kernelExpandEvents, dataSpikePacketsBuffer, argNumExpandEvents++);
   SET_KERNEL_ARG(kernelExpandEvents, dataUnsortedEventCountsBuffer, argNumExpandEvents++);
   SET_KERNEL_ARG(kernelExpandEvents, dataUnsortedEventTargetsBuffer, argNumExpandEvents++);
@@ -4008,6 +3888,7 @@ IntegrationTest::runCLKernels()
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, constantCoefficientsBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, modelParametersBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, modelVariablesBuffer, argNumUpdateNeuronsV00++);
+  SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataSpikePacketCountsBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataSpikePacketsBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataMakeEventPtrsStructBuffer, argNumUpdateNeuronsV00++);
   }
@@ -4034,6 +3915,8 @@ IntegrationTest::runCLKernels()
     argNumUpdateSpikedNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, modelVariablesBuffer, 
     argNumUpdateSpikedNeuronsV00++);
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataSpikePacketCountsBuffer, 
+    argNumUpdateSpikedNeuronsV00++);  
   SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataSpikePacketsBuffer, 
     argNumUpdateSpikedNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataMakeEventPtrsStructBuffer, 
@@ -4165,6 +4048,8 @@ IntegrationTest::runCLKernels()
       verified = false; 
       break;
     }
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+      dataSpikePacketCounts);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
       dataSpikePackets);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSynapseTargetsBuffer, dataSynapseTargetsSizeBytes, 
@@ -4211,6 +4096,8 @@ IntegrationTest::runCLKernels()
         verified = false; 
         break;
       }
+      ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+        dataSpikePacketCounts);
       ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
         dataSpikePackets);
     }
@@ -4224,6 +4111,8 @@ IntegrationTest::runCLKernels()
       verified = false; 
       break;
     }
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+      dataSpikePacketCounts);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
       dataSpikePackets);
     if(currentTimeStep == OVERWRITE_SPIKES_UNTILL_STEP-1)
@@ -4239,6 +4128,8 @@ IntegrationTest::runCLKernels()
       dataExpandEventsDebugDeviceSizeBytes, dataExpandEventsDebugDevice);
 #endif
 #if EXPAND_EVENTS_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+      dataSpikePacketCounts);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
       dataSpikePackets);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapseTargetsBuffer, dataSynapseTargetsSizeBytes, 
@@ -5309,6 +5200,8 @@ IntegrationTest::runCLKernels()
       ENQUEUE_WRITE_BUFFER(CL_TRUE, psToleranceBuffer, psToleranceSizeBytes, 
         psTolerance);
 #endif
+      ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+        dataSpikePacketCounts);
       ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
         dataSpikePackets);
       ENQUEUE_WRITE_BUFFER(CL_TRUE, constantCoefficientsBuffer, constantCoefficientsSizeBytes, 
@@ -5489,10 +5382,16 @@ device modifies it.*/
 #if OVERWRITE_SPIKES_UNTILL_STEP
     if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
     {
+      cl_uint *dataSpikePacketCountsToInject = (cl_uint *)calloc(UPDATE_NEURONS_SPIKE_PACKETS_V00, 
+        sizeof(cl_uint));
+      memcpy(dataSpikePacketCountsToInject, dataSpikePacketCounts, 
+        (UPDATE_NEURONS_SPIKE_PACKETS_V00*sizeof(cl_uint)));
       cl_uint size = (UPDATE_NEURONS_SPIKE_PACKETS_V00*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS);
       cl_uint *dataSpikePacketsToInject = (cl_uint *)calloc(size, sizeof(cl_uint));
       memcpy(dataSpikePacketsToInject, dataSpikePackets, (size*sizeof(cl_uint)));
   
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+        dataSpikePacketCounts);
       ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
         dataSpikePackets);
         
@@ -5507,14 +5406,17 @@ device modifies it.*/
           dataSynapseTargets,
           dataSynapseDelays,
           dataSynapseWeights,
+          dataSpikePacketCountsToInject,
           dataSpikePacketsToInject,
           modelVariables,
-          dataSpikePackets
+          dataSpikePackets,
+          dataSpikePacketCounts
         ) != SDK_SUCCESS
       ){
         std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
         verified = false; 
       }
+      free(dataSpikePacketCountsToInject);
       free(dataSpikePacketsToInject);
       if(verified == false){break;}
     }
@@ -5523,6 +5425,8 @@ device modifies it.*/
     {
       if(verify)
       {
+        ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+          dataSpikePacketCounts);
         ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
           dataSpikePackets);
       }
@@ -5538,8 +5442,10 @@ device modifies it.*/
             dataSynapseDelays,
             dataSynapseWeights,
             NULL,
+            NULL,
             modelVariables,
-            dataSpikePackets
+            dataSpikePackets,
+            dataSpikePacketCounts
           ) != SDK_SUCCESS
       ){
         std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
@@ -5561,10 +5467,16 @@ device modifies it.*/
       ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
       
+      cl_uint *dataSpikePacketCountsToInject = (cl_uint *)calloc(UPDATE_NEURONS_SPIKE_PACKETS_V00, 
+        sizeof(cl_uint));
+      memcpy(dataSpikePacketCountsToInject, dataSpikePacketCounts, 
+        (UPDATE_NEURONS_SPIKE_PACKETS_V00*sizeof(cl_uint)));
       cl_uint size = (UPDATE_NEURONS_SPIKE_PACKETS_V00*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS);
       cl_uint *dataSpikePacketsToInject = (cl_uint *)calloc(size, sizeof(cl_uint));
       memcpy(dataSpikePacketsToInject, dataSpikePackets, (size*sizeof(cl_uint)));
   
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+        dataSpikePacketCounts);
       ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
         dataSpikePackets);
         
@@ -5579,14 +5491,17 @@ device modifies it.*/
           dataSynapseTargets,
           dataSynapseDelays,
           dataSynapseWeights,
+          dataSpikePacketCountsToInject,
           dataSpikePacketsToInject,
           modelVariables,
-          dataSpikePackets
+          dataSpikePackets,
+          dataSpikePacketCounts
         ) != SDK_SUCCESS)
       {
         std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
         verified = false; 
       }
+      free(dataSpikePacketCountsToInject);
       free(dataSpikePacketsToInject);
       if(verified == false){break;}
     }
@@ -5597,6 +5512,8 @@ device modifies it.*/
         modelVariables);
       ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+        dataSpikePacketCounts);
       ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
         dataSpikePackets);
       if(verifyKernelUpdateNeurons
@@ -5611,8 +5528,10 @@ device modifies it.*/
           dataSynapseDelays,
           dataSynapseWeights,
           NULL,
+          NULL,
           modelVariables,
-          dataSpikePackets
+          dataSpikePackets,
+          dataSpikePacketCounts
         ) != SDK_SUCCESS)
       {
         std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
@@ -5628,6 +5547,8 @@ device modifies it.*/
 #else
     ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
       modelVariables);
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+      dataSpikePacketCounts);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
       dataSpikePackets);
     if(verifyKernelUpdateNeurons
@@ -5642,8 +5563,10 @@ device modifies it.*/
           NULL,
           NULL,
           NULL,
+          NULL,
           modelVariables,
-          dataSpikePackets
+          dataSpikePackets,
+          dataSpikePacketCounts
         ) != SDK_SUCCESS
     ){
       std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
@@ -5661,6 +5584,8 @@ device modifies it.*/
     EXPAND_EVENTS_ENABLE && UPDATE_NEURONS_ENABLE_V00)
   if(takeSimSnapshot)
   {
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+      dataSpikePacketCounts);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
       dataSpikePackets);
     ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
@@ -5677,6 +5602,7 @@ device modifies it.*/
       dataMakeEventPtrsStruct,
       dataGroupEventsTik,
       dataSpikePackets,
+      dataSpikePacketCounts,
       modelVariables
     );
   }
@@ -5997,9 +5923,10 @@ IntegrationTest::verifyKernelExpandEvents
   /*Reset event counter in previous step*/
   for(cl_uint p = 0; p < EXPAND_EVENTS_SPIKE_PACKETS; p++)
   {
+    cl_uint wg = (p/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF));
     cl_uint offset = 
       /*WG*/
-      EXPAND_EVENTS_TIME_SLOTS * p/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG + 
+      EXPAND_EVENTS_TIME_SLOTS * wg + 
       /*time slot*/
       ((EXPAND_EVENTS_TIME_SLOTS + (timeSlot-1))%EXPAND_EVENTS_TIME_SLOTS);
       
@@ -6009,15 +5936,15 @@ IntegrationTest::verifyKernelExpandEvents
   for(cl_uint packet = 0; packet < EXPAND_EVENTS_SPIKE_PACKETS; packet++)
   {
     cl_uint packet_index = packet * EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS;
-    cl_uint total_spikes = dataSpikePackets[packet_index];
+    cl_uint total_spikes = dataSpikePacketCounts[packet];
 
     /*Iterate through spikes in a current packet*/
     for(cl_uint i = 0; i < total_spikes; i++)
     {
       cl_uint spiked_neuron = dataSpikePackets[packet_index + 
-        EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
+        EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
       cl_float spike_time = *((cl_float *)(&dataSpikePackets[packet_index + 
-        EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1]));
+        EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1]));
         
       cl_uint synapsePointer = dataSynapsePointer[spiked_neuron];
       cl_uint synapse_count = dataSynapsePointer[spiked_neuron + 1] - synapsePointer;
@@ -6025,6 +5952,8 @@ IntegrationTest::verifyKernelExpandEvents
       /*Iterate through synapses of spiked neuron*/
       for(cl_uint j = 0; j < synapse_count; j++)
       {
+        cl_uint wg = (packet/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF));
+
         cl_uint synapseOffset = (synapsePointer + j);
         /*target neuron*/
         cl_uint target_neuron = dataSynapseTargets[synapseOffset];
@@ -6044,8 +5973,8 @@ IntegrationTest::verifyKernelExpandEvents
           ((timeSlot + (int)event_time - bin_correction)%EXPAND_EVENTS_TIME_SLOTS);
         
         /*Obtain offsets for storing synaptic event*/
-        cl_uint event_local_ptr = dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * 
-          packet/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG + time_slot];
+        cl_uint event_local_ptr = dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * wg + 
+          time_slot];
         
         /*Catch overflows and record max overflow*/
         if(event_local_ptr >= EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
@@ -6058,13 +5987,11 @@ IntegrationTest::verifyKernelExpandEvents
         }
 
         /*Increment event counter*/
-        dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * 
-          packet/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG + time_slot]++;
+        dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * wg + time_slot]++;
         
         cl_uint event_global_ptr = 
           /*Event data buffers*/
-          (packet/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG) * EXPAND_EVENTS_TIME_SLOTS * 
-          EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE +
+          wg * EXPAND_EVENTS_TIME_SLOTS * EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE +
           /*Current event data buffer*/
           time_slot * EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE +
           /*Current event*/
@@ -6084,7 +6011,7 @@ IntegrationTest::verifyKernelExpandEvents
         /*Offset is based on time slot, bin, WG*/
         cl_uint offset = 
           /*WG offset*/
-          (packet/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG) + 
+          wg + 
           /*time slot + bin with EXPAND_EVENTS_GRID_SIZE_WG as a pitch*/
           (time_slot*(EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG+1) + 
           bin*EXPAND_EVENTS_GRID_SIZE_WG);
@@ -6104,12 +6031,12 @@ IntegrationTest::verifyKernelExpandEvents
     {
       for(cl_uint time_slot = 0; time_slot < EXPAND_EVENTS_TIME_SLOTS; time_slot++)
       {
-        if(dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * 
-          packet/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG + time_slot] >= 
+        cl_uint wg = (packet/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF));
+        
+        if(dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * wg + time_slot] >= 
           EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
         {
-          dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * 
-            packet/EXPAND_EVENTS_SPIKE_PACKETS_PER_WG + time_slot] = 
+          dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * wg + time_slot] = 
             EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE-1;
         }
       }
@@ -6133,19 +6060,19 @@ IntegrationTest::verifyKernelExpandEvents
       /**/
       std::cout << i <<"->(" << dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * i + 
         timeSlot] << "," << dataUnsortedEventCounts[EXPAND_EVENTS_TIME_SLOTS * i + 
-        timeSlot] << "),";
+        timeSlot] << ");";
       
     }
   }
   
   if(error_event_totals)
   {
-    std::cout << "Failed to match synaptic event time slot counters " << error_event_totals 
+    std::cout << "/nFailed to match synaptic event time slot counters " << error_event_totals 
       << " times." << std::endl;
     return SDK_FAILURE;
   }
 
-  /*Iterate through spike packets*/
+  /*Iterate through events*/
   for(cl_uint p = 0; p < EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS; p++)
   {
     cl_uint checksum_event_target_neuron_host = 0, checksum_event_target_neuron_device = 0;
@@ -8420,9 +8347,11 @@ IntegrationTest::verifyKernelUpdateNeurons
   unsigned int  *synapseTargets,
   DATA_TYPE     *synapseDelays,
   DATA_TYPE     *synapseWeights,
+  unsigned int  *spikePacketCounts,
   unsigned int  *spikePackets,
   DATA_TYPE     *modelVariables,
-  unsigned int  *dataSpikePackets
+  unsigned int  *dataSpikePackets,
+  unsigned int  *dataSpikePacketCounts
 )
 /**************************************************************************************************/
 {
@@ -8435,7 +8364,7 @@ IntegrationTest::verifyKernelUpdateNeurons
   if((synapsePointer != NULL) && (synapseTargets != NULL) && (synapseDelays != NULL) &&
     (synapseWeights != NULL))
   {
-    if(spikePackets != NULL)
+    if((spikePackets != NULL) && (spikePacketCounts != NULL))
     {
       memset(ne, 0, UPDATE_NEURONS_TOTAL_NEURONS*sizeof(int));
       
@@ -8443,16 +8372,14 @@ IntegrationTest::verifyKernelUpdateNeurons
       for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
       {
         cl_uint packet_index = packet * UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS;
-        cl_uint total_spikes = spikePackets[packet_index];
+        cl_uint total_spikes = spikePacketCounts[packet];
 
         /*Iterate through spikes in a current packet and inject spikes*/
         for(cl_uint i = 0; i < total_spikes; i++)
         {
           cl_uint spiked_neuron = spikePackets[packet_index + 
-            UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
             UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
           cl_float spike_time = *((cl_float *)(&spikePackets[packet_index + 
-            UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
             UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1]));
             
           if(ne[spiked_neuron] == 1)
@@ -8616,15 +8543,15 @@ IntegrationTest::verifyKernelUpdateNeurons
     for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
     {
       cl_uint packet_index = packet * UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS;
-      cl_uint total_spikes = dataSpikePackets[packet_index];
+      cl_uint total_spikes = dataSpikePacketCounts[packet];
 
       /*Iterate through spikes in a current packet*/
       for(cl_uint i = 0; i < total_spikes; i++)
       {
         cl_uint spiked_neuron = dataSpikePackets[packet_index + 
-          UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
+          UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
         cl_float spike_time = *((cl_float *)(&dataSpikePackets[packet_index + 
-          UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i 
+          UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i 
           + 1]));
         if(te_ps[spiked_neuron] != spike_time)
         {
@@ -9048,6 +8975,7 @@ IntegrationTest::takeSimulationSnapshot
   cl_uint   *dataMakeEventPtrsStruct,
   cl_uint   *dataGroupEventsTik,
   cl_uint   *dataSpikePackets,
+  cl_uint   *dataSpikePacketCounts,
   cl_float  *modelVariables
 )
 /**************************************************************************************************/
@@ -9159,7 +9087,7 @@ IntegrationTest::takeSimulationSnapshot
   for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
   {
     cl_uint packetIndex = packet * UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS;
-    cl_uint spikes = dataSpikePackets[packetIndex];
+    cl_uint spikes = dataSpikePacketCounts[packet];
     
     totalSpikes += spikes;
     if(spikesPerPacketMax < spikes){spikesPerPacketMax = spikes;}
@@ -9169,10 +9097,8 @@ IntegrationTest::takeSimulationSnapshot
     for(cl_uint i = 0; i < spikes; i++)
     {
       cl_uint spiked_neuron = dataSpikePackets[packetIndex + 
-        UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
         UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
       cl_float spike_time = *((cl_float *)(&dataSpikePackets[packetIndex + 
-        UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + 
         UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1]));
 
       if(spikeTimeMax < spike_time){spikeTimeMax = spike_time;}
@@ -9284,6 +9210,8 @@ IntegrationTest::cleanup()
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   if(dataSpikePackets) 
       free(dataSpikePackets);
+  if(dataSpikePacketCounts) 
+      free(dataSpikePacketCounts);
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE

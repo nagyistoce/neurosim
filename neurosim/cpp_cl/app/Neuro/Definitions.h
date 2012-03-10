@@ -208,6 +208,32 @@
 /***************************************************************************************************
   OCL Macros and Constants
 ***************************************************************************************************/
+
+#define FIND_TARGET_DEVICE(platformDevices, targetDevices, deviceIterator, found)\
+  {\
+    const char *tD = targetDevices;\
+    found = false;\
+    char *str = (char *) calloc(0xFFFF, sizeof(char));\
+    strcpy(str, tD);\
+    char *pch;\
+    pch = strtok (str, ",");\
+    while (pch != NULL)\
+    {\
+      for(deviceIterator = platformDevices.begin(); deviceIterator != platformDevices.end();\
+      ++deviceIterator)\
+      {\
+        std::string deviceName = (*deviceIterator).getInfo<CL_DEVICE_NAME>();\
+        if(strcmp(deviceName.c_str(), pch) == 0)\
+        {\
+          found = true; break;\
+        }\
+      }\
+      if(found){break;}\
+      pch = strtok (NULL, ",");\
+    }\
+    free(str);\
+  }
+    
 /*Allocate buffer*/
 #define CREATE_BUFFER(flags, buffer, size)\
   {\
@@ -370,15 +396,19 @@
 #define SYNAPSE_DEVIATION_RATIO                               0.5
 /*Size of spike packet buffer (spikes) per WF*/
 #if !(defined(SPIKE_DATA_BUFFER_SIZE))
-  #define SPIKE_DATA_BUFFER_SIZE                              127 /*127*/
+  #define SPIKE_DATA_BUFFER_SIZE                              128 /*128*/
 #endif
 /*Size of event data buffer*/
 #if !(defined(EVENT_DATA_BUFFER_SIZE))
-  #define EVENT_DATA_BUFFER_SIZE                              (24*1024)
+  #define EVENT_DATA_BUFFER_SIZE                              (16*1024)
 #endif
 /*The number of spike packets*/
 #if !(defined(SPIKE_PACKETS))
   #define SPIKE_PACKETS                                       128 /*128*/
+#endif
+/*The size of bin for event count histogram*/
+#if !(defined(HISTOGRAM_BIN_SIZE))
+  #define HISTOGRAM_BIN_SIZE                                  128 /*128*/
 #endif
 /*Solver error tolerance mode (see usage below)*/
 #if !(defined(TOLERANCE_MODE))
@@ -524,7 +554,7 @@
   #define KERNEL_VERIFY_ENABLE                                0
   #define SORT_VERIFY_ENABLE                                  0
   #define LOG_MODEL_VARIABLES                                 0
-  #define LOG_SIMULATION                                      0
+  #define LOG_SIMULATION                                      1
   #define DEBUG_MASK                                          0
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      0
@@ -742,29 +772,27 @@
   #define EXPAND_EVENTS_ERROR_CODE_1                          0x1 /*EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE overflow*/
   
   /*CONTROL: the number of spike packets*/
-  #define EXPAND_EVENTS_SPIKE_PACKETS                         (SPIKE_PACKETS)
-  #define EXPAND_EVENTS_SPIKE_PACKETS_PER_WG                  1
-  
+  #define EXPAND_EVENTS_SPIKE_PACKETS                         SPIKE_PACKETS
+
   /*Kernel parameters*/
   #define EXPAND_EVENTS_KERNEL_FILE_NAME                      "Kernel_ExpandEvents.cl"
   #define EXPAND_EVENTS_KERNEL_NAME                           "expand_events"
   #define EXPAND_EVENTS_WF_SIZE_WI                            WF_SIZE_WI
   /*CONTROL: number of WFs in a WG*/
   #if !(defined(EXPAND_EVENTS_WG_SIZE_WF))
-    #define EXPAND_EVENTS_WG_SIZE_WF                          4 /*Options: 1, 2, 4*/
+    #define EXPAND_EVENTS_WG_SIZE_WF                          1 /*Options: 1, 2, 4*/
   #endif
   #define EXPAND_EVENTS_WG_SIZE_WI                            (EXPAND_EVENTS_WG_SIZE_WF*\
                                                               EXPAND_EVENTS_WF_SIZE_WI)
-  #define EXPAND_EVENTS_GRID_SIZE_WG                          (EXPAND_EVENTS_SPIKE_PACKETS/\
-                                                              EXPAND_EVENTS_SPIKE_PACKETS_PER_WG)
-  
+  #define EXPAND_EVENTS_GRID_SIZE_WG                          HISTOGRAM_BIN_SIZE
+  #define EXPAND_EVENTS_SPIKE_PACKETS_PER_WF                  (EXPAND_EVENTS_SPIKE_PACKETS/\
+                                                              (EXPAND_EVENTS_GRID_SIZE_WG*\
+                                                              EXPAND_EVENTS_WG_SIZE_WF))
   /*Spike data structure parameters (data in)*/
   #define EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT                 0.0, 10.0
   #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE                SPIKE_DATA_BUFFER_SIZE
-  #define EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE              2
   #define EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS            2
-  #define EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS              (EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + \
-                                                              EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE *\
+  #define EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS              (EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE *\
                                                               EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS)
 
   /*Time slot (bin) buffer parameters (data out)*/
@@ -795,6 +823,13 @@
   
   /*CONTROL: Minimum event delay latency*/
   #define EXPAND_EVENTS_MIN_DELAY                             (MINIMUM_PROPAGATION_DELAY)
+/*
+                                               Restrictions
+*/
+#if	(EXPAND_EVENTS_SPIKE_PACKETS%(EXPAND_EVENTS_GRID_SIZE_WG*EXPAND_EVENTS_WG_SIZE_WF) != 0)
+  #error Parameter EXPAND_EVENTS_SPIKE_PACKETS must be divisible by \
+    (EXPAND_EVENTS_GRID_SIZE_WG*EXPAND_EVENTS_WG_SIZE_WF)
+#endif
 #endif
 /**************************************************************************************************/
 
@@ -836,31 +871,31 @@
 */
 /*VARIANT_00*/
 #if SCAN_ENABLE_V00
-  /*Device*/
-#ifdef SCAN_DEVICE_V00
-  #define SCAN_HISTOGRAM_TOTAL_BINS                           (1<<4)
-  #define SCAN_HISTOGRAM_BIN_SIZE                             128
-  #define SCAN_HISTOGRAM_IN_TYPE_V00                          0
-#endif
   /*Host and Device*/
   #define SCAN_HISTOGRAM_TOTAL_BINS_V00                       (1<<4)
-  #define SCAN_HISTOGRAM_BIN_SIZE_V00                         128
+  #define SCAN_HISTOGRAM_BIN_SIZE_V00                         HISTOGRAM_BIN_SIZE
   #define SCAN_HISTOGRAM_IN_TYPE_V00                          0
+  /*Device*/
+#ifdef SCAN_DEVICE_V00
+  #define SCAN_HISTOGRAM_TOTAL_BINS                           SCAN_HISTOGRAM_TOTAL_BINS_V00
+  #define SCAN_HISTOGRAM_BIN_SIZE                             SCAN_HISTOGRAM_BIN_SIZE_V00
+  #define SCAN_HISTOGRAM_IN_TYPE                              SCAN_HISTOGRAM_IN_TYPE_V00
+#endif
 #endif  
 /*END VARIANT_00*/
 /*VARIANT_01*/
 #if SCAN_ENABLE_V01
-  /*Device*/
-#ifdef SCAN_DEVICE_V01
-  #define SCAN_HISTOGRAM_TOTAL_BINS                           (1<<4)
-  #define SCAN_HISTOGRAM_BIN_SIZE                             128
-  #define SCAN_HISTOGRAM_IN_TYPE                              1
-#endif
   /*Host and Device*/
   #define SCAN_HISTOGRAM_TOTAL_BINS_V01                       (1<<4)
-  #define SCAN_HISTOGRAM_BIN_SIZE_V01                         128
+  #define SCAN_HISTOGRAM_BIN_SIZE_V01                         HISTOGRAM_BIN_SIZE
   #define SCAN_HISTOGRAM_IN_TYPE_V01                          1
   #define SCAN_HISTOGRAM_BIN_BACKETS                          128
+  /*Device*/
+#ifdef SCAN_DEVICE_V01
+  #define SCAN_HISTOGRAM_TOTAL_BINS                           SCAN_HISTOGRAM_TOTAL_BINS_V01
+  #define SCAN_HISTOGRAM_BIN_SIZE                             SCAN_HISTOGRAM_BIN_SIZE_V01
+  #define SCAN_HISTOGRAM_IN_TYPE                              SCAN_HISTOGRAM_IN_TYPE_V01
+#endif
 #endif  
 /*END VARIANT_01*/
 /*
@@ -897,7 +932,7 @@
   #define GROUP_EVENTS_VERIFY_ENABLE                            KERNEL_VERIFY_ENABLE
   /*Debugging*/
   #define GROUP_EVENTS_DEBUG_ENABLE                             (0)&DEBUG_MASK
-  #define GROUP_EVENTS_DEBUG_BUFFER_SIZE_WORDS                  (GROUP_EVENTS_TIME_SLOTS*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT*GROUP_EVENTS_HISTOGRAM_BIN_SIZE_OUT)//(1024*128)
+  #define GROUP_EVENTS_DEBUG_BUFFER_SIZE_WORDS                  (1024*128)
   /*Error tracking and codes*/
   #define GROUP_EVENTS_ERROR_TRY_CATCH_ENABLE                   0
   #define GROUP_EVENTS_ERROR_TRACK_ENABLE                       0
@@ -908,8 +943,10 @@
   #define GROUP_EVENTS_KERNEL_NAME                              "group_events"
   #define GROUP_EVENTS_WF_SIZE_WI                               WF_SIZE_WI /*Options: 64*/
   #define GROUP_EVENTS_WG_SIZE_WF                               1
-  #define GROUP_EVENTS_WG_SIZE_WI                               (GROUP_EVENTS_WG_SIZE_WF*GROUP_EVENTS_WF_SIZE_WI)
-  #define GROUP_EVENTS_GRID_SIZE_WG                             (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS/GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG)
+  #define GROUP_EVENTS_WG_SIZE_WI                               (GROUP_EVENTS_WG_SIZE_WF*\
+                                                                GROUP_EVENTS_WF_SIZE_WI)
+  #define GROUP_EVENTS_GRID_SIZE_WG                             (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS/\
+                                                                GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG)
   /*Incoming histogram of target neurons*/
   #define GROUP_EVENTS_HISTOGRAM_BIN_BITS                       4   /*Must be aligned with GROUP_EVENTS_HISTOGRAM_BIN_MASK*/
   #define GROUP_EVENTS_HISTOGRAM_BIN_MASK                       0xF /*Must be aligned with GROUP_EVENTS_HISTOGRAM_BIN_BITS*/
@@ -922,7 +959,8 @@
   #define GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT                   0xF /*Must be aligned with GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT*/
   #define GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT                 (1<<GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT)
   #define GROUP_EVENTS_HISTOGRAM_BIN_SIZE_OUT                   (GROUP_EVENTS_GRID_SIZE_WG)
-  #define GROUP_EVENTS_HISTOGRAM_OUT_ELEMENTS_PER_WG            (GROUP_EVENTS_ELEMENTS_PER_WI*GROUP_EVENTS_WG_SIZE_WI)
+  #define GROUP_EVENTS_HISTOGRAM_OUT_ELEMENTS_PER_WG            (GROUP_EVENTS_ELEMENTS_PER_WI*\
+                                                                GROUP_EVENTS_WG_SIZE_WI)
   #define GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE                  (GROUP_EVENTS_GRID_SIZE_WG)
   /*Synaptic event buffer parameters*/
   #define GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS                   128
@@ -1251,8 +1289,6 @@
   #define UPDATE_NEURONS_SPIKED_KERNEL_NAME                       "update_spiked_neurons"
   /*WF size measured in WIs*/
   #define UPDATE_NEURONS_WF_SIZE_WI                               WF_SIZE_WI /*Options: 64*/
-  /*Scaling parameter for the grid size*/
-  #define UPDATE_NEURONS_WF_DATA_CHUNKS                           16
   /*Size of element in event pointer struct*/
   #define UPDATE_NEURONS_STRUCT_ELEMENT_SIZE                      2
   /*Event input buffer element size*/
@@ -1266,10 +1302,8 @@
   #define UPDATE_NEURONS_MODEL_PARAMETERS                         9
   /*Spike data structure parameters*/
   #define UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE                   SPIKE_DATA_BUFFER_SIZE
-  #define UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE                 2
   #define UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS               2
-  #define UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS                  (UPDATE_NEURONS_SPIKE_TOTALS_BUFFER_SIZE + \
-                                                                  UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE * \
+  #define UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS                  (UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE * \
                                                                   UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
   /*Number of constant coefficient types*/
   #define UPDATE_NEURONS_CONST_COEFFICIENTS                       4
@@ -1289,10 +1323,8 @@
   #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (UPDATE_NEURONS_TOTAL_NEURONS*1024)
   
   /*CONTROL: Source data size for unit test*/
-  #define UPDATE_NEURONS_SYNAPTIC_EVENT_BUFFERS                   128
   #if !(defined(UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE))
-  #define UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE                 (UPDATE_NEURONS_SYNAPTIC_EVENT_BUFFERS*\
-                                                                  EVENT_DATA_BUFFER_SIZE)
+  #define UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE                 (128*EVENT_DATA_BUFFER_SIZE)
   #endif
   /*Simulation parameters*/
   /*Tolerance mode: 
@@ -1348,30 +1380,17 @@
 
 */
 #if UPDATE_NEURONS_ENABLE_V00
-  /*Device*/
-#ifdef UPDATE_NEURONS_DEVICE_V00
-  /*Deliver events by placing address to events for each neuron in dedicated for it location.
-    Each neuron has such a location*/
-  #define UPDATE_NEURONS_EVENT_DELIVERY_MODE                      0
-  /*CONTROL: number of WFs in a WG*/
-  #define UPDATE_NEURONS_WG_SIZE_WF                               2
-  #define UPDATE_NEURONS_WG_SIZE_WI                               (UPDATE_NEURONS_WG_SIZE_WF*\
-                                                                  UPDATE_NEURONS_WF_SIZE_WI)
-  #define UPDATE_NEURONS_GRID_SIZE_WG                             (UPDATE_NEURONS_TOTAL_NEURONS/\
-                                                                  (UPDATE_NEURONS_ELEMENTS_PER_WI*\
-                                                                  UPDATE_NEURONS_WG_SIZE_WI*\
-                                                                  UPDATE_NEURONS_WF_DATA_CHUNKS))
-  #define UPDATE_NEURONS_STRUCT_SIZE                              (UPDATE_NEURONS_TOTAL_NEURONS*\
-                                                                  UPDATE_NEURONS_STRUCT_ELEMENT_SIZE)
-#endif
-  /*Host and Device*/
+  /*Wisible to Host and Device*/
+  /*CONTROL: number of WFs per WG*/
+  #if !(defined(UPDATE_NEURONS_WG_SIZE_WF_V00))
   #define UPDATE_NEURONS_WG_SIZE_WF_V00                           2
+  #endif
+  /*CONTROL: number of spike packets generated by kernel*/
+  #define UPDATE_NEURONS_SPIKE_PACKETS_V00                        SPIKE_PACKETS
   #define UPDATE_NEURONS_WG_SIZE_WI_V00                           (UPDATE_NEURONS_WG_SIZE_WF_V00*\
                                                                   UPDATE_NEURONS_WF_SIZE_WI)
-  #define UPDATE_NEURONS_GRID_SIZE_WG_V00                         (UPDATE_NEURONS_TOTAL_NEURONS/\
-                                                                  (UPDATE_NEURONS_ELEMENTS_PER_WI*\
-                                                                  UPDATE_NEURONS_WG_SIZE_WI_V00*\
-                                                                  UPDATE_NEURONS_WF_DATA_CHUNKS))
+  #define UPDATE_NEURONS_GRID_SIZE_WG_V00                         (UPDATE_NEURONS_SPIKE_PACKETS_V00/\
+                                                                  UPDATE_NEURONS_WG_SIZE_WF_V00)
 #if !MAKE_EVENT_PTRS_ENABLE
   #define UPDATE_NEURONS_STRUCT_SIZE_V00                          (UPDATE_NEURONS_TOTAL_NEURONS*\
                                                                   UPDATE_NEURONS_STRUCT_ELEMENT_SIZE)
@@ -1383,38 +1402,26 @@
                                                                   MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE))
 #endif
   #define UPDATE_NEURONS_STRUCTS_V00                              1
-  #define UPDATE_NEURONS_SPIKE_PACKETS_V00                        (UPDATE_NEURONS_WG_SIZE_WF_V00*\
-                                                                  UPDATE_NEURONS_GRID_SIZE_WG_V00)
-//TODO: get rid of it by implementing limit address in the kernel
-#if(UPDATE_NEURONS_TOTAL_NEURONS%(UPDATE_NEURONS_ELEMENTS_PER_WI*UPDATE_NEURONS_WG_SIZE_WI_V00*\
-   UPDATE_NEURONS_WF_DATA_CHUNKS))
-  #error(UPDATE_NEURONS_TOTAL_NEURONS must be multiple of (UPDATE_NEURONS_ELEMENTS_PER_WI*\
-    UPDATE_NEURONS_WG_SIZE_WI_V00*UPDATE_NEURONS_WF_DATA_CHUNKS))
-#endif
-#endif  /*END VARIANT_00*/
-/*
-            VARIANT_01
 
-*/
-#if UPDATE_NEURONS_ENABLE_V01
-  /*Device*/
-#ifdef UPDATE_NEURONS_DEVICE_V01
-  #define UPDATE_NEURONS_EVENT_DELIVERY_MODE                      1
-  /*CONTROL: number of WFs in a WG*/
-  #define UPDATE_NEURONS_WG_SIZE_WF                               1
-  #define UPDATE_NEURONS_GRID_SIZE_WG                             (UPDATE_NEURONS_STRUCTS/UPDATE_NEURONS_WG_SIZE_WF)
-  #define UPDATE_NEURONS_WG_SIZE_WI                               (UPDATE_NEURONS_WG_SIZE_WF*UPDATE_NEURONS_WF_SIZE_WI)
+  /*Wisible to Device*/
+#ifdef UPDATE_NEURONS_DEVICE_V00
+  #define UPDATE_NEURONS_WG_SIZE_WF                               UPDATE_NEURONS_WG_SIZE_WF_V00
+  #define UPDATE_NEURONS_WG_SIZE_WI                               UPDATE_NEURONS_WG_SIZE_WI_V00
+  #define UPDATE_NEURONS_GRID_SIZE_WG                             UPDATE_NEURONS_GRID_SIZE_WG_V00
 #endif
-  /*Host and Device*/
-  #define UPDATE_NEURONS_WG_SIZE_WF_V01                           1
-  #define UPDATE_NEURONS_GRID_SIZE_WG_V01                         (UPDATE_NEURONS_STRUCTS/UPDATE_NEURONS_WG_SIZE_WF_V01)
-  #define UPDATE_NEURONS_WG_SIZE_WI_V01                           (UPDATE_NEURONS_WG_SIZE_WF_V01*UPDATE_NEURONS_WF_SIZE_WI)
-  /*CONTROL: number of pointer structs*/
-  #define UPDATE_NEURONS_STRUCTS_V01                              (64*UPDATE_NEURONS_WG_SIZE_WF_V01)
-  /*CONTROL: max size of pointer struct. Depends on max number of unique neurons receiving events*/
-  #define UPDATE_NEURONS_STRUCT_SIZE_V01                          (1*1024*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE)
-  #undef UPDATE_NEURONS_SPIKE_PACKETS_V01
-  #define UPDATE_NEURONS_SPIKE_PACKETS_V01                        (UPDATE_NEURONS_WG_SIZE_WF_V01*UPDATE_NEURONS_GRID_SIZE_WG_V01)
+/*
+                                      Restrictions, VARIANT_00
+*/
+#if(UPDATE_NEURONS_TOTAL_NEURONS%(UPDATE_NEURONS_ELEMENTS_PER_WI*UPDATE_NEURONS_WG_SIZE_WI_V00*\
+   UPDATE_NEURONS_GRID_SIZE_WG_V00))
+  #error(UPDATE_NEURONS_TOTAL_NEURONS must be multiple of (UPDATE_NEURONS_ELEMENTS_PER_WI*\
+    UPDATE_NEURONS_WG_SIZE_WI_V00*UPDATE_NEURONS_GRID_SIZE_WG_V00))
+#endif
+#if(UPDATE_NEURONS_SPIKE_PACKETS_V00%UPDATE_NEURONS_WG_SIZE_WF_V00)
+  #error(UPDATE_NEURONS_SPIKE_PACKETS_V00 must be multiple of UPDATE_NEURONS_WG_SIZE_WF_V00)
+#endif
+
+
 #endif  /*END VARIANT_00*/
 #endif /*UPDATE_NEURONS_ENABLE*/
 /**************************************************************************************************/

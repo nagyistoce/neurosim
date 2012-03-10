@@ -34,6 +34,9 @@
       Additional notes:
       exe name="some_name" - has to be unique.
     -->
+    
+    
+    
     <exe name="1" tag="skip">
       <id>simulation_modes</id>
       <!-- Configuration -->
@@ -41,11 +44,13 @@
         <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
         <param id="TOTAL_NEURON_BITS">17</param>
         <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
-        <param id="SPIKE_DATA_BUFFER_SIZE">127</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">128</param>
         <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
         <param id="SPIKE_PACKETS">(2*64)</param>
-        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">1</param>
         <param id="TOLERANCE_MODE">0</param>
+        <param id="HISTOGRAM_BIN_SIZE">(2*64)</param>
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">2</param>
       </config>
       <!-- Execution flow -->
       <flow>
@@ -105,7 +110,11 @@
         </node>
       </flow>
     </exe>
+    
+    
     <!--  -->
+    
+    
     <exe name="2" tag="skip">
       <id>Snapshot</id>
       <!-- Configuration -->
@@ -113,11 +122,13 @@
         <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
         <param id="TOTAL_NEURON_BITS">17</param>
         <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
-        <param id="SPIKE_DATA_BUFFER_SIZE">127</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">128</param>
         <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
         <param id="SPIKE_PACKETS">(2*64)</param>
-        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">1</param>
         <param id="TOLERANCE_MODE">0</param>
+        <param id="HISTOGRAM_BIN_SIZE">(2*64)</param>
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">2</param>
       </config>
       <!-- Execution flow -->
       <flow>
@@ -138,7 +149,11 @@
         </node>
       </flow>
     </exe>
+    
+    
     <!--  -->
+    
+    
     <exe name="3" tag="noskip">
       <id>quick_validation</id>
       <!-- Configuration -->
@@ -146,11 +161,13 @@
         <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
         <param id="TOTAL_NEURON_BITS">17</param>
         <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
-        <param id="SPIKE_DATA_BUFFER_SIZE">127</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">128</param>
         <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
         <param id="SPIKE_PACKETS">(2*64)</param>
-        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">1</param>
         <param id="TOLERANCE_MODE">0</param>
+        <param id="HISTOGRAM_BIN_SIZE">(2*64)</param>
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">2</param>
       </config>
       <!-- Execution flow -->
       <flow>
@@ -179,55 +196,156 @@
         </node>
       </flow>
     </exe>
+    
+    
     <!--  -->
+    
+    
     <exe name="4" tag="skip">
       <id>Debug</id>
       <!-- Configuration -->
       <config>
+        <param id="ENABLE_MASK">oct("0b1100000010000000")</param>
+        <param id="SIMULATION_MODE">0</param>
+        <param id="SIMULATION_TIME_STEPS">(16*2+1)</param>
+        <param id="PREINITIALIZE_NETWORK_STATE">0</param>
         <param id="TOTAL_NEURON_BITS">17</param>
         <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
-        <param id="SPIKE_DATA_BUFFER_SIZE">127</param>
+        <param id="TOLERANCE_MODE">0</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">128</param>
+        <param id="SPIKE_PACKETS">(4*64)</param>
+        <param id="HISTOGRAM_BIN_SIZE">(2*64)</param>
         <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">2</param>
+        <param id="UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE">(2**20)</param>
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">2</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Debug</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Debug">
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    
+    
+    <!--  -->
+    
+    
+    <exe name="5" tag="skip">
+      <id>EXPAND_EVENTS</id>
+      <!-- Configuration -->
+      <config>
+        <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">128</param>
         <param id="SPIKE_PACKETS">(2*64)</param>
-        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+        <param id="TOLERANCE_MODE">0</param>
+        <param id="ENABLE_MASK">oct("0b1000000000000000")</param>
+        <param id="TOTAL_NEURON_BITS">16</param>
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">1</param>
+        <param id="EXPAND_EVENTS_SPIKE_PACKETS_PER_WF">4</param>
+        <param id="MAX_SYNAPSES_PER_NEURON">(16*64)</param>
+        <param id="SIMULATION_MODE">0</param>
+        <param id="SIMULATION_TIME_STEPS">(16*2+1)</param>
+        <param id="PREINITIALIZE_NETWORK_STATE">0</param>
+        <param id="EVENT_DATA_BUFFER_SIZE">(256*1024)</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">EXPAND_EVENTS</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="EXPAND_EVENTS">
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    
+    
+    <!--  -->
+    
+    
+    <exe name="6" tag="skip">
+      <id>MAKE_EVENT_PTRS</id>
+      <!-- Configuration -->
+      <config>
+        <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">128</param>
+        <param id="SPIKE_PACKETS">(2*64)</param>
         <param id="TOLERANCE_MODE">0</param>
       </config>
       <!-- Execution flow -->
       <flow>
         <!-- Start node is alwasy the first -->
         <node name="Start">
-          <result id="PASS">ALL</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="ALL">
-          <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
-          <param id="SIMULATION_MODE">0</param>
-          <param id="SIMULATION_TIME_STEPS">(16*4+1)</param>
-          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-          <result id="PASS">Exit</result>
+          <result id="PASS">MAKE_EVENT_PTRS</result>
           <result id="FAIL">Exit</result>
         </node>
         <node name="MAKE_EVENT_PTRS">
           <param id="ENABLE_MASK">oct("0b0000000100000000")</param>
+          <param id="TOTAL_NEURON_BITS">17</param>
+          <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+          <param id="EXPAND_EVENTS_SPIKE_PACKETS_PER_WF">1</param>
+          <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
           <param id="SIMULATION_MODE">0</param>
           <param id="SIMULATION_TIME_STEPS">(16*2+1)</param>
           <param id="PREINITIALIZE_NETWORK_STATE">0</param>
           <param id="MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE">(2**24)</param>
-          <result id="PASS">Exit</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="UPDATE_NEURONS">
-          <param id="ENABLE_MASK">oct("0b0000000010000000")</param>
-          <param id="SIMULATION_MODE">0</param>
-          <param id="SIMULATION_TIME_STEPS">(16*2+1)</param>
-          <param id="PREINITIALIZE_NETWORK_STATE">0</param>
-          <param id="UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE">(2**20)</param>
+          <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
           <result id="PASS">Exit</result>
           <result id="FAIL">Exit</result>
         </node>
       </flow>
     </exe>
+    
+    
     <!--  -->
+    
+    
+    <exe name="7" tag="skip">
+      <id>UPDATE_NEURONS</id>
+      <!-- Configuration -->
+      <config>
+        <param id="ENABLE_MASK">oct("0b0000000010000000")</param>
+        <param id="SIMULATION_MODE">0</param>
+        <param id="SIMULATION_TIME_STEPS">(16*2+1)</param>
+        <param id="PREINITIALIZE_NETWORK_STATE">0</param>
+        <param id="TOTAL_NEURON_BITS">17</param>
+        <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
+        <param id="TOLERANCE_MODE">0</param>
+        <param id="SPIKE_DATA_BUFFER_SIZE">128</param>
+        <param id="SPIKE_PACKETS">(4*64)</param>
+        <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">4</param>
+        <param id="UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE">(2**20)</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">UPDATE_NEURONS</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="UPDATE_NEURONS">
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    
+    
+    <!--  -->
+    
+    
   </specific_config>
   
   <report_config>
