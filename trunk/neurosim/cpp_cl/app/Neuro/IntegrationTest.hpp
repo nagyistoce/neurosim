@@ -216,6 +216,11 @@ class IntegrationTest : public SDKSample
     cl_uint dataSpikePacketsSizeBytes;
     cl_uint* dataSpikePackets;
     cl::Buffer dataSpikePacketsBuffer;
+    
+    cl_uint dataSpikePacketCountsSize;
+    cl_uint dataSpikePacketCountsSizeBytes;
+    cl_uint* dataSpikePacketCounts;
+    cl::Buffer dataSpikePacketCountsBuffer;
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
@@ -490,6 +495,7 @@ public:
 /* *** */
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
         dataSpikePackets(NULL),
+        dataSpikePacketCounts(NULL),
 #endif
 /* *** */
 #if EXPAND_EVENTS_ENABLE
@@ -669,6 +675,7 @@ public:
 /* *** */
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
         dataSpikePackets(NULL),
+        dataSpikePacketCounts(NULL),
 #endif
 /* *** */
 #if EXPAND_EVENTS_ENABLE
@@ -1211,9 +1218,11 @@ public:
       unsigned int  *synapseTargets,
       DATA_TYPE     *synapseDelays,
       DATA_TYPE     *synapseWeights,
+      unsigned int  *spikePacketCounts,
       unsigned int  *spikePackets,
       DATA_TYPE     *modelVariables,
-      unsigned int  *dataSpikePackets
+      unsigned int  *dataSpikePackets,
+      unsigned int  *dataSpikePacketCounts
     );
     
     int 
@@ -1257,6 +1266,7 @@ public:
       cl_uint   *dataMakeEventPtrsStruct,
       cl_uint   *dataGroupEventsTik,
       cl_uint   *dataSpikePackets,
+      cl_uint   *dataSpikePacketCounts,
       cl_float  *modelVariables
     );
 #endif

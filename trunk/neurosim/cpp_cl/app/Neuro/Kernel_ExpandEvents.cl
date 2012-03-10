@@ -10,13 +10,13 @@
   GM.
   
   TODO:
+  - Scalability: more than 1 spike packet per WF
+    - Have a separate data structure for spike counts
+    - Load spike counts, then load spikes into local
+    - WF-iterate over spikes, load synaptic data, calculate arrival time etc
   - Could benefit from replacing atomics with primitives like scan, sort etc
-  - Reduce synaptic data by tighter alignment of synapse blocks
-  - Redesign payload flow: no need to carry weight and delay all a way throug sort.
-  - More than 1 spike packet per WG.
+  - Redesign payload: only relocate arrival time and reference to synaptic structure.
   - Just-in-time delivery of events instead of circular buffer of time slots -> GM size reduction.
-
-
 */
 
 
@@ -34,6 +34,7 @@ void expand_events
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
   __global      uint          *gm_target_neuron_histogram,
 #endif
+  __global      uint          *gm_spike_counts,
   __global      uint          *gm_spikes,
   __global      uint          *gm_event_counts,
   __global      uint          *gm_event_targets,
@@ -45,29 +46,39 @@ void expand_events
   __global      uint          *gm_synapse_pointer,
                 uint          step
 ){
-  uint wi_id = get_local_id(0);
-  uint wg_id = get_group_id(0);
-  
-  __local uint lmSpikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + 2*EXPAND_EVENTS_WG_SIZE_WF];
+  uint wi_id            = get_local_id(0);
+  uint wg_id            = get_group_id(0);
+  uint global_wf_id     = (wg_id*EXPAND_EVENTS_WG_SIZE_WF + wi_id/EXPAND_EVENTS_WF_SIZE_WI);
+  uint local_wf_id      = (wi_id/EXPAND_EVENTS_WF_SIZE_WI);
+  uint wi_id_wf_scope   = (wi_id%EXPAND_EVENTS_WF_SIZE_WI);
+
+  /*TODO: combine/reuse local memory where possible to reduce its total size.*/
+  __local uint lmSpikeCounts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF + 1 + 
+    EXPAND_EVENTS_WG_SIZE_WF];
+  /*TODO: this easts up too much memory, need to optimize (buffered on demand loads).*/
+  __local uint lmSpikes[2*EXPAND_EVENTS_WG_SIZE_WF + EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS*
+    EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF];
   __local uint lmTimeSlotCounters[EXPAND_EVENTS_TIME_SLOTS];
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
   __local uint lmTargetNeuronHistogram[EXPAND_EVENTS_TIME_SLOTS*EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS];
 #endif
 
-  /*Load a batch of spike events produced in update phase*/
-#if EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS > EXPAND_EVENTS_WG_SIZE_WI
+  /*WF: independently load its spike counts*/
+#if EXPAND_EVENTS_SPIKE_PACKETS_PER_WF > EXPAND_EVENTS_WF_SIZE_WI
   for
   (
-    uint i = wi_id; 
-    i < EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS;
-    i += EXPAND_EVENTS_WG_SIZE_WI
+    uint i = wi_id_wf_scope; 
+    i < EXPAND_EVENTS_SPIKE_PACKETS_PER_WF;
+    i += EXPAND_EVENTS_WF_SIZE_WI
   ){
-    lmSpikes[i] = gm_spikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS * wg_id + i];
+    lmSpikeCounts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*local_wf_id + i] = 
+      gm_spike_counts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*global_wf_id + i];
   }
 #else
-  if(wi_id < EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS)
+  if(wi_id_wf_scope < EXPAND_EVENTS_SPIKE_PACKETS_PER_WF)
   {
-    lmSpikes[wi_id] = gm_spikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS * wg_id + wi_id];
+    lmSpikeCounts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*local_wf_id + wi_id_wf_scope] = 
+      gm_spike_counts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*global_wf_id + wi_id_wf_scope];
   }
 #endif
 
@@ -131,30 +142,76 @@ void expand_events
 #endif
 #endif
 
-  uint  tgt_wf_id = wi_id/EXPAND_EVENTS_WF_SIZE_WI;
-  uint  tgt_inwrp_id = wi_id%EXPAND_EVENTS_WF_SIZE_WI;
-  
+  if(wi_id == 0)
+  {
+    lmSpikeCounts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF] = 0;
+  }
+  /*TODO: this barrier here is only because lmSpikeCounts init to 0 above. Can it be replaced with
+    mem_fence without if(wi_id == 0) above?*/
   barrier(CLK_LOCAL_MEM_FENCE);
-  uint  total_spikes =  lmSpikes[0];
+
+  /*WF: independently load a batch of spike events produced in update phase*/
+  /*TODO: this has to be done on a fly, integrated with the next loop. Optimize for 1 WF per WG*/
+  for
+  (
+    uint i = 0; 
+    i < EXPAND_EVENTS_SPIKE_PACKETS_PER_WF;
+    i++
+  ){
+    uint spikeCount = lmSpikeCounts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*local_wf_id + i];
+
+    /*First WI in a WF computes and broadcasts ptr*/
+    if(wi_id_wf_scope == 0)
+    {
+      lmSpikeCounts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF + 1 + local_wf_id] = 
+        atomic_add(&lmSpikeCounts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF], 
+        spikeCount);
+    }
+    uint spikePtr = 
+      lmSpikeCounts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF + 1 + local_wf_id];
+
+#if EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS > EXPAND_EVENTS_WF_SIZE_WI
+    for
+    (
+      uint j = wi_id_wf_scope; 
+      j < spikeCount*EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS;
+      j += EXPAND_EVENTS_WF_SIZE_WI
+    ){
+      lmSpikes[2*EXPAND_EVENTS_WG_SIZE_WF + spikePtr*EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS + j] = 
+        gm_spikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS*EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*
+        global_wf_id + i*EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + j];
+    }
+#else
+    if(wi_id_wf_scope < spikeCount*EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS)
+    {
+      lmSpikes[2*EXPAND_EVENTS_WG_SIZE_WF + spikePtr*EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS + 
+        wi_id_wf_scope] = gm_spikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS*
+        EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*global_wf_id + i*EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + 
+        wi_id_wf_scope];
+    }
+#endif
+  }
+
+  barrier(CLK_LOCAL_MEM_FENCE);
+  uint  totalSpikes = lmSpikeCounts[EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF];
 
   /*Each WF picks a spike*/
-  for(uint j = tgt_wf_id; j < total_spikes; j += EXPAND_EVENTS_WG_SIZE_WF)
+  /*TODO: instead of predetermined do first come first served using an atimic -> better balancing*/
+  for(uint j = local_wf_id; j < totalSpikes; j += EXPAND_EVENTS_WG_SIZE_WF)
   {
-    uint  spiked_nrn = lmSpikes[EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + 
-      EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * j];
+    uint  spiked_nrn = lmSpikes[2*EXPAND_EVENTS_WG_SIZE_WF + 
+    EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS*j];
 
     /*Get synapse pointer and synapse count*/
-    if(tgt_inwrp_id < 2)
+    if(wi_id_wf_scope < 2)
     {
-      lmSpikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + 2*tgt_wf_id + tgt_inwrp_id] = 
-        gm_synapse_pointer[spiked_nrn + tgt_inwrp_id];
+      lmSpikes[2*local_wf_id + wi_id_wf_scope] = gm_synapse_pointer[spiked_nrn + wi_id_wf_scope];
     }
-    uint  synapsePointer = lmSpikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + 2*tgt_wf_id];
-    uint  tgt_max_cnt = lmSpikes[EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS + 2*tgt_wf_id + 1] - 
-      synapsePointer;
+    uint  synapsePointer = lmSpikes[2*local_wf_id];
+    uint  tgt_max_cnt = lmSpikes[2*local_wf_id + 1] - synapsePointer;
 
     /*Each WF retrieves all targets of the source nrn: */
-    for(uint tgt = tgt_inwrp_id; tgt < tgt_max_cnt; tgt += EXPAND_EVENTS_WF_SIZE_WI)
+    for(uint tgt = wi_id_wf_scope; tgt < tgt_max_cnt; tgt += EXPAND_EVENTS_WF_SIZE_WI)
     {
       /*Get synapse data*/
       uint synapseOffset  = (synapsePointer + tgt);
@@ -162,7 +219,7 @@ void expand_events
       uint weight         = gm_synapse_weights[synapseOffset];
       DATA_TYPE delay     = gm_synapse_delays[synapseOffset];
 
-      DATA_TYPE spike_time = as_float(lmSpikes[EXPAND_EVENTS_SPIKE_TOTALS_BUFFER_SIZE + 
+      DATA_TYPE spike_time = as_float(lmSpikes[2*EXPAND_EVENTS_WG_SIZE_WF + 
         EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * j + 1]);
 
       /*Add delay to spike time, account for time step transition by decrementing 
