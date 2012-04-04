@@ -6,6 +6,19 @@
     structures.
   - review buffer flags fore read/write operations
   
+  
+  code snippets:
+  
+  for(cl_uint i = 0; i < EXPAND_EVENTS_GRID_SIZE_WG*EXPAND_EVENTS_WG_SIZE_WF; i++)
+  {
+    std::stringstream ss;
+    for(cl_uint j = 0; j < EXPAND_EVENTS_WF_SIZE_WI; j++)
+    {
+      ss << dataExpandEventsDebugDevice[i*EXPAND_EVENTS_WF_SIZE_WI + j] << ",";
+    }
+    LOG(ss.str(), 0)
+  }
+  
   =============================================================================================== */
 
 
@@ -144,7 +157,8 @@ IntegrationTest::allocateHostData()
   {
 #if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
   size = 
-    EXPAND_EVENTS_TIME_SLOTS*(EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG + 1);
+    EXPAND_EVENTS_TIME_SLOTS*(EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*
+      EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS + 1);
 #endif
 #if SCAN_ENABLE_V00
   size = 
@@ -166,8 +180,8 @@ IntegrationTest::allocateHostData()
 #if (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
   #error (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
 #endif
-#if (EXPAND_EVENTS_GRID_SIZE_WG != SCAN_HISTOGRAM_BIN_SIZE_V00)
-  #error (EXPAND_EVENTS_GRID_SIZE_WG != SCAN_HISTOGRAM_BIN_SIZE_V00)
+#if (EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS != SCAN_HISTOGRAM_BIN_SIZE_V00)
+  #error (EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS != SCAN_HISTOGRAM_BIN_SIZE_V00)
 #endif
 #endif
 #if (SCAN_ENABLE_V00 && GROUP_EVENTS_ENABLE_V00)
@@ -352,7 +366,7 @@ IntegrationTest::allocateHostData()
   for(cl_uint i = 1; i < EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE; i++)
   {
     dataSynapsePointer[i] = dataSynapsePointer[i-1] + 
-      cl_uint(((double)EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE)*((1.0-SYNAPSE_DEVIATION_RATIO)+
+      cl_uint(((double)MAX_SYNAPSES_PER_NEURON)*((1.0-SYNAPSE_DEVIATION_RATIO)+
       abs((SYNAPSE_DEVIATION_RATIO*((double)rand()/((double)RAND_MAX))))));
   }
 
@@ -509,7 +523,8 @@ int
 IntegrationTest::initializeSpikeData
 (
   double spikeBufferMinPercentFill,
-  double spikeBufferMaxPercentFill
+  double spikeBufferMaxPercentFill,
+  double spikeNeuronsPermil
 )
 /**************************************************************************************************/
 {
@@ -521,6 +536,25 @@ IntegrationTest::initializeSpikeData
   LOG("initializeSpikeData: set srand seed to " << srandSeed, 0);
   
   cl_uint neuronsPerPacket = EXPAND_EVENTS_TOTAL_NEURONS/EXPAND_EVENTS_SPIKE_PACKETS;
+  cl_uint maxSpikesPerPacket = neuronsPerPacket;
+  double targetPacketSpikes = 0;
+  cl_uint totalNetworkSpikes = 0;
+  
+  if(spikeNeuronsPermil != NULL)
+  {
+    maxSpikesPerPacket = cl_uint(ceil(1.5*(double)maxSpikesPerPacket*(spikeNeuronsPermil/1000)));
+    targetPacketSpikes = (double)neuronsPerPacket*(spikeNeuronsPermil/1000);
+    if(maxSpikesPerPacket < 1){maxSpikesPerPacket = 1;}
+    
+    if(maxSpikesPerPacket > EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE)
+    {
+      std::cerr << "ERROR, initializeSpikeData: can't fit spikes within " << 
+        EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE << " boundary" << std::endl;
+      return SDK_FAILURE;
+    }
+  }
+
+  LOG("initializeSpikeData: max spikes per packet is " << maxSpikesPerPacket, 0);
   
   /* init spike data */
   for(cl_uint packet = 0; packet < EXPAND_EVENTS_SPIKE_PACKETS; packet++)
@@ -528,10 +562,39 @@ IntegrationTest::initializeSpikeData
     cl_uint packet_index = packet * EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS;
     
     int totalSpikes = EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE;
-    GET_RANDOM_INT(totalSpikes, EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE, 
-      spikeBufferMinPercentFill, spikeBufferMaxPercentFill);
-    if(totalSpikes == -1){return SDK_FAILURE;}
-
+    
+    if(spikeNeuronsPermil != NULL)
+    {
+      GET_RANDOM_INT(totalSpikes, maxSpikesPerPacket, 
+        spikeBufferMinPercentFill, spikeBufferMaxPercentFill);
+        
+      /* correct spikes if not achieving the target */
+      int spikeDifference =  int(targetPacketSpikes*packet - (double)totalNetworkSpikes);
+      
+      if(spikeDifference < 0)
+      {
+        totalSpikes = 0;
+      }
+      else if(spikeDifference > 0)
+      {
+        totalSpikes = ((cl_uint)spikeDifference < maxSpikesPerPacket)? 
+          spikeDifference : maxSpikesPerPacket;
+      }
+    }
+    else
+    {
+      GET_RANDOM_INT(totalSpikes, EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE, 
+        spikeBufferMinPercentFill, spikeBufferMaxPercentFill);
+    }
+    
+    totalNetworkSpikes += totalSpikes;
+    
+    if(totalSpikes == -1)
+    {
+      std::cerr << "ERROR, initializeSpikeData: not able to initialize spikes" << std::endl;
+      return SDK_FAILURE;
+    }
+    
     dataSpikePacketCounts[packet] = totalSpikes;
     if(totalSpikes <= 0){continue;}
     
@@ -577,6 +640,9 @@ IntegrationTest::initializeSpikeData
       }
     }
   }
+  
+  LOG("initializeSpikeData: total spikes in the network " << totalNetworkSpikes, 0);
+  
   return SDK_SUCCESS;
 #else
   std::cerr << "ERROR, initializeSpikeData: (EXPAND_EVENTS_ENABLE is not true)" 
@@ -594,6 +660,12 @@ IntegrationTest::initializeExpandEventsData()
 {
 #if EXPAND_EVENTS_ENABLE
   int result = SDK_SUCCESS;
+  unsigned long long gabaSynapseCount = 0;
+  unsigned long long ampaSynapseCount = 0;
+  double gabaRatio = SYNAPSE_GABA_PERCENT;
+  double averageSynapsePerNeuron = 0;
+  cl_uint maxSynapsePerNeuron = 0;
+  cl_uint minSynapsePerNeuron = 0xFFFFFFFF;
   
   memset(dataUnsortedEventCounts, 0, dataUnsortedEventCountsSizeBytes);
   memset(dataUnsortedEventTargets, 0, dataUnsortedEventTargetsSizeBytes);
@@ -610,12 +682,16 @@ IntegrationTest::initializeExpandEventsData()
   LOG("initializeExpandEventsData: set srand seed to " << srandSeed, 0);
   
   /*init synaptic data*/
-  double gabaRatio = 1.0;
   for(cl_uint i = 0; i < EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE-1; i++)
   {
     cl_uint ptrStart = dataSynapsePointer[i];
     cl_uint ptrEnd = dataSynapsePointer[i+1];
     cl_uint synapseCount = ptrEnd - ptrStart;
+    
+    maxSynapsePerNeuron = max(maxSynapsePerNeuron,synapseCount);
+    minSynapsePerNeuron = min(minSynapsePerNeuron,synapseCount);
+    averageSynapsePerNeuron = averageSynapsePerNeuron + 
+      (synapseCount - averageSynapsePerNeuron)/(i+1);
 
     /*Initialize synaptic structure*/
     for(cl_uint j = 0; j < synapseCount; j++)
@@ -651,6 +727,11 @@ IntegrationTest::initializeExpandEventsData()
       if(weightType < gabaRatio)
       {
         weight = -67.0f/1.4f;
+        gabaSynapseCount++;
+      }
+      else
+      {
+        ampaSynapseCount++;
       }
       dataSynapseWeights[offset] = cl_float(weight*((double)rand()/((double)RAND_MAX)));
       
@@ -659,6 +740,13 @@ IntegrationTest::initializeExpandEventsData()
         abs((EXPAND_EVENTS_MAX_DELAY-EXPAND_EVENTS_MIN_DELAY)*((double)rand()/((double)RAND_MAX))));
     }
   }
+
+  LOG("Gaba Synapse Count:" << gabaSynapseCount, 1);
+  LOG("Ampa Synapse Count:" << ampaSynapseCount, 1);
+  LOG("Total Synapse Count:" << (ampaSynapseCount+gabaSynapseCount), 1);
+  LOG("Max Synapses/Neuron:" << maxSynapsePerNeuron, 1);
+  LOG("Min Synapses/Neuron:" << minSynapsePerNeuron, 1);
+  LOG("Average Synapses/Neuron:" << averageSynapsePerNeuron, 1);
 
   return result;
 #else
@@ -691,7 +779,8 @@ IntegrationTest::initializeDataForKernelScanHistogramV00(cl_uint timeSlot, cl_ui
       }
       else
       {
-        element = cl_uint(abs(SCAN_HISTOGRAM_MAX_COUNT*((double)rand()/((double)RAND_MAX))));
+        element = 
+          cl_uint(abs(SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V00*((double)rand()/((double)RAND_MAX))));
         dataHistogram[offset + k] = element;
       }
 
@@ -741,7 +830,8 @@ IntegrationTest::initializeDataForKernelGroupEventsV00
   memset(dataErrorGroupEvents, 0, dataErrorGroupEventsSizeBytes);
 #endif
 #if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
-  memset(dataHistogramGroupEventsTik, 0, dataHistogramGroupEventsTikSizeBytes);
+  /*Set it with non-zero since kernel should zero it out*/
+  memset(dataHistogramGroupEventsTik, 0xF, dataHistogramGroupEventsTikSizeBytes);
 #endif
   memset(dataUnsortedEventCounts, 0, dataUnsortedEventCountsSizeBytes);
   memset(dataUnsortedEventTargets, 0, dataUnsortedEventTargetsSizeBytes);
@@ -818,19 +908,37 @@ IntegrationTest::initializeEventBuffers
 )
 /**************************************************************************************************/
 {
+  SET_RANDOM_SEED(srandSeed);
+  LOG("initializeEventBuffers: set srand seed to " << srandSeed, 0);
+  
+  std::stringstream ss;
+
   /*Initialize syn events and neuron counters*/
   for(cl_uint s = 0; s < timeSlots; s++)
   {
+    cl_uint timeSlotTotal = 0;
+    
     for(cl_uint b = 0; b < buffers; b++)
     {
-      cl_uint event_total = cl_uint(unsortedEventTimeSlotDelta*
-        (timeSlots - s - 1)*(1 - percentTimeSlotDeltaDeviation/100.0) +
-        abs(unsortedEventTimeSlotDelta*(timeSlots - s - 1)*
-        (2*percentTimeSlotDeltaDeviation/100.0)*(double)rand()/((double)RAND_MAX)));
+      cl_uint event_total = bufferSize;
+      
+      if(unsortedEventTimeSlotDelta != NULL)
+      {
+        event_total = cl_uint(unsortedEventTimeSlotDelta*
+          (timeSlots - s - 1)*(1 - percentTimeSlotDeltaDeviation/100.0) +
+          abs(unsortedEventTimeSlotDelta*(timeSlots - s - 1)*
+          (percentTimeSlotDeltaDeviation/100.0)*(double)rand()/((double)RAND_MAX)));
+      }
+      else
+      {
+        event_total = cl_uint(bufferSize*(1 - percentTimeSlotDeltaDeviation/100.0) +
+          abs(bufferSize*(percentTimeSlotDeltaDeviation/100.0)*(double)rand()/((double)RAND_MAX)));
+      }
       
       if(event_total >= bufferSize){event_total = bufferSize;}
 
       dataUnsortedEventCounts[timeSlots*b + s] = event_total;
+      timeSlotTotal += event_total;
       
       cl_uint count_inhibitory = cl_uint(event_total*(percentInh/100.0));
       
@@ -888,7 +996,11 @@ IntegrationTest::initializeEventBuffers
         dataHistogram[offset]++;
       }
     }
+    
+    ss << s << "(" << timeSlotTotal << "), ";
   }
+  
+  LOG("initializeEventBuffers: allocation of events to time slots " << ss.str(), 0);
 
   return SDK_SUCCESS;
 }
@@ -991,7 +1103,7 @@ IntegrationTest::initializeDataForKernelScanHistogramV01()
           b*SCAN_HISTOGRAM_BIN_SIZE_V01;
           
         dataHistogramGroupEventsTik[p] = 
-          cl_uint(abs(SCAN_HISTOGRAM_MAX_COUNT*((double)rand()/((double)RAND_MAX))));
+          cl_uint(abs(SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V01*((double)rand()/((double)RAND_MAX))));
       }
     }
   }
@@ -1020,6 +1132,7 @@ IntegrationTest::initializeUnsortedEvents
   cl_uint histogramBitShift,
   cl_uint keyOffset,
   cl_float percentInhibitory,
+  double   percentBufferSizeDeviation,
   cl_uint *dataUnsortedEventCounts,
   cl_uint *dataUnsortedEventTargets,
   cl_uint *dataUnsortedEventDelays,
@@ -1029,8 +1142,10 @@ IntegrationTest::initializeUnsortedEvents
   /*Initialize syn events and neuron counters*/
   for(cl_uint b = 0; b < totalBuffers; b++)
   {
-    cl_uint event_total = cl_uint(abs(bufferSize*
-      (double)rand()/((double)RAND_MAX)));
+    cl_uint event_total = cl_uint(bufferSize*(1 - percentBufferSizeDeviation/100.0) +
+        abs(bufferSize*(percentBufferSizeDeviation/100.0)*(double)rand()/((double)RAND_MAX)));
+
+    if(event_total >= bufferSize){event_total = bufferSize;}
 
     dataUnsortedEventCounts[b] = event_total;
     
@@ -1246,9 +1361,14 @@ IntegrationTest::initializeGrouppedEvents
 
 
 int 
-IntegrationTest::initializeDataForKernelGroupEventsV01(int step, cl_uint keyOffset)
+IntegrationTest::initializeDataForKernelGroupEventsV01
 /**************************************************************************************************/
-{
+(
+  int step, 
+  cl_uint keyOffset,
+  double percentBufferSizeDeviation
+){
+
   int result = SDK_SUCCESS;
 
 #if GROUP_EVENTS_ENABLE_V01
@@ -1270,7 +1390,8 @@ IntegrationTest::initializeDataForKernelGroupEventsV01(int step, cl_uint keyOffs
   memset(dataDebugDeviceGroupEvents, 0, dataDebugDeviceGroupEventsSizeBytes);
 #endif
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  memset(dataErrorGroupEvents, 0, dataErrorGroupEventsSizeBytes);
+  /*Set it with non-zero since kernel should zero it out*/
+  memset(dataErrorGroupEvents, 0xF, dataErrorGroupEventsSizeBytes);
 #endif
 #if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
   memset(dataHistogramGroupEventsTik, 0, dataHistogramGroupEventsTikSizeBytes);
@@ -1305,6 +1426,7 @@ IntegrationTest::initializeDataForKernelGroupEventsV01(int step, cl_uint keyOffs
     shiftFirstStage,
     keyOffset,
     10.0f,
+    percentBufferSizeDeviation,
     dataUnsortedEventCountsTemp,
     dataUnsortedEventTargetsTemp,
     dataUnsortedEventDelaysTemp,
@@ -1414,12 +1536,12 @@ IntegrationTest::initializeDataForKernelGroupEventsV01(int step, cl_uint keyOffs
 
 int 
 IntegrationTest::initializeDataForKernelGroupEventsV02_V03
+/**************************************************************************************************/
 (
   cl_uint step, 
-  cl_uint keyOffset
-)
-/**************************************************************************************************/
-{
+  cl_uint keyOffset,
+  double percentBufferSizeDeviation
+){
   int result = SDK_SUCCESS;
 
 #if GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
@@ -1469,6 +1591,7 @@ IntegrationTest::initializeDataForKernelGroupEventsV02_V03
     shiftFirstStage,
     keyOffset,
     10.0f,
+    percentBufferSizeDeviation,
     dataUnsortedEventCounts,
     dataUnsortedEventTargets,
     dataUnsortedEventDelays,
@@ -1769,7 +1892,7 @@ IntegrationTest::initializeDataForKernelMakeEventPtrs
   else if(mode == 1)
   {
     maxNeuronId = (MAKE_EVENT_PTRS_TOTAL_NEURONS-1);
-    eventsPerNeuronDeviation = 30.0;
+    eventsPerNeuronDeviation = 20.0;
     totalEvents = MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE;
   }
 
@@ -1918,7 +2041,7 @@ int
 IntegrationTest::psInit
 (
   cl_uint     totalNeurons,
-  cl_uint     injectCurrentUntilStep,
+  int         injectCurrentUntilStep,
   const char  *neuronVariablesSampleFile
 )
 /**************************************************************************************************/
@@ -2096,7 +2219,7 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
   bool          resetEvents,
   bool          resetParameters,
   bool          resetVariables,
-  cl_uint       step,
+  double        gabaRatio,
   const char    *neuronVariablesSampleFile
 )
 /**************************************************************************************************/
@@ -2120,7 +2243,6 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
   if(resetEvents)
   {
     memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
-    double gabaRatio = 5.0*(!(step%3));
     result = initializeSortedEvents
     (
       2,
@@ -2230,20 +2352,9 @@ IntegrationTest::registerLocalMemory()
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
   {
-  cl_uint lmSpikes = sizeof(cl_uint)*EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS; 
-  lmSpikesSizeBytes = lmSpikes;
-  REGISTER_MEMORY(EXPAND_EVENTS_KERNEL_NAME, MEM_LOCAL, lmSpikes);
-  
-  cl_uint lmTimeSlotCounters = sizeof(cl_uint)*EXPAND_EVENTS_TIME_SLOTS; 
-  lmTimeSlotCountersSizeBytes = lmTimeSlotCounters;
-  REGISTER_MEMORY(EXPAND_EVENTS_KERNEL_NAME, MEM_LOCAL, lmTimeSlotCounters);
-  
-#if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
-  cl_uint lmTargetNeuronHistogram = sizeof(cl_uint)*(EXPAND_EVENTS_TIME_SLOTS*
-    EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS);
-  lmTargetNeuronHistogramSizeBytes = lmTargetNeuronHistogram;
-  REGISTER_MEMORY(EXPAND_EVENTS_KERNEL_NAME, MEM_LOCAL, lmTargetNeuronHistogram);
-#endif
+  cl_uint lmExpandEvents = sizeof(cl_uint)*EXPAND_EVENTS_CACHE_SIZE_WORDS; 
+  lmExpandEventsSizeBytes = lmExpandEvents;
+  REGISTER_MEMORY(EXPAND_EVENTS_KERNEL_NAME, MEM_LOCAL, lmExpandEvents);
   }
 #endif
 /**************************************************************************************************/
@@ -2258,19 +2369,15 @@ IntegrationTest::registerLocalMemory()
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03
   {
-  cl_uint lmSortData = sizeof(cl_uint)*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI+16); 
-  lmSortDataSizeBytes = lmSortData;
-  REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmSortData);
+  cl_uint lmCacheGroupEvents = sizeof(cl_uint)*(GROUP_EVENTS_CACHE_SIZE_WORDS); 
+  lmCacheGroupEventsSizeBytes = lmCacheGroupEvents;
+  REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmCacheGroupEvents);
 
   cl_uint lmlocalHistogramReference = sizeof(cl_uint)*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS; 
   lmlocalHistogramReferenceSizeBytes = lmlocalHistogramReference;
   REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmlocalHistogramReference);
-  
-  cl_uint lmlocalHistogramScratchPad = sizeof(cl_uint)*(GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2); 
-  lmlocalHistogramScratchPadSizeBytes = lmlocalHistogramScratchPad;
-  REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmlocalHistogramScratchPad);
-  
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
+
+#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT && GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT)
   cl_uint lmGroupEventsHistogramOut = sizeof(cl_uint)*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT);
   lmGroupEventsHistogramOutSizeBytes = lmGroupEventsHistogramOut;
@@ -3478,7 +3585,7 @@ IntegrationTest::runCLKernels()
     }
 #if PREINITIALIZE_NETWORK_STATE
     if(initializeSpikeData(PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT, 
-      PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT) != SDK_SUCCESS)
+      PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT, NULL) != SDK_SUCCESS)
 #else
     if(initializeSpikeData(EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT) != SDK_SUCCESS)
 #endif
@@ -3990,7 +4097,7 @@ IntegrationTest::runCLKernels()
 #endif
 
   bool verified = true;
-#if (PROFILING_MODE == 1 || PROFILING_MODE == 2) && (START_PROFILING_AT_STEP > 0)
+#if (PROFILING_MODE == 1 || PROFILING_MODE == 2) && (START_PROFILING_AT_STEP > -1)
   double startAppTime = 0, endAppTime = 0;
 #endif
 #if SIMULATION_SNAPSHOT
@@ -3998,7 +4105,7 @@ IntegrationTest::runCLKernels()
 #endif
 
   /*Iterate through steps*/
-  std::cout << "\nStarting execution" << std::endl;
+  std::cout << "\nStarted execution" << std::endl;
   for(currentTimeStep = 0; currentTimeStep < SIMULATION_TIME_STEPS; currentTimeStep++)
   {
 #if SIMULATION_SNAPSHOT
@@ -4019,10 +4126,10 @@ IntegrationTest::runCLKernels()
         << SIMULATION_TIME_STEPS << std::endl;
     }
 #endif
-#if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0
+#if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep == START_PROFILING_AT_STEP)
     {
-      std::cout << "\nStarting device timing at step " << currentTimeStep << std::endl;
+      std::cout << "\nStarted device timing at step " << currentTimeStep << std::endl;
       startAppTime = timeStampNs();
     }
 #endif
@@ -4075,21 +4182,23 @@ IntegrationTest::runCLKernels()
     else
     {
       int result = SDK_SUCCESS;
-      
+#if EXPAND_EVENTS_TEST_MODE == -1
       if(expandEventsTimeStep == 1)
       {
-        result = initializeSpikeData(0.0, 0.0);
+        result = initializeSpikeData(0.0, 0.0, NULL);
       }
       else if(expandEventsTimeStep == EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT - 1)
       {
-        result = initializeSpikeData(100.0, 100.0);
+        result = initializeSpikeData(100.0, 100.0, NULL);
       }
       else
       {
         result = initializeSpikeData(0.0, 
-          (double)(100*expandEventsTimeStep/EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT));
+          (double)(100*expandEventsTimeStep/EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT), NULL);
       }
-      
+#elif (EXPAND_EVENTS_TEST_MODE >= 0) && (EXPAND_EVENTS_TEST_MODE <= 1000)
+      result = initializeSpikeData(0.0, 100.0, EXPAND_EVENTS_TEST_MODE);
+#endif
       if(result != SDK_SUCCESS)
       {
         std::cout << "Failed initializeSpikeData" << std::endl; 
@@ -4142,7 +4251,7 @@ IntegrationTest::runCLKernels()
       dataSynapsePointer);
 #endif
     SET_KERNEL_ARG(kernelExpandEvents, expandEventsTimeStep, argNumExpandEvents);
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
     status = commandQueue.enqueueNDRangeKernel(kernelExpandEvents, cl::NullRange, 
@@ -4151,7 +4260,7 @@ IntegrationTest::runCLKernels()
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -4215,6 +4324,7 @@ IntegrationTest::runCLKernels()
 /**************************************************************************************************/
 #if SCAN_ENABLE_V00
     {
+    cl_uint scanTimeStep = currentTimeStep%SCAN_HISTOGRAM_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(EXPAND_EVENTS_ENABLE)
     if(initializeDataForKernelScanHistogramV00(currentTimeSlot, 0) != SDK_SUCCESS)
@@ -4225,16 +4335,11 @@ IntegrationTest::runCLKernels()
       break;
     }
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramBuffer, dataHistogramSizeBytes, dataHistogram);
-#endif
 /*End unit test initialization*/
-#if (SCAN_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
-      dataScanDebugHost);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataScanDebugDeviceBuffer, dataScanDebugDeviceSizeBytes, 
-      dataScanDebugDevice);
-#endif
-#if SCAN_VERIFY_ENABLE
+
+#elif SCAN_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramBuffer, dataHistogramSizeBytes, dataHistogram);
+    /*Capture histogram for verification*/
     if(initializeDataForKernelScanHistogramV00(currentTimeSlot, 1) != SDK_SUCCESS)
     {
       std::cout 
@@ -4243,17 +4348,28 @@ IntegrationTest::runCLKernels()
       break;
     }
 #endif
-    SET_KERNEL_ARG(kernelScanHistogramV00, currentTimeStep, argNumScan00);
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+
+#if (SCAN_DEBUG_ENABLE)
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
+      dataScanDebugHost);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataScanDebugDeviceBuffer, dataScanDebugDeviceSizeBytes, 
+      dataScanDebugDevice);
+#endif
+
+    SET_KERNEL_ARG(kernelScanHistogramV00, scanTimeStep, argNumScan00);
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelScanHistogramV00, cl::NullRange, 
       globalThreadsScanV00, localThreadsScanV00, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -4265,12 +4381,14 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelScanHistogramV00, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
 #if (SCAN_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
       dataScanDebugHost);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataScanDebugDeviceBuffer, dataScanDebugDeviceSizeBytes, 
       dataScanDebugDevice);
 #endif
+
 #if (SCAN_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -4283,6 +4401,7 @@ IntegrationTest::runCLKernels()
       }
     }
 #endif
+
 #if SCAN_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramBuffer, dataHistogramSizeBytes, dataHistogram);
     if(verifyKernelScanHistogramV00(currentTimeSlot) != SDK_SUCCESS)
@@ -4296,18 +4415,31 @@ IntegrationTest::runCLKernels()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V00
     {
+      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(EXPAND_EVENTS_ENABLE && SCAN_ENABLE_V00)
+    /*Reset the data with new values every some number of steps for better represenation*/
+#if !EXPAND_EVENTS_ENABLE && !SCAN_ENABLE_V00
+    if(!groupEventsTimeStep)
+#endif
     {
+#if GROUP_EVENTS_TEST_MODE == -1
       double deltaDev = 50.0; double perecentInh = 5.0;
       cl_uint detla = cl_uint(((GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE*deltaDev)/100)/
         GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS);
       if(initializeDataForKernelGroupEventsV00(detla, deltaDev, perecentInh)!= SDK_SUCCESS)
         {std::cout << "Failed initializeDataForKernelGroupEventsV00" 
         << std::endl; verified = false; break;}
-    }
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
+
+      double perecentInh = 5.0; cl_uint detla = NULL;
+        
+      if(initializeDataForKernelGroupEventsV00(detla, GROUP_EVENTS_TEST_MODE, perecentInh)!= 
+        SDK_SUCCESS)
+        {std::cout << "Failed initializeDataForKernelGroupEventsV00" 
+        << std::endl; verified = false; break;}
+#endif
+
 #if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
@@ -4323,15 +4455,10 @@ IntegrationTest::runCLKernels()
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramBuffer, dataHistogramSizeBytes, dataHistogram);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-#endif 
+    }
 /*End unit test initialization*/
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-#if GROUP_EVENTS_VERIFY_ENABLE || SORT_VERIFY_ENABLE
+
+#elif GROUP_EVENTS_VERIFY_ENABLE || SORT_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUnsortedEventTargetsBuffer, dataUnsortedEventTargetsSizeBytes, 
       dataUnsortedEventTargets);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUnsortedEventDelaysBuffer, dataUnsortedEventDelaysSizeBytes, 
@@ -4339,6 +4466,8 @@ IntegrationTest::runCLKernels()
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUnsortedEventWeightsBuffer, dataUnsortedEventWeightsSizeBytes, 
       dataUnsortedEventWeights);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramBuffer, dataHistogramSizeBytes, dataHistogram);
+#endif
+
 #if SORT_VERIFY_ENABLE && \
     (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
      GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
@@ -4348,18 +4477,28 @@ IntegrationTest::runCLKernels()
       std::cout << "Failed captureUnsortedEvents" << std::endl; verified = false; break;
     }
 #endif
+
+#if (GROUP_EVENTS_DEBUG_ENABLE)
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+      dataDebugHostGroupEvents);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
-    SET_KERNEL_ARG(kernelGroupEventsV00, currentTimeStep, argNumGrupEventsV00);
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+
+    SET_KERNEL_ARG(kernelGroupEventsV00, groupEventsTimeStep, argNumGrupEventsV00);
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV00, cl::NullRange, 
       globalThreadsGroupEventsV00, localThreadsGroupEventsV00, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -4371,12 +4510,7 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelGroupEventsV00, (endAppTime-startAppTime), 1.0)
     }
 #endif
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
+
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -4384,13 +4518,14 @@ IntegrationTest::runCLKernels()
         dataErrorGroupEvents);
       if(dataErrorGroupEvents[0] != 0)
       {
-        std::cout << "GROUP_EVENTS_ERROR_TRACK_ENABLE, verifyKernelGroupEventsV00: "
+        std::cout << "GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV00: "
           << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
         verified = false; 
         break;
       }
     }
 #endif
+
 #if GROUP_EVENTS_VERIFY_ENABLE
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
@@ -4429,31 +4564,36 @@ IntegrationTest::runCLKernels()
       << "Failed initializeDataForKernelScanHistogramV01" << std::endl; verified = false; break;}
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif 
 /*End unit test initialization*/
+
+#elif SCAN_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
+      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+#endif
+
 #if (SCAN_DEBUG_ENABLE)
     ENQUEUE_WRITE_BUFFER(CL_FALSE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
       dataScanDebugHost);
     ENQUEUE_WRITE_BUFFER(CL_FALSE, dataScanDebugDeviceBuffer, dataScanDebugDeviceSizeBytes, 
       dataScanDebugDevice);
 #endif
-#if SCAN_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif
+
     SET_KERNEL_ARG(kernelScanHistogramV01, dataHistogramGroupEventsTikBuffer, argNumScan01);
     /*TODO: get rid of unnecessary argument with preprocessor*/
     SET_KERNEL_ARG(kernelScanHistogramV01, 0, argNumScan01+1);
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelScanHistogramV01, cl::NullRange, 
       globalThreadsScanV01, localThreadsScanV01, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -4465,12 +4605,14 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelScanHistogramV01, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
 #if (SCAN_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_FALSE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
       dataScanDebugHost);
     ENQUEUE_READ_BUFFER(CL_FALSE, dataScanDebugDeviceBuffer, dataScanDebugDeviceSizeBytes, 
       dataScanDebugDevice);
 #endif
+
 #if (SCAN_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -4483,6 +4625,7 @@ IntegrationTest::runCLKernels()
       }
     }
 #endif
+
 #if SCAN_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsVerifySizeBytes, dataHistogramGroupEventsVerify);
@@ -4500,34 +4643,51 @@ IntegrationTest::runCLKernels()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V01
     {
+      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01) 
-    if(initializeDataForKernelGroupEventsV01(sortStep-1, 1) != SDK_SUCCESS){std::cout 
-      << "Failed initializeDataForKernelGroupEventsV01" << std::endl; verified = false; break;}
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
+    {
+#if GROUP_EVENTS_TEST_MODE == -1
+    if(initializeDataForKernelGroupEventsV01(sortStep-1, 1, 0) != SDK_SUCCESS)
+    {
+      std::cout << "Failed initializeDataForKernelGroupEventsV01" << std::endl; verified = false; 
+      break;
+      }
+#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
+    if(initializeDataForKernelGroupEventsV01(sortStep-1, 1, GROUP_EVENTS_TEST_MODE) != SDK_SUCCESS)
+    {
+      std::cout << "Failed initializeDataForKernelGroupEventsV01" << std::endl; verified = false; 
+      break;
+    }
+#endif
+
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
+#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-#endif  
+#endif
+    }
 /*End unit test initialization*/
+
+#elif GROUP_EVENTS_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
+      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+#endif
+
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
-#if GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif
+
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     SET_KERNEL_ARG(kernelGroupEventsV01, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV01++);
 #endif
@@ -4538,16 +4698,19 @@ IntegrationTest::runCLKernels()
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV01--;
 #endif
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV01, cl::NullRange, 
       globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -4559,12 +4722,14 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelGroupEventsV01, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
+
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -4572,13 +4737,14 @@ IntegrationTest::runCLKernels()
         dataErrorGroupEvents);
       if(dataErrorGroupEvents[0] != 0)
       {
-        std::cout << "GROUP_EVENTS_ERROR_TRACK_ENABLE, verifyKernelGroupEventsV01: "
+        std::cout << "GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV01: "
           << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
         verified = false; 
         break;
       }
     }
 #endif
+
 #if GROUP_EVENTS_VERIFY_ENABLE
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
@@ -4600,40 +4766,47 @@ IntegrationTest::runCLKernels()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V02
     {
+      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01) 
-    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 1) != SDK_SUCCESS)
     {
-      std::cout 
-      << "Failed initializeDataForKernelGroupEventsV02_V03" << std::endl; 
+#if GROUP_EVENTS_TEST_MODE == -1
+    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 1, 0) != SDK_SUCCESS)
+    {
+      std::cout << "Failed initializeDataForKernelGroupEventsV02_V03" << std::endl; 
+      verified = false; 
+      break;
+      }
+#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
+    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 1, GROUP_EVENTS_TEST_MODE) 
+      != SDK_SUCCESS)
+    {
+      std::cout << "Failed initializeDataForKernelGroupEventsV02_V03" << std::endl; 
       verified = false; 
       break;
     }
+#endif
+
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUnsortedEventTargetsBuffer, dataUnsortedEventTargetsSizeBytes, 
       dataUnsortedEventTargets);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUnsortedEventDelaysBuffer, dataUnsortedEventDelaysSizeBytes, 
       dataUnsortedEventDelays);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUnsortedEventWeightsBuffer, dataUnsortedEventWeightsSizeBytes, 
       dataUnsortedEventWeights);
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
+#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-#endif  
-/*End unit test initialization*/
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
-#if GROUP_EVENTS_VERIFY_ENABLE
+    }
+/*End unit test initialization*/
+
+#elif GROUP_EVENTS_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUnsortedEventTargetsBuffer, dataUnsortedEventTargetsSizeBytes, 
       dataUnsortedEventTargets);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUnsortedEventDelaysBuffer, dataUnsortedEventDelaysSizeBytes, 
@@ -4645,6 +4818,14 @@ IntegrationTest::runCLKernels()
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
 #endif
+
+#if (GROUP_EVENTS_DEBUG_ENABLE)
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+      dataDebugHostGroupEvents);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
+#endif
+
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     SET_KERNEL_ARG(kernelGroupEventsV02, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV02++);
 #endif
@@ -4655,16 +4836,19 @@ IntegrationTest::runCLKernels()
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV02--;
 #endif
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV02, cl::NullRange, 
       globalThreadsGroupEventsV02, localThreadsGroupEventsV02, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -4676,12 +4860,14 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelGroupEventsV02, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
+
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -4696,6 +4882,7 @@ IntegrationTest::runCLKernels()
       }
     }
 #endif
+
 #if GROUP_EVENTS_VERIFY_ENABLE
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
@@ -4746,31 +4933,36 @@ IntegrationTest::runCLKernels()
       << "Failed initializeDataForKernelScanHistogramV01" << std::endl; verified = false; break;}
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif 
 /*End unit test initialization*/
+
+#elif SCAN_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
+      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+#endif
+
 #if (SCAN_DEBUG_ENABLE)
     ENQUEUE_WRITE_BUFFER(CL_FALSE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
       dataScanDebugHost);
     ENQUEUE_WRITE_BUFFER(CL_FALSE, dataScanDebugDeviceBuffer, dataScanDebugDeviceSizeBytes, 
       dataScanDebugDevice);
 #endif
-#if SCAN_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif
+
     SET_KERNEL_ARG(kernelScanHistogramV01, dataHistogramGroupEventsTikBuffer, argNumScan01);
     /*TODO: get rid of unnecessary argument with preprocessor*/
     SET_KERNEL_ARG(kernelScanHistogramV01, 0, argNumScan01+1);
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelScanHistogramV01, cl::NullRange, 
       globalThreadsScanV01, localThreadsScanV01, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -4782,12 +4974,14 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelScanHistogramV01, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
 #if (SCAN_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_FALSE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes, 
       dataScanDebugHost);
     ENQUEUE_READ_BUFFER(CL_FALSE, dataScanDebugDeviceBuffer, dataScanDebugDeviceSizeBytes, 
       dataScanDebugDevice);
 #endif
+
 #if (SCAN_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -4800,6 +4994,7 @@ IntegrationTest::runCLKernels()
       }
     }
 #endif
+
 #if SCAN_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsVerifySizeBytes, dataHistogramGroupEventsVerify);
@@ -4817,35 +5012,52 @@ IntegrationTest::runCLKernels()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V01
     {
+      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && SCAN_ENABLE_V01 &&\
       GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT && GROUP_EVENTS_ENABLE_V02)
-    if(initializeDataForKernelGroupEventsV01(sortStep-1, 0) != SDK_SUCCESS){std::cout 
-      << "Failed initializeDataForKernelGroupEventsV01" << std::endl; verified = false; break;}
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
+    {
+#if GROUP_EVENTS_TEST_MODE == -1
+    if(initializeDataForKernelGroupEventsV01(sortStep-1, 1, 0) != SDK_SUCCESS)
+    {
+      std::cout << "Failed initializeDataForKernelGroupEventsV01" << std::endl; verified = false; 
+      break;
+    }
+#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
+    if(initializeDataForKernelGroupEventsV01(sortStep-1, 1, GROUP_EVENTS_TEST_MODE) != SDK_SUCCESS)
+    {
+      std::cout << "Failed initializeDataForKernelGroupEventsV01" << std::endl; verified = false; 
+      break;
+    }
+#endif
+
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
+#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-#endif  
+#endif
+    }
 /*End unit test initialization*/
+
+#elif GROUP_EVENTS_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
+      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+#endif
+
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
-#if GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif
+
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     SET_KERNEL_ARG(kernelGroupEventsV01, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV01++);
 #endif
@@ -4853,19 +5065,23 @@ IntegrationTest::runCLKernels()
     SET_KERNEL_ARG(kernelGroupEventsV01, dataGroupEventsTokBuffer, argNumGrupEventsV01+1);
     SET_KERNEL_ARG(kernelGroupEventsV01, dataHistogramGroupEventsTikBuffer, argNumGrupEventsV01+2);
     SET_KERNEL_ARG(kernelGroupEventsV01, sortStep, argNumGrupEventsV01+3);
+    
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV01--;
 #endif
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV01, cl::NullRange, 
       globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -4877,12 +5093,14 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelGroupEventsV01, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
+
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -4897,6 +5115,7 @@ IntegrationTest::runCLKernels()
       }
     }
 #endif
+
 #if GROUP_EVENTS_VERIFY_ENABLE
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
@@ -4918,41 +5137,48 @@ IntegrationTest::runCLKernels()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V03
     {
+      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && SCAN_ENABLE_V01 &&\
       GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT && GROUP_EVENTS_ENABLE_V02)
-    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 0) != SDK_SUCCESS)
     {
-      std::cout 
-      << "Failed initializeDataForKernelGroupEventsV02_V03" << std::endl; 
+#if GROUP_EVENTS_TEST_MODE == -1
+    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 1, 0) != SDK_SUCCESS)
+    {
+      std::cout << "Failed initializeDataForKernelGroupEventsV02_V03" << std::endl; 
+      verified = false; 
+      break;
+      }
+#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
+    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 1, GROUP_EVENTS_TEST_MODE) 
+      != SDK_SUCCESS)
+    {
+      std::cout << "Failed initializeDataForKernelGroupEventsV02_V03" << std::endl; 
       verified = false; 
       break;
     }
+#endif
+
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUnsortedEventTargetsBuffer, dataUnsortedEventTargetsSizeBytes, 
       dataUnsortedEventTargets);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUnsortedEventDelaysBuffer, dataUnsortedEventDelaysSizeBytes, 
       dataUnsortedEventDelays);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUnsortedEventWeightsBuffer, dataUnsortedEventWeightsSizeBytes, 
       dataUnsortedEventWeights);
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
       dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
+#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-#endif  
-/*End unit test initialization*/
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
-#if GROUP_EVENTS_VERIFY_ENABLE
+    }
+/*End unit test initialization*/
+
+#elif GROUP_EVENTS_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUnsortedEventTargetsBuffer, dataUnsortedEventTargetsSizeBytes, 
       dataUnsortedEventTargets);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUnsortedEventDelaysBuffer, dataUnsortedEventDelaysSizeBytes, 
@@ -4970,6 +5196,14 @@ IntegrationTest::runCLKernels()
         dataUnsortedEventWeights);
     }
 #endif
+
+#if (GROUP_EVENTS_DEBUG_ENABLE)
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+      dataDebugHostGroupEvents);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
+#endif
+
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     SET_KERNEL_ARG(kernelGroupEventsV03, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV03++);
 #endif
@@ -4980,16 +5214,19 @@ IntegrationTest::runCLKernels()
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV03--;
 #endif
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV03, cl::NullRange, 
       globalThreadsGroupEventsV03, localThreadsGroupEventsV03, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -5001,12 +5238,14 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelGroupEventsV03, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
+
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -5021,6 +5260,7 @@ IntegrationTest::runCLKernels()
       }
     }
 #endif
+
 #if GROUP_EVENTS_VERIFY_ENABLE
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
@@ -5062,37 +5302,43 @@ IntegrationTest::runCLKernels()
       verified = false; 
       break;
     }
+    
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-#endif
 /*End unit test initialization*/
+
+#elif MAKE_EVENT_PTRS_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
+      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
+    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
+#endif
+
 #if (MAKE_EVENT_PTRS_DEBUG_ENABLE)
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataMakeEventPtrsDebugHostBuffer, 
       dataMakeEventPtrsDebugHostSizeBytes, dataMakeEventPtrsDebugHost);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataMakeEventPtrsDebugDeviceBuffer, 
       dataMakeEventPtrsDebugDeviceSizeBytes, dataMakeEventPtrsDebugDevice);
 #endif
-#if MAKE_EVENT_PTRS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-#endif
+
     SET_KERNEL_ARG(kernelMakeEventPtrs, dataHistogramGroupEventsTokBuffer, argNumMakeEventPtrs);
     SET_KERNEL_ARG(kernelMakeEventPtrs, dataGroupEventsTikBuffer, argNumMakeEventPtrs+1);
     SET_KERNEL_ARG(kernelMakeEventPtrs, dataMakeEventPtrsStructBuffer, argNumMakeEventPtrs+2); /*TODO: instead of a new buffer it could be a reuse*/
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelMakeEventPtrs, cl::NullRange, 
       globalThreadsMakeEventPtrs, localThreadsMakeEventPtrs, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -5104,17 +5350,20 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelMakeEventPtrs, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelGlueEventPtrs, cl::NullRange, 
       globalThreadsGlueEventPtrs, localThreadsGlueEventPtrs, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -5127,12 +5376,14 @@ IntegrationTest::runCLKernels()
     }
 #endif
 #endif
+
 #if (MAKE_EVENT_PTRS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsDebugHostBuffer, 
       dataMakeEventPtrsDebugHostSizeBytes, dataMakeEventPtrsDebugHost);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsDebugDeviceBuffer, 
       dataMakeEventPtrsDebugDeviceSizeBytes, dataMakeEventPtrsDebugDevice);
 #endif
+
 #if (MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -5147,6 +5398,7 @@ IntegrationTest::runCLKernels()
       }
     }
 #endif
+
 #if MAKE_EVENT_PTRS_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, 
       dataMakeEventPtrsStructSizeBytes, dataMakeEventPtrsStruct);
@@ -5187,7 +5439,7 @@ IntegrationTest::runCLKernels()
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && EXPAND_EVENTS_ENABLE)
     bool resetVarsAndParams = (currentTimeStep==0); /*TODO: fix, doesnt work with !(currentTimeStep%17);*/
     if(initializeDataForKernelUpdateNeurons(!(MAKE_EVENT_PTRS_ENABLE), 
-      resetVarsAndParams, resetVarsAndParams, currentTimeStep, "") != SDK_SUCCESS)
+      resetVarsAndParams, resetVarsAndParams, 5.0*(!(currentTimeStep%3)), "") != SDK_SUCCESS)
     {
       std::cout 
       << "Failed initializeDataForKernelUpdateNeurons" << std::endl; 
@@ -5241,16 +5493,19 @@ device modifies it.*/
     GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE &&\
     EXPAND_EVENTS_ENABLE)
 #if (UPDATE_NEURONS_VERIFY_ENABLE || (KERNEL_ENDSTEP_VERIFY_EVERY_STEPS > 0)) ||\
-    (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0) || SIMULATION_SNAPSHOT
+    (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > -1) || SIMULATION_SNAPSHOT
 #if UPDATE_NEURONS_VERIFY_ENABLE || (KERNEL_ENDSTEP_VERIFY_EVERY_STEPS > 0)
     if(!((currentTimeStep+1)%KERNEL_ENDSTEP_VERIFY_EVERY_STEPS) || (currentTimeStep == 0)
 #else
     if(false
 #endif
-#if OVERWRITE_SPIKES_UNTILL_STEP
+#if (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > -1)
+    || (currentTimeStep < START_PROFILING_AT_STEP)
+#endif
+#if OVERWRITE_SPIKES_UNTILL_STEP > 0
     || (currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
 #endif
-#if INJECT_CURRENT_UNTILL_STEP
+#if INJECT_CURRENT_UNTILL_STEP > 0
     || (currentTimeStep < INJECT_CURRENT_UNTILL_STEP)
 #endif
 #if SIMULATION_SNAPSHOT
@@ -5267,7 +5522,7 @@ device modifies it.*/
 /*Set loop-dependent arguments for update kernel and equeue it*/
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataGroupEventsTikBuffer, argNumUpdateNeuronsV00);
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, currentTimeStep, argNumUpdateNeuronsV00+1);
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
     status = commandQueue.enqueueNDRangeKernel(kernelUpdateNeuronsV00, cl::NullRange, 
@@ -5276,7 +5531,7 @@ device modifies it.*/
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -5295,16 +5550,18 @@ device modifies it.*/
       argNumUpdateSpikedNeuronsV00);
     SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, currentTimeStep, 
       argNumUpdateSpikedNeuronsV00+1);
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelUpdateSpikedNeuronsV00, cl::NullRange, 
       globalThreadsUpdateNeuronsV00, localThreadsUpdateNeuronsV00, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+    
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
       status = ndrEvt.wait();
@@ -5366,10 +5623,10 @@ device modifies it.*/
     {
     bool verify = !((currentTimeStep+1)%KERNEL_ENDSTEP_VERIFY_EVERY_STEPS) || 
       (currentTimeStep == 0);
-#if OVERWRITE_SPIKES_UNTILL_STEP
+#if OVERWRITE_SPIKES_UNTILL_STEP > 0
     verify |= (currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP);
 #endif
-#if INJECT_CURRENT_UNTILL_STEP
+#if INJECT_CURRENT_UNTILL_STEP > 0
     verify |= (currentTimeStep < INJECT_CURRENT_UNTILL_STEP);
 #endif
     if(verify)
@@ -5379,7 +5636,7 @@ device modifies it.*/
       ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
     }
-#if OVERWRITE_SPIKES_UNTILL_STEP
+#if OVERWRITE_SPIKES_UNTILL_STEP > 0
     if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
     {
       cl_uint *dataSpikePacketCountsToInject = (cl_uint *)calloc(UPDATE_NEURONS_SPIKE_PACKETS_V00, 
@@ -5456,10 +5713,10 @@ device modifies it.*/
     }
 /*END: Verification without profiling*/
 
-/*Profiling mode 1: verify host-device until steps reach OVERWRITE_SPIKES_UNTILL_STEP (while
-  spikes or currents are injected)*/
-#elif (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0)
-#if OVERWRITE_SPIKES_UNTILL_STEP
+/*Profiling mode 1: verify host-device until steps reach OVERWRITE_SPIKES_UNTILL_STEP or 
+  INJECT_CURRENT_UNTILL_STEP or INJECT_CURRENT_UNTILL_STEP*/
+#elif (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > -1)
+#if OVERWRITE_SPIKES_UNTILL_STEP > 0
     if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
     {
       ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
@@ -5505,7 +5762,7 @@ device modifies it.*/
       free(dataSpikePacketsToInject);
       if(verified == false){break;}
     }
-#elif INJECT_CURRENT_UNTILL_STEP
+#elif INJECT_CURRENT_UNTILL_STEP > 0
     if(currentTimeStep < INJECT_CURRENT_UNTILL_STEP)
     {
       ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
@@ -5516,6 +5773,42 @@ device modifies it.*/
         dataSpikePacketCounts);
       ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
         dataSpikePackets);
+
+      if(verifyKernelUpdateNeurons
+        (
+          true,
+          currentTimeStep,
+          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+          dataMakeEventPtrsStruct,
+          dataGroupEventsTik,
+          dataSynapsePointer,
+          dataSynapseTargets,
+          dataSynapseDelays,
+          dataSynapseWeights,
+          NULL,
+          NULL,
+          modelVariables,
+          dataSpikePackets,
+          dataSpikePacketCounts
+        ) != SDK_SUCCESS)
+      {
+        std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
+        verified = false;
+        break;
+      }
+    }
+#else
+    if(currentTimeStep < START_PROFILING_AT_STEP)
+    {
+      ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+        modelVariables);
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+        dataGroupEventsTik);
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
+        dataSpikePacketCounts);
+      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
+        dataSpikePackets);
+        
       if(verifyKernelUpdateNeurons
         (
           true,
@@ -5635,13 +5928,22 @@ device modifies it.*/
         return SDK_FAILURE;
   }
   
-#if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > 0
+  if(!verified)  {return SDK_FAILURE;}
+  
+#if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > -1
   status = commandQueue.finish();
-  endAppTime = timeStampNs();
   if(!sampleCommon->checkVal(status, CL_SUCCESS, "cl::CommandQueue.finish failed."))
   {
     return SDK_FAILURE;
   }
+  
+  status = ndrEvt.wait();
+  endAppTime = timeStampNs();
+  if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
+  {
+    return SDK_FAILURE;
+  }
+  
   cl_uint profiledSteps = SIMULATION_TIME_STEPS - START_PROFILING_AT_STEP;
   double appTimeSec = (endAppTime - startAppTime);
   std::cout << "\nDevice timing: " << profiledSteps << " steps, " << appTimeSec << " sec, " 
@@ -5655,7 +5957,7 @@ device modifies it.*/
     int result = SDK_SUCCESS;
     double startAppTime = 0, endAppTime = 0;
     
-    std::cout << "\nStarting host timing at step " << START_PROFILING_AT_STEP << std::endl;
+    std::cout << "\nStarted host timing at step " << START_PROFILING_AT_STEP << std::endl;
     
     startAppTime = timeStampNs();
     for(cl_uint step = START_PROFILING_AT_STEP; step < SIMULATION_TIME_STEPS; step++)
@@ -5700,7 +6002,7 @@ device modifies it.*/
       << appTimeSec/profiledSteps << " sec/step" << std::endl;
   }
 #endif
-#elif PROFILING_MODE == 2 && START_PROFILING_AT_STEP > 0
+#elif PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
   set<std::string>::iterator kernel_name;
   std::cout << "Kernel execution time profile" << std::endl;
   std::cout << "Kernel Name\t\t\tTotal Time (s)\tCount\tAverage Time (ms)" << std::endl 
@@ -5728,8 +6030,6 @@ device modifies it.*/
   std::cout.setf(std::ios::scientific,std::ios::floatfield);
 #endif
 
-  if(!verified)  {return SDK_FAILURE;}
-
 #if (ERROR_TRY_CATCH_ENABLE)
   }
   catch (cl::Error err) 
@@ -5753,6 +6053,13 @@ IntegrationTest::initialize()
   
   srandSeed = 0; 
   srandCounter = 0;
+  
+#if STATISTICS_ENABLE
+  averageEventsInNetwork = 0;
+  averageEventsInNetworkCounter = 0;
+  averageSpikesInNetwork = 0;
+  averageSpikesInNetworkCounter = 0;
+#endif
   
   time_t rawtime; time ( &rawtime ); startTimeStamp = std::string(ctime (&rawtime));
   
@@ -5910,24 +6217,27 @@ IntegrationTest::verifyKernelExpandEvents
   cl_uint timeSlot = timeStep%EXPAND_EVENTS_TIME_SLOTS;
 
   /*Reset histogram data in previous step*/
-  for(cl_uint i = 0; i < (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG+1); i++)
-  {
+  for
+  (
+    cl_uint i = 0; 
+    i < (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS+1); 
+    i++
+  ){
     cl_uint offset = 
     /*time slot*/
     (((EXPAND_EVENTS_TIME_SLOTS + (timeSlot-1))%EXPAND_EVENTS_TIME_SLOTS)*
-    (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG+1) + 
+    (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS+1) + 
     /*data*/
     i);
     dataHistogramVerify[offset] = 0;
   }
   /*Reset event counter in previous step*/
-  for(cl_uint p = 0; p < EXPAND_EVENTS_SPIKE_PACKETS; p++)
+  for(cl_uint b = 0; b < EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS; b++)
   {
-    cl_uint wg = (p/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF));
     cl_uint offset = 
-      /*WG*/
-      EXPAND_EVENTS_TIME_SLOTS * wg + 
-      /*time slot*/
+      /*Buffer*/
+      EXPAND_EVENTS_TIME_SLOTS * b + 
+      /*Time slot*/
       ((EXPAND_EVENTS_TIME_SLOTS + (timeSlot-1))%EXPAND_EVENTS_TIME_SLOTS);
       
     dataUnsortedEventCountsVerify[offset] = 0;
@@ -5952,8 +6262,11 @@ IntegrationTest::verifyKernelExpandEvents
       /*Iterate through synapses of spiked neuron*/
       for(cl_uint j = 0; j < synapse_count; j++)
       {
-        cl_uint wg = (packet/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF));
-
+#if EXPAND_EVENTS_INTER_WF_COOPERATION == 0
+        cl_uint buffer = (packet/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF));
+#else
+        cl_uint buffer = (packet/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF));
+#endif
         cl_uint synapseOffset = (synapsePointer + j);
         /*target neuron*/
         cl_uint target_neuron = dataSynapseTargets[synapseOffset];
@@ -5973,7 +6286,7 @@ IntegrationTest::verifyKernelExpandEvents
           ((timeSlot + (int)event_time - bin_correction)%EXPAND_EVENTS_TIME_SLOTS);
         
         /*Obtain offsets for storing synaptic event*/
-        cl_uint event_local_ptr = dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * wg + 
+        cl_uint event_local_ptr = dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * buffer + 
           time_slot];
         
         /*Catch overflows and record max overflow*/
@@ -5987,11 +6300,11 @@ IntegrationTest::verifyKernelExpandEvents
         }
 
         /*Increment event counter*/
-        dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * wg + time_slot]++;
+        dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * buffer + time_slot]++;
         
         cl_uint event_global_ptr = 
           /*Event data buffers*/
-          wg * EXPAND_EVENTS_TIME_SLOTS * EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE +
+          buffer * EXPAND_EVENTS_TIME_SLOTS * EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE +
           /*Current event data buffer*/
           time_slot * EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE +
           /*Current event*/
@@ -6011,10 +6324,10 @@ IntegrationTest::verifyKernelExpandEvents
         /*Offset is based on time slot, bin, WG*/
         cl_uint offset = 
           /*WG offset*/
-          wg + 
-          /*time slot + bin with EXPAND_EVENTS_GRID_SIZE_WG as a pitch*/
-          (time_slot*(EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG+1) + 
-          bin*EXPAND_EVENTS_GRID_SIZE_WG);
+          buffer + 
+          /*time slot + bin with EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS as a pitch*/
+          (time_slot*(EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS+1) + 
+          bin*EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS);
           
         /*Increment counter for a target neuron failing into slot/bin/WG specified by the offset.*/
         dataHistogramVerify[offset]++;
@@ -6031,12 +6344,15 @@ IntegrationTest::verifyKernelExpandEvents
     {
       for(cl_uint time_slot = 0; time_slot < EXPAND_EVENTS_TIME_SLOTS; time_slot++)
       {
-        cl_uint wg = (packet/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF));
-        
-        if(dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * wg + time_slot] >= 
+#if EXPAND_EVENTS_INTER_WF_COOPERATION == 0
+        cl_uint buffer = (packet/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF));
+#else
+        cl_uint buffer = (packet/(EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF));
+#endif
+        if(dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * buffer + time_slot] >= 
           EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
         {
-          dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * wg + time_slot] = 
+          dataUnsortedEventCountsVerify[EXPAND_EVENTS_TIME_SLOTS * buffer + time_slot] = 
             EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE-1;
         }
       }
@@ -6148,14 +6464,14 @@ IntegrationTest::verifyKernelExpandEvents
   /* init scan and verify data */
   for(cl_uint j = 0; j < EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS; j++)
   {
-    for(cl_uint k = 0; k < EXPAND_EVENTS_GRID_SIZE_WG; k++)
+    for(cl_uint k = 0; k < EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS; k++)
     {
       /*Offset is based on time slot, bin, WG*/
       cl_uint offset = 
       /*Time slot space = (time slot #) x (bins per WG) x WGs*/
-      timeSlot*(EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_GRID_SIZE_WG+1) + 
+      timeSlot*(EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS+1) + 
       /*Bin totals are stored aligned in GM (bin 0 from all WGs, bin 1 from all WGs etc*/
-      j*EXPAND_EVENTS_GRID_SIZE_WG + k;
+      j*EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS + k;
       /*Increment counter for a target neuron failing into slot/bin/WG specified by the offset.*/
       error_event_totals += (dataHistogram[offset] != dataHistogramVerify[offset]);
     }
@@ -6184,23 +6500,22 @@ IntegrationTest::verifyKernelScanHistogramV00(cl_uint timeSlot)
   cl_uint errorEventTotals = 0; 
   cl_uint offsetTimeSlot = timeSlot*(SCAN_HISTOGRAM_TOTAL_BINS_V00*SCAN_HISTOGRAM_BIN_SIZE_V00 + 1);
 
-  for(cl_uint j = 1; j <= SCAN_HISTOGRAM_TOTAL_BINS_V00*SCAN_HISTOGRAM_BIN_SIZE_V00; j++)
+  for(cl_uint j = 0; j <= SCAN_HISTOGRAM_TOTAL_BINS_V00*SCAN_HISTOGRAM_BIN_SIZE_V00; j++)
   {
     cl_uint offset = offsetTimeSlot + j;
     if(dataHistogramVerify[offset] != dataHistogram[offset])
     {
       errorEventTotals++;
       /*
-      std::cout << timeSlot << "->(" << dataHistogramVerify[offset] << "," 
-        << dataHistogram[offset] << "), ";
-      */
+      std::cout << j << "->(" << dataHistogramVerify[offset] << "," << dataHistogram[offset] 
+        << "), ";*/
     }
   }
 
   if(errorEventTotals)
   {
     std::cout << "verifyKernelScanHistogramV00: failed to match verification data " 
-      << errorEventTotals << " times." << std::endl;
+      << errorEventTotals << " times in time slot " << timeSlot << std::endl;
     return SDK_FAILURE;
   }
 #endif
@@ -6219,6 +6534,8 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
 #if GROUP_EVENTS_ENABLE_V00
   {
   cl_uint print = 0;
+  std::stringstream ss;
+  
   cl_uint offset = currentTimeSlot*
     (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + 1);
   
@@ -6238,14 +6555,17 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
   cl_uint total_synaptic_events = 
     dataHistogram[offset+GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
   
+  print ? ss << "Total synaptic events: " << total_synaptic_events << std::endl,true : false;
+  
   /*Compute total chunks for grid*/
   cl_uint total_synaptic_event_chunks = total_synaptic_events/(GROUP_EVENTS_WG_SIZE_WI*
     GROUP_EVENTS_ELEMENTS_PER_WI);
-  if(total_synaptic_event_chunks*(GROUP_EVENTS_WG_SIZE_WI*
-    GROUP_EVENTS_ELEMENTS_PER_WI) < total_synaptic_events)
+  if(total_synaptic_event_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI) < 
+     total_synaptic_events)
   {
     total_synaptic_event_chunks++;
   }
+  
   /*Compute total chunks per WG for output histogram*/
   cl_uint wg_chunk_size = total_synaptic_event_chunks/GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
   if(wg_chunk_size*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE  < total_synaptic_event_chunks)
@@ -6254,6 +6574,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
   }
   wg_chunk_size *= (GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI);
 #endif
+
   for(cl_uint i = 0; i < dataGroupEventsTikVerifySize; i++)
   {
     dataGroupEventsTikVerify[i] = 0;
@@ -6279,17 +6600,17 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
       cl_uint key = dataUnsortedEventDelays[ptr];
       
       /*Compute offset key for target neuron*/
-      cl_uint bin = (key>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00)&
+      cl_uint bin = (key >> GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00)&
         GROUP_EVENTS_HISTOGRAM_BIN_MASK;
         
       /*Offset is based on time slot, bin, WG*/
       cl_uint bin_offset = 
-      /*Time slot*/
-      currentTimeSlot*(GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + 1) + 
-      /*WG offset*/
-      b +
-      /*time slot + bin with GROUP_EVENTS_HISTOGRAM_BIN_SIZE as a pitch*/
-      bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
+        /*Time slot*/
+        currentTimeSlot*(GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + 1) + 
+        /*WG offset*/
+        b +
+        /*time slot + bin with GROUP_EVENTS_HISTOGRAM_BIN_SIZE as a pitch*/
+        bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
 
       /*Check for offset overlap*/
       if(dataOffsetGroupEventsCopy[bin_offset] >= dataHistogram[bin_offset+1])
@@ -6341,7 +6662,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
   
   free(dataOffsetGroupEventsCopy);
   
-  print ? std::cout << "Time slot " << currentTimeSlot << ": " << std::endl, true : false;
+  print ? ss << "Time slot " << currentTimeSlot << ": " << std::endl, true : false;
 
   /*Verify event data*/
   for(cl_uint j = 0; j < GROUP_EVENTS_HISTOGRAM_TOTAL_BINS; j++)
@@ -6357,19 +6678,24 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
     /*Start and end bin ptr*/
     cl_uint start = dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
     cl_uint end = dataHistogram[offset + (j+1)*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
-    
-    print ? std::cout << "Start-End: " << start << "-" << end << std::endl, true : false;
-    
+
+    print ? ss << "Start-End: " << start << "-" << end << std::endl, true : false;
+
     /*Verify correct bin and checksum in that bin for current time slot*/
     for(cl_uint p = start; p < end; p++)
     {
-      cl_uint v_key = (dataGroupEventsTikVerify[p]>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
+      cl_uint v_key = (dataGroupEventsTikVerify[p] >> GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
         GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-      cl_uint a_key = (dataGroupEventsTik[p]>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
+      cl_uint a_key = (dataGroupEventsTik[p] >> GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
         GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-      
+
       verify_error_count_target_neuron += (v_key != j);
+      (print && (v_key != j)) ? ss << "V," << p << ": (" << v_key << " != " << j << ")" 
+        << "; ", true : false;
       actual_error_count_target_neuron += (a_key != j);
+      (print && (a_key != j)) ? ss << "A," << p << ": (" << a_key << " != " << j << ")" 
+        << "; ", true : false;
+
       CHECKSUM01(verify_checksum_target_neuron, dataGroupEventsTikVerify[p]);
       //verify_checksum_target_neuron += dataGroupEventsTikVerify[p];
       CHECKSUM01(actual_checksum_target_neuron, dataGroupEventsTik[p]);
@@ -6386,6 +6712,8 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
 #endif
     }
     
+    print ? ss << std::endl, true : false;
+    
     if(verify_error_count_target_neuron)
     {
       std::cout << "verifyKernelGroupEventsV00: Failed to validate correct bin for " 
@@ -6393,7 +6721,6 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         << " keys out of " << (end-start) << " in verification data in bin " << j 
         << ", time slot " << currentTimeSlot << std::endl;
       result = SDK_FAILURE;
-      break;
     }
     
     if(actual_error_count_target_neuron)
@@ -6403,7 +6730,6 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         << " keys out of " << (end-start) << " in actual data in bin " << j 
         << ", time slot " << currentTimeSlot << std::endl;
       result = SDK_FAILURE;
-      break;
     }
     
     if(verify_checksum_target_neuron != actual_checksum_target_neuron)
@@ -6412,7 +6738,6 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         << j << ", time slot " 
         << currentTimeSlot << std::endl;
       result = SDK_FAILURE;
-      break;
     }
 #if GROUP_EVENTS_VALUES_MODE_V00
     if(verify_checksum_value_01 != actual_checksum_value_01)
@@ -6421,19 +6746,38 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         << j << ", time slot " 
         << currentTimeSlot << std::endl;
       result = SDK_FAILURE;
-      break;
     }
 #endif
-    /*
-    print ? std::cout << verify_checksum_target_neuron << ", ", true : false;
-    */
+    if(print && (result != SDK_SUCCESS))
+    {
+      ss << "WG Pointers for bin " << j 
+        << "\nWG,Ptr Start,Ptr End,Index,Key Verified,Key Actual,F/P" << std::endl;
+        
+      for(cl_uint w = 0; w < GROUP_EVENTS_HISTOGRAM_BIN_SIZE; w++)
+      {
+        cl_uint start = dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + w];
+        cl_uint end = dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + w + 1] - 1;
+          
+        for(cl_uint p = start; p < end; p++)
+        {
+          cl_uint v_key = dataGroupEventsTikVerify[p];
+          cl_uint a_key = dataGroupEventsTik[p];
+          bool pass = (v_key == a_key);
+          
+          ss << w << "," << start << "," << end << "," << p << "," << v_key << "," << a_key << ","; 
+          if(!pass){ss << "F";}
+          ss << std::endl;
+        }
+      }
+    }
+    
+    if(result != SDK_SUCCESS){break;}
   }
   
-  print ? std::cout << std::endl, true : false;
+  print ? ss << std::endl, true : false;
   
   /*Verify event data*/
 #if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
-  print ? std::cout << "Output histogram:" << std::endl, true : false;
   for(cl_uint w = 0; w < (GROUP_EVENTS_GRID_SIZE_WG); w++)
   {
     for(cl_uint b = 0; b < (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT); b++)
@@ -6454,21 +6798,34 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         //verify_checksum_histogram_out += dataHistogramGroupEventsVerify[p];
         CHECKSUM01(actual_checksum_histogram_out, dataHistogramGroupEventsTik[p]);
         //actual_checksum_histogram_out += dataHistogramGroupEventsTik[p];
-        print ? std::cout << p << "," << dataHistogramGroupEventsVerify[p] << ","
-          << dataHistogramGroupEventsTik[p] << std::endl, true : false;
       }
+      
       /*Verify*/
       if(verify_checksum_histogram_out != actual_checksum_histogram_out)
       {
         std::cout << "verifyKernelGroupEventsV00: Failed to match output histogram checksum in bin " 
           << b << ", WG " << w << ", time slot " << currentTimeSlot << std::endl;
         result = SDK_FAILURE;
+        print ? ss << "Output histogram:" << std::endl, true : false;
+        for(cl_uint j = 0; j < (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE); j++)
+        {
+          cl_uint p = 
+            /*WG offset*/
+            w*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + 
+            /*WG offset for histogram out*/
+            j +
+            /*bin*/
+            b*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
+          print ? ss << p << "," << dataHistogramGroupEventsVerify[p] << ","
+            << dataHistogramGroupEventsTik[p] << std::endl, true : false;
+        }
         break;
       }
     }
     if(result != SDK_SUCCESS){break;}
   }
 #endif
+  if(print){LOG(ss.str(), 0);}
   }
 #endif
   return result;
@@ -6526,8 +6883,7 @@ IntegrationTest::verifyKernelScanHistogramV01()
 
   for(cl_uint j = 1; j < (SCAN_HISTOGRAM_TOTAL_BINS_V01*SCAN_HISTOGRAM_BIN_SIZE_V01 + 1); j++)
   {
-    error_count_histogram_out += 
-      (dataHistogramGroupEventsVerify[j] != temp[j]);
+    error_count_histogram_out += (dataHistogramGroupEventsVerify[j] != temp[j]);
   }
 
   /*Verify*/
@@ -7873,8 +8229,8 @@ IntegrationTest::stepIzPs
   int *ip, 
   DATA_TYPE *fp, 
 #if STATISTICS_ENABLE
-  int *fcount,
-  unsigned long long int *icount, 
+  int *totalSpikes,
+  unsigned long long int *psStepCount, 
   DATA_TYPE *mu, 
   int *max_order, 
 #endif
@@ -7954,12 +8310,13 @@ IntegrationTest::stepIzPs
 #if PRINT_stepIzPs
     std::cerr << "WARNING, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
 #endif
+    ps_order = ps_order_limit-1;
     result = SDK_FAILURE;
   }
 
 #if STATISTICS_ENABLE
-  (*icount)++;
-	*mu += ((DATA_TYPE)ps_order - *mu)/(DATA_TYPE)*icount;
+  (*psStepCount)++;
+	*mu += ((DATA_TYPE)ps_order - *mu)/(DATA_TYPE)*psStepCount;
 	if(ps_order > *max_order)*max_order = ps_order;
 #endif
 
@@ -8012,7 +8369,7 @@ IntegrationTest::stepIzPs
     
 #if STATISTICS_ENABLE
 		/*Record spike and schedule events*/
-    (*fcount)++;
+    (*totalSpikes)++;
 #endif
 
     if(variableDelaysEnalbe)
@@ -8073,12 +8430,13 @@ IntegrationTest::stepIzPs
 #if PRINT_stepIzPs
       std::cerr << "WARNING, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
 #endif
+      ps_order = ps_order_limit-1;
       result = SDK_FAILURE;
     }
 
 #if STATISTICS_ENABLE
-    (*icount)++; 
-		*mu += ((DATA_TYPE)ps_order- *mu)/(DATA_TYPE)*icount;
+    (*psStepCount)++; 
+		*mu += ((DATA_TYPE)ps_order- *mu)/(DATA_TYPE)*psStepCount;
 		if(ps_order > *max_order)*max_order = ps_order;
 #endif
 
@@ -8102,7 +8460,7 @@ int
 IntegrationTest::updateStep
 (
   bool    ignoreFailures,
-  cl_uint injectCurrentUntilStep,
+  int     injectCurrentUntilStep,
   cl_uint currentTimeStep,
   cl_uint totalNeurons,
   cl_uint psOrderLimit,
@@ -8116,8 +8474,8 @@ IntegrationTest::updateStep
   int nrn_ind, substep;
 
 #if STATISTICS_ENABLE
-  int fcount = 0, max_order_ps = 0, max_events = 0;
-  unsigned long long int icount = 0;
+  int totalSpikes = 0, max_order_ps = 0, max_events = 0;
+  unsigned long long psStepCount = 0, eventCount = 0;
   DATA_TYPE   mu_order_ps = 0.0;
 #endif
 
@@ -8167,7 +8525,6 @@ IntegrationTest::updateStep
 #if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
     fp_ps[17] = psTolerance[nrn_ind/(UPDATE_NEURONS_TOTAL_NEURONS/UPDATE_NEURONS_TOLERANCE_CHUNKS)];
 #endif
-
     if(nrnp_ps->n_in)
     {
 #if STATISTICS_ENABLE
@@ -8183,6 +8540,9 @@ IntegrationTest::updateStep
       for(substep=0;substep<(nrnp_ps->n_in);substep++)
 #endif
       {
+#if STATISTICS_ENABLE
+        eventCount++;
+#endif
 #if(FLIXIBLE_DELAYS_ENABLE)
         fp_ps[13] = event - start_ps;
 #else
@@ -8201,8 +8561,8 @@ IntegrationTest::updateStep
             ip,
             fp_ps,
 #if STATISTICS_ENABLE
-            &fcount,
-            &icount,
+            &totalSpikes,
+            &psStepCount,
             &mu_order_ps,
             &max_order_ps,
 #endif
@@ -8272,8 +8632,8 @@ IntegrationTest::updateStep
         ip,
         fp_ps,
 #if STATISTICS_ENABLE
-        &fcount,
-        &icount,
+        &totalSpikes,
+        &psStepCount,
         &mu_order_ps,
         &max_order_ps,
 #endif
@@ -8299,8 +8659,8 @@ IntegrationTest::updateStep
         ip,
         fp_ps,
 #if STATISTICS_ENABLE
-        &fcount,
-        &icount,
+        &totalSpikes,
+        &psStepCount,
         &mu_order_ps,
         &max_order_ps,
 #endif
@@ -8315,14 +8675,24 @@ IntegrationTest::updateStep
   
 #if PRINT_updateStep && STATISTICS_ENABLE
   std::cout << "\n Spikes: " 
-            << "\n  Total: " << fcount 
-            << "\n  Average: " << ((double)fcount/(double)totalNeurons)
+            << "\n  Total: " << totalSpikes 
+            << "\n  Average: " << ((double)totalSpikes/(double)totalNeurons)
             << "\n Synaptic events: " 
             << "\n  Max per neuron: " << max_events 
-            << "\n ps_step calls: " << icount 
+            << "\n ps_step calls: " << psStepCount 
             << "\n Average PS order: " << mu_order_ps 
             << "\n Max PS order: " << max_order_ps 
             << std::endl;
+#endif
+
+#if STATISTICS_ENABLE
+    averageSpikesInNetworkCounter++;
+    averageSpikesInNetwork = averageSpikesInNetwork + (totalSpikes - averageSpikesInNetwork)/
+      (averageSpikesInNetworkCounter);
+
+    averageEventsInNetworkCounter++;
+    averageEventsInNetwork = averageEventsInNetwork + (eventCount - averageEventsInNetwork)/
+      (averageEventsInNetworkCounter);
 #endif
 
   free(yold); free(ynew);
@@ -8423,6 +8793,7 @@ IntegrationTest::verifyKernelUpdateNeurons
         sortedEvents,
         nrn_ps
       );
+      
       if(result != SDK_SUCCESS){return result;}
     }
 #endif
@@ -8535,57 +8906,54 @@ IntegrationTest::verifyKernelUpdateNeurons
   }
 
   /*Verify spikes*/
+  char *spikeCheck = (char *)calloc(UPDATE_NEURONS_TOTAL_NEURONS, sizeof(char));
+  
+  /*All verified spikes have equivalents in the reference data*/
+  for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
+  {
+    cl_uint packet_index = packet * UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS;
+    cl_uint total_spikes = dataSpikePacketCounts[packet];
+
+    /*Iterate through spikes in a current packet*/
+    for(cl_uint i = 0; i < total_spikes; i++)
+    {
+      cl_uint spiked_neuron = dataSpikePackets[packet_index + 
+        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
+      cl_float spike_time = *((cl_float *)(&dataSpikePackets[packet_index + 
+        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i 
+        + 1]));
+      if(te_ps[spiked_neuron] != spike_time)
+      {
+        std::cerr << "ERROR, verifyKernelUpdateNeurons, spike time mismatch for neuron " 
+          << spiked_neuron << ", packet " << packet << ": " << te_ps[spiked_neuron] << "!=" 
+          << spike_time << std::endl;
+        result = SDK_FAILURE;
+        if(breakOnFailure){break;}
+      }
+      else
+      {
+        spikeCheck[spiked_neuron] = 1;
+      }
+    }
+    if(breakOnFailure && (result == SDK_FAILURE)){break;}
+  }
+  
+  /*There are no reference spikes, which are not present in the verified data*/
   if(result != SDK_FAILURE)
   {
-    char *spikeCheck = (char *)calloc(UPDATE_NEURONS_TOTAL_NEURONS, sizeof(char));
-    
-    /*All verified spikes have equivalents in the reference data*/
-    for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
+    for(cl_uint n = 0; n < UPDATE_NEURONS_TOTAL_NEURONS; n++)
     {
-      cl_uint packet_index = packet * UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS;
-      cl_uint total_spikes = dataSpikePacketCounts[packet];
-
-      /*Iterate through spikes in a current packet*/
-      for(cl_uint i = 0; i < total_spikes; i++)
+      if(te_ps[n] != 0.0 && spikeCheck[n] == 0)
       {
-        cl_uint spiked_neuron = dataSpikePackets[packet_index + 
-          UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
-        cl_float spike_time = *((cl_float *)(&dataSpikePackets[packet_index + 
-          UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i 
-          + 1]));
-        if(te_ps[spiked_neuron] != spike_time)
-        {
-          std::cerr << "ERROR, verifyKernelUpdateNeurons, spike time mismatch for neuron " 
-            << spiked_neuron << ", packet " << packet << ": " << te_ps[spiked_neuron] << "!=" 
-            << spike_time << std::endl;
-          result = SDK_FAILURE;
-          if(breakOnFailure){break;}
-        }
-        else
-        {
-          spikeCheck[spiked_neuron] = 1;
-        }
-      }
-      if(breakOnFailure && (result == SDK_FAILURE)){break;}
-    }
-    
-    /*There are no reference spikes, which are not present in the verified data*/
-    if(result != SDK_FAILURE)
-    {
-      for(cl_uint n = 0; n < UPDATE_NEURONS_TOTAL_NEURONS; n++)
-      {
-        if(te_ps[n] != 0.0 && spikeCheck[n] == 0)
-        {
-          std::cerr << "ERROR, verifyKernelUpdateNeurons, a spike from neuron " << n 
-            << " and spike time " << te_ps[n] << " is absent"<< std::endl;
-          result = SDK_FAILURE;
-          if(breakOnFailure){break;}
-        }
+        std::cerr << "ERROR, verifyKernelUpdateNeurons, a spike from neuron " << n 
+          << " and spike time " << te_ps[n] << " is absent"<< std::endl;
+        result = SDK_FAILURE;
+        if(breakOnFailure){break;}
       }
     }
-    
-    free(spikeCheck);
   }
+  
+  free(spikeCheck);
   }
 #endif
 #endif
@@ -9341,6 +9709,11 @@ IntegrationTest::cleanup()
 void 
 IntegrationTest::printStats()
 {
+#if STATISTICS_ENABLE
+  LOG("Average Events/Iteration:" << averageEventsInNetwork, 1);
+  LOG("Average Spikes/Iteration:" << averageSpikesInNetwork, 1);
+#endif
+
   std::string strArray[4] = 
   {
       "Time(sec)", 
@@ -9376,8 +9749,8 @@ main(int argc, char *argv[])
   if(test.run() !=  SDK_SUCCESS)
     {test.cleanup(); std::cout << "\nRESULT:FAIL\n"; return SDK_FAILURE;}
   std::cout << "\nRESULT:PASS\n";
-  test.cleanup();
   test.printStats();
-
+  test.cleanup();
+  
   return SDK_SUCCESS;
 }

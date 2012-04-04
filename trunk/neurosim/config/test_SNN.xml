@@ -17,255 +17,149 @@
     <!--  -->
   </common_config>
   
-  <!-- Test-specific config parameters -->
+  <!-- Test-specific config parameters. Refer to test_Generic.xml for usage -->
   <specific_config>
-    <!-- 
-      Templates for test-specific config parameters.
-      The script sequentually runs each <exe> section. A section be skipped if it has  a tag="skip".
-      Each <exe> section consits of <config> and <flow> sections.
-      Each parameter value in <config> section can be a comma-separated string of values. A value 
-      can be a scalar or an expression accepted by Perl function eval(). The script recursively 
-      compiles and runs all combinations of parameters. It runs each combination according to the
-      execution flow defined by the <flow> section. That section has nodes. The executable is 
-      compiled and run at each node. The user can specify which node to execute next depending on 
-      the PASS or FAIL outcome of a run. Each node can have parameters. Node parameter names must
-      not be shown in <config> and <common_config> sections.
-      
-      Additional notes:
-      exe name="some_name" - has to be unique.
-    -->
+
     
+    <!--  -->
     
     
     <exe name="1" tag="skip">
-      <id>simulation_modes</id>
+      <id>SNN_SMALL</id>
       <!-- Configuration -->
       <config>
+        <!-- ENABLE_MASK: oct("0b1111111110000000") -->
         <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
-        <param id="REFERENCE_EVENT_QUEUE_SIZE">750</param>
-        <param id="TOTAL_NEURON_BITS">17</param>
+        
+        <!-- REFERENCE_EVENT_QUEUE_SIZE: 10000 -->
+        <param id="REFERENCE_EVENT_QUEUE_SIZE">10000</param>
+        
+        <!-- TOTAL_NEURON_BITS: 17 -->
+        <param id="TOTAL_NEURON_BITS">14</param>
+        
+        <!-- PREINITIALIZE_NETWORK_STATE: 1 -->
         <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+        
+        <!-- SYNAPTIC_EVENT_BUFFERS: 32,64,128,256,512,1024. Tahiti: 32,64 -->
         <param id="SYNAPTIC_EVENT_BUFFERS">32</param>
+        
+        <!-- SYNAPSE_GABA_PERCENT: 0.0 - 100.0 -->
         <param id="SYNAPSE_GABA_PERCENT">0.0</param>
-        <param id="EVENT_DATA_BUFFER_SIZE">(64*1024)</param>
+        
+        <!-- EVENT_DATA_BUFFER_SIZE: -->
+        <param id="EVENT_DATA_BUFFER_SIZE">(96*1024)</param>
+		
+        <!-- SPIKE_PACKET_SIZE (affects problem partitioning): 4-512 -->
         <param id="SPIKE_PACKET_SIZE">16</param>
-        <param id="SPIKE_PACKETS">512</param>
+		
+        <!-- SPIKE_PACKETS (affects problem partitioning): 64-2048 -->
+        <param id="SPIKE_PACKETS">256</param>
+		
+        <!-- SYNAPSE_DEVIATION_RATIO (affects problem size): 0.5 -->
         <param id="SYNAPSE_DEVIATION_RATIO">0.1</param>
-        <param id="MAX_SYNAPSES_PER_NEURON">1536</param>
-        <param id="TOLERANCE_MODE">2</param>
-        <param id="EXPAND_EVENTS_TEST_MODE">10</param>
-        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
-        <param id="EXPAND_EVENTS_SPIKE_BUFFER_SIZE">128</param>
-        <param id="EXPAND_EVENTS_INTER_WF_COOPERATION">1</param>
-        <param id="SCAN_WG_SIZE_WF">2</param>   
-        <param id="SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">0</param>
-        <param id="SCAN_OPTIMIZATION_2LEVEL_REDUCE">1</param>
-        <param id="SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET">64</param>
-        <param id="GROUP_EVENTS_WG_SIZE_WF">4</param>     
-        <param id="GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG">1</param>
-        <param id="GROUP_EVENTS_ELEMENTS_PER_WI">4</param>
-        <param id="GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER">16</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT">1</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE">1</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT">1</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS">1</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">17</param>
-        <param id="GROUP_EVENTS_TEST_MODE">10</param>
-        <param id="MAKE_EVENT_PTRS_WG_SIZE_WF">4</param>
-        <param id="MAKE_EVENT_PTRS_ELEMENTS_PER_WI">8</param>
-        <param id="MAKE_EVENT_PTRS_GRID_SIZE_WG">128</param>
-        <param id="MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE">1024</param>
-        <param id="UPDATE_NEURONS_ELEMENTS_PER_WI">1</param>
-        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">1</param>
-      </config>
-      <!-- Execution flow -->
-      <flow>
-        <!-- Start node is alwasy the first -->
-        <node name="Start">
-          <result id="PASS">Simulation_Mode_0</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="Simulation_Mode_0">
-          <param id="SIMULATION_MODE">0</param>
-          <param id="SIMULATION_SNAPSHOT">1</param>
-          <param id="SIMULATION_TIME_STEPS">(16*4+1)</param>
-          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-          <result id="PASS">Simulation_Mode_1</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="Simulation_Mode_1">
-          <param id="SIMULATION_MODE">1</param>
-          <param id="SIMULATION_SNAPSHOT">1</param>
-          <param id="SIMULATION_TIME_STEPS">400</param>
-          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">1</param>
-          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">1</param>
-          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-          <result id="PASS">Simulation_Mode_2</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="Simulation_Mode_2">
-          <param id="SIMULATION_MODE">2</param>
-          <param id="SIMULATION_TIME_STEPS">1200</param>
-          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-          <param id="START_PROFILING_AT_STEP">200</param>
-          <result id="PASS">Simulation_Mode_3</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="Simulation_Mode_3">
-          <param id="SIMULATION_MODE">3</param>
-          <param id="SIMULATION_TIME_STEPS">1200</param>
-          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-          <param id="START_PROFILING_AT_STEP">200</param>
-          <result id="PASS">Simulation_Mode_4</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="Simulation_Mode_4">
-          <param id="SIMULATION_MODE">4</param>
-          <param id="SIMULATION_TIME_STEPS">1200</param>
-          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-          <param id="START_PROFILING_AT_STEP">200</param>
-          <result id="PASS">Simulation_Mode_5</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="Simulation_Mode_5">
-          <param id="SIMULATION_MODE">5</param>
-          <param id="SIMULATION_TIME_STEPS">1000</param>
-          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-          <result id="PASS">Exit</result>
-          <result id="FAIL">Exit</result>
-        </node>
-      </flow>
-    </exe>
-    
-    
-    <!--  -->
-    
-    
-    <!-- Snapshot -->
-    <exe name="2" tag="skip">
-      <id>Snapshot</id>
-      <!-- Configuration -->
-     <config>
-        <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
-        <param id="REFERENCE_EVENT_QUEUE_SIZE">750</param>
-        <param id="TOTAL_NEURON_BITS">17</param>
-        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-        <param id="SYNAPTIC_EVENT_BUFFERS">32</param>
-        <param id="SYNAPSE_GABA_PERCENT">0.0</param>
-        <param id="EVENT_DATA_BUFFER_SIZE">(64*1024)</param>
-        <param id="SPIKE_PACKET_SIZE">16</param>
-        <param id="SPIKE_PACKETS">512</param>
-        <param id="SYNAPSE_DEVIATION_RATIO">0.1</param>
-        <param id="MAX_SYNAPSES_PER_NEURON">1536</param>
+		
+        <!-- MAX_SYNAPSES_PER_NEURON (affects problem size): 32-16384 -->
+        <param id="MAX_SYNAPSES_PER_NEURON">12288</param>
+        
+        <!-- TOLERANCE_MODE: 0,1,2 -->
         <param id="TOLERANCE_MODE">0</param>
+		
+        <!-- EXPAND_EVENTS_TEST_MODE (per mil of spiked neurons, affects problem size): 5-20 -->
         <param id="EXPAND_EVENTS_TEST_MODE">10</param>
+		
+        <!-- EXPAND_EVENTS_WG_SIZE_WF: 1,2,4. Tahiti: 4 -->
         <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+		
+        <!-- EXPAND_EVENTS_SPIKE_BUFFER_SIZE (LM buffer for local spike storage): 64-512 -->
         <param id="EXPAND_EVENTS_SPIKE_BUFFER_SIZE">128</param>
+		
+        <!-- EXPAND_EVENTS_INTER_WF_COOPERATION: 0,1. Tahiti: 1-->
         <param id="EXPAND_EVENTS_INTER_WF_COOPERATION">1</param>
+        
+        <!-- SCAN_WG_SIZE_WF: 1,2,4. Tahiti: 32:1, 64:4 -->
         <param id="SCAN_WG_SIZE_WF">2</param>   
+        
+        <!-- SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 0 -->
         <param id="SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">0</param>
+        
+        <!-- SCAN_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1-->
         <param id="SCAN_OPTIMIZATION_2LEVEL_REDUCE">1</param>
+        
+        <!-- SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET: 0-15. Tahiti: 64-->
         <param id="SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET">64</param>
+        
+        <!-- GROUP_EVENTS_WG_SIZE_WF: 1,2,4 Tahiti: 4-->
         <param id="GROUP_EVENTS_WG_SIZE_WF">4</param>     
+        
+        <!-- GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG: 1 -->
         <param id="GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG">1</param>
+        
+        <!-- GROUP_EVENTS_ELEMENTS_PER_WI: 2,4,8,16. Tahiti: 4,8 -->
         <param id="GROUP_EVENTS_ELEMENTS_PER_WI">4</param>
+        
+        <!-- GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER: 8,16,32. Tahiti: 8,16 -->
         <param id="GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER">16</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT: 0,1. Tahiti: 0 -->
         <param id="GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1 -->
         <param id="GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT: 0,1. Tahiti: 1 -->
         <param id="GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS: 0,1. Tahiti: 1 -->
         <param id="GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 17 -->
         <param id="GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">17</param>
+        
+        <!-- GROUP_EVENTS_TEST_MODE (deviation per cent of EVENT_DATA_BUFFER_SIZE capacity) -->
         <param id="GROUP_EVENTS_TEST_MODE">10</param>
+
+        <!-- MAKE_EVENT_PTRS_WG_SIZE_WF: 1,2,4. Tahiti: 4. -->
         <param id="MAKE_EVENT_PTRS_WG_SIZE_WF">4</param>
+        
+        <!-- MAKE_EVENT_PTRS_ELEMENTS_PER_WI: 2,4,8,16. Tahiti: 8 -->
         <param id="MAKE_EVENT_PTRS_ELEMENTS_PER_WI">8</param>
+        
+        <!-- MAKE_EVENT_PTRS_GRID_SIZE_WG: 32,64,128. Tahiti: 128 or more -->
         <param id="MAKE_EVENT_PTRS_GRID_SIZE_WG">128</param>
+        
+        <!-- MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE: 1024 -->
         <param id="MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE">1024</param>
+        
+        <!-- UPDATE_NEURONS_ELEMENTS_PER_WI: 1 -->
         <param id="UPDATE_NEURONS_ELEMENTS_PER_WI">1</param>
+        
+        <!-- UPDATE_NEURONS_WG_SIZE_WF_V00: 1,2,4 -->
         <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">1</param>
+        
       </config>
       <!-- Execution flow -->
       <flow>
         <!-- Start node is alwasy the first -->
         <node name="Start">
-          <result id="PASS">Snapshot</result>
+          <result id="PASS">Profile</result>
           <result id="FAIL">Exit</result>
         </node>
-        <node name="Snapshot">
+        <node name="VerifyAll">
+          <param id="SIMULATION_MODE">0</param>
+          <param id="SIMULATION_TIME_STEPS">100</param>
+          <result id="PASS">Profile</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="VerifyQuick">
           <param id="SIMULATION_MODE">1</param>
-          <param id="SIMULATION_SNAPSHOT">1</param>
-          <param id="SIMULATION_TIME_STEPS">1000</param>
-          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">1</param>
-          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">1</param>
-          <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-          <result id="PASS">Exit</result>
-          <result id="FAIL">Exit</result>
-        </node>
-      </flow>
-    </exe>
-    
-    
-    <!--  -->
-    
-    
-    <!-- quick_validation -->
-    <exe name="3" tag="noskip">
-      <id>quick_validation</id>
-      <!-- Configuration -->
-      <config>
-        <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
-        <param id="REFERENCE_EVENT_QUEUE_SIZE">750</param>
-        <param id="TOTAL_NEURON_BITS">17</param>
-        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-        <param id="SYNAPTIC_EVENT_BUFFERS">32</param>
-        <param id="SYNAPSE_GABA_PERCENT">0.0</param>
-        <param id="EVENT_DATA_BUFFER_SIZE">(64*1024)</param>
-        <param id="SPIKE_PACKET_SIZE">16</param>
-        <param id="SPIKE_PACKETS">512</param>
-        <param id="SYNAPSE_DEVIATION_RATIO">0.1</param>
-        <param id="MAX_SYNAPSES_PER_NEURON">1536</param>
-        <param id="TOLERANCE_MODE">2</param>
-        <param id="EXPAND_EVENTS_TEST_MODE">10</param>
-        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
-        <param id="EXPAND_EVENTS_SPIKE_BUFFER_SIZE">128</param>
-        <param id="EXPAND_EVENTS_INTER_WF_COOPERATION">1</param>
-        <param id="SCAN_WG_SIZE_WF">2</param>   
-        <param id="SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">0</param>
-        <param id="SCAN_OPTIMIZATION_2LEVEL_REDUCE">1</param>
-        <param id="SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET">64</param>
-        <param id="GROUP_EVENTS_WG_SIZE_WF">4</param>     
-        <param id="GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG">1</param>
-        <param id="GROUP_EVENTS_ELEMENTS_PER_WI">4</param>
-        <param id="GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER">16</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT">1</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE">1</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT">1</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS">1</param>
-        <param id="GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">17</param>
-        <param id="GROUP_EVENTS_TEST_MODE">10</param>
-        <param id="MAKE_EVENT_PTRS_WG_SIZE_WF">4</param>
-        <param id="MAKE_EVENT_PTRS_ELEMENTS_PER_WI">8</param>
-        <param id="MAKE_EVENT_PTRS_GRID_SIZE_WG">128</param>
-        <param id="MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE">1024</param>
-        <param id="UPDATE_NEURONS_ELEMENTS_PER_WI">1</param>
-        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">1</param>
-      </config>
-      <!-- Execution flow -->
-      <flow>
-        <!-- Start node is alwasy the first -->
-        <node name="Start">
-          <result id="PASS">Verify</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="Verify">
-          <param id="SIMULATION_MODE">1</param>
-          <param id="SIMULATION_TIME_STEPS">400</param>
+          <param id="SIMULATION_TIME_STEPS">200</param>
           <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">50</param>
           <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">50</param>
-          <result id="PASS">Profile_kernels</result>
+          <result id="PASS">Profile</result>
           <result id="FAIL">Exit</result>
         </node>
-        <node name="Profile_kernels">
-          <param id="SIMULATION_MODE">4</param>
+        <node name="Profile">
+          <param id="SIMULATION_MODE">2</param>
           <param id="SIMULATION_TIME_STEPS">1200</param>
           <param id="START_PROFILING_AT_STEP">200</param>
           <result id="PASS">Exit</result>
@@ -278,33 +172,144 @@
     <!--  -->
     
     
-    <exe name="4" tag="skip">
-      <id>Debug</id>
+    <exe name="2" tag="noskip">
+      <id>SNN_MEDIUM</id>
       <!-- Configuration -->
       <config>
-        <param id="ENABLE_MASK">oct("0b1100000010000000")</param>
-        <param id="SIMULATION_MODE">0</param>
-        <param id="SIMULATION_TIME_STEPS">(16*2+1)</param>
-        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+        <!-- ENABLE_MASK: oct("0b1111111110000000") -->
+        <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
+        
+        <!-- REFERENCE_EVENT_QUEUE_SIZE: 10000 -->
+        <param id="REFERENCE_EVENT_QUEUE_SIZE">750</param>
+        
+        <!-- TOTAL_NEURON_BITS: 17 -->
         <param id="TOTAL_NEURON_BITS">17</param>
-        <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
-        <param id="TOLERANCE_MODE">0</param>
-        <param id="SPIKE_PACKET_SIZE">128</param>
-        <param id="SPIKE_PACKETS">(4*64)</param>
-        <param id="SYNAPTIC_EVENT_BUFFERS">(2*64)</param>
-        <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
-        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">2</param>
-        <param id="UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE">(2**20)</param>
-        <param id="EXPAND_EVENTS_WG_SIZE_WF">2</param>
+        
+        <!-- PREINITIALIZE_NETWORK_STATE: 1 -->
+        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+        
+        <!-- SYNAPTIC_EVENT_BUFFERS: 32,64,128,256,512,1024. Tahiti: 32,64 -->
+        <param id="SYNAPTIC_EVENT_BUFFERS">32</param>
+        
+        <!-- SYNAPSE_GABA_PERCENT: 0.0 - 100.0 -->
+        <param id="SYNAPSE_GABA_PERCENT">0.0</param>
+        
+        <!-- EVENT_DATA_BUFFER_SIZE: -->
+        <param id="EVENT_DATA_BUFFER_SIZE">(64*1024)</param>
+		
+        <!-- SPIKE_PACKET_SIZE (affects problem partitioning): 4-512 -->
+        <param id="SPIKE_PACKET_SIZE">16</param>
+		
+        <!-- SPIKE_PACKETS (affects problem partitioning): 64-2048 -->
+        <param id="SPIKE_PACKETS">512</param>
+		
+        <!-- SYNAPSE_DEVIATION_RATIO (affects problem size): 0.5 -->
+        <param id="SYNAPSE_DEVIATION_RATIO">0.1</param>
+		
+        <!-- MAX_SYNAPSES_PER_NEURON (affects problem size): 32-16384 -->
+        <param id="MAX_SYNAPSES_PER_NEURON">1536</param>
+        
+        <!-- TOLERANCE_MODE: 0,1,2 -->
+        <param id="TOLERANCE_MODE">2</param>
+		
+        <!-- EXPAND_EVENTS_TEST_MODE (per mil of spiked neurons, affects problem size): 5-20 -->
+        <param id="EXPAND_EVENTS_TEST_MODE">10</param>
+		
+        <!-- EXPAND_EVENTS_WG_SIZE_WF: 1,2,4. Tahiti: 4 -->
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+		
+        <!-- EXPAND_EVENTS_SPIKE_BUFFER_SIZE (LM buffer for local spike storage): 64-512 -->
+        <param id="EXPAND_EVENTS_SPIKE_BUFFER_SIZE">128</param>
+		
+        <!-- EXPAND_EVENTS_INTER_WF_COOPERATION: 0,1. Tahiti: 1-->
+        <param id="EXPAND_EVENTS_INTER_WF_COOPERATION">1</param>
+        
+        <!-- SCAN_WG_SIZE_WF: 1,2,4. Tahiti: 32:1, 64:4 -->
+        <param id="SCAN_WG_SIZE_WF">2</param>   
+        
+        <!-- SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 0 -->
+        <param id="SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">0</param>
+        
+        <!-- SCAN_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1-->
+        <param id="SCAN_OPTIMIZATION_2LEVEL_REDUCE">1</param>
+        
+        <!-- SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET: 0-15. Tahiti: 64-->
+        <param id="SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET">64</param>
+        
+        <!-- GROUP_EVENTS_WG_SIZE_WF: 1,2,4 Tahiti: 4-->
+        <param id="GROUP_EVENTS_WG_SIZE_WF">4</param>     
+        
+        <!-- GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG: 1 -->
+        <param id="GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG">1</param>
+        
+        <!-- GROUP_EVENTS_ELEMENTS_PER_WI: 2,4,8,16. Tahiti: 4,8 -->
+        <param id="GROUP_EVENTS_ELEMENTS_PER_WI">4</param>
+        
+        <!-- GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER: 8,16,32. Tahiti: 8,16 -->
+        <param id="GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER">16</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT: 0,1. Tahiti: 0 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT: 0,1. Tahiti: 1 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS: 0,1. Tahiti: 1 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 17 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">17</param>
+        
+        <!-- GROUP_EVENTS_TEST_MODE (deviation per cent of EVENT_DATA_BUFFER_SIZE capacity) -->
+        <param id="GROUP_EVENTS_TEST_MODE">10</param>
+
+        <!-- MAKE_EVENT_PTRS_WG_SIZE_WF: 1,2,4. Tahiti: 4. -->
+        <param id="MAKE_EVENT_PTRS_WG_SIZE_WF">4</param>
+        
+        <!-- MAKE_EVENT_PTRS_ELEMENTS_PER_WI: 2,4,8,16. Tahiti: 8 -->
+        <param id="MAKE_EVENT_PTRS_ELEMENTS_PER_WI">8</param>
+        
+        <!-- MAKE_EVENT_PTRS_GRID_SIZE_WG: 32,64,128. Tahiti: 128 or more -->
+        <param id="MAKE_EVENT_PTRS_GRID_SIZE_WG">128</param>
+        
+        <!-- MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE: 1024 -->
+        <param id="MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE">1024</param>
+        
+        <!-- UPDATE_NEURONS_ELEMENTS_PER_WI: 1 -->
+        <param id="UPDATE_NEURONS_ELEMENTS_PER_WI">1</param>
+        
+        <!-- UPDATE_NEURONS_WG_SIZE_WF_V00: 1,2,4 -->
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">1</param>
+        
       </config>
       <!-- Execution flow -->
       <flow>
         <!-- Start node is alwasy the first -->
         <node name="Start">
-          <result id="PASS">Debug</result>
+          <result id="PASS">Profile</result>
           <result id="FAIL">Exit</result>
         </node>
-        <node name="Debug">
+        <node name="VerifyAll">
+          <param id="SIMULATION_MODE">0</param>
+          <param id="SIMULATION_TIME_STEPS">100</param>
+          <result id="PASS">Profile</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="VerifyQuick">
+          <param id="SIMULATION_MODE">1</param>
+          <param id="SIMULATION_TIME_STEPS">200</param>
+          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">50</param>
+          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">50</param>
+          <result id="PASS">Profile</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Profile">
+          <param id="SIMULATION_MODE">2</param>
+          <param id="SIMULATION_TIME_STEPS">1200</param>
+          <param id="START_PROFILING_AT_STEP">200</param>
           <result id="PASS">Exit</result>
           <result id="FAIL">Exit</result>
         </node>
@@ -313,8 +318,156 @@
     
     
     <!--  -->
+    
+    
+    <exe name="3" tag="skip">
+      <id>SNN_LARGE</id>
+      <!-- Configuration -->
+      <config>
+        <!-- ENABLE_MASK: oct("0b1111111110000000") -->
+        <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
+        
+        <!-- REFERENCE_EVENT_QUEUE_SIZE: 10000 -->
+        <param id="REFERENCE_EVENT_QUEUE_SIZE">150</param>
+        
+        <!-- TOTAL_NEURON_BITS: 17 -->
+        <param id="TOTAL_NEURON_BITS">21</param>
+        
+        <!-- PREINITIALIZE_NETWORK_STATE: 1 -->
+        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+        
+        <!-- SYNAPTIC_EVENT_BUFFERS: 32,64,128,256,512,1024. Tahiti: 32,64 -->
+        <param id="SYNAPTIC_EVENT_BUFFERS">32</param>
+        
+        <!-- SYNAPSE_GABA_PERCENT: 0.0 - 100.0 -->
+        <param id="SYNAPSE_GABA_PERCENT">0.0</param>
+        
+        <!-- EVENT_DATA_BUFFER_SIZE: -->
+        <param id="EVENT_DATA_BUFFER_SIZE">(64*1024)</param>
+		
+        <!-- SPIKE_PACKET_SIZE (affects problem partitioning): 4-512 -->
+        <param id="SPIKE_PACKET_SIZE">32</param>
+		
+        <!-- SPIKE_PACKETS (affects problem partitioning): 64-2048 -->
+        <param id="SPIKE_PACKETS">512</param>
+		
+        <!-- SYNAPSE_DEVIATION_RATIO (affects problem size): 0.5 -->
+        <param id="SYNAPSE_DEVIATION_RATIO">0.1</param>
+		
+        <!-- MAX_SYNAPSES_PER_NEURON (affects problem size): 32-16384 -->
+        <param id="MAX_SYNAPSES_PER_NEURON">96</param>
+        
+        <!-- TOLERANCE_MODE: 0,1,2 -->
+        <param id="TOLERANCE_MODE">0</param>
+		
+        <!-- EXPAND_EVENTS_TEST_MODE (per mil of spiked neurons, affects problem size): 5-20 -->
+        <param id="EXPAND_EVENTS_TEST_MODE">10</param>
+		
+        <!-- EXPAND_EVENTS_WG_SIZE_WF: 1,2,4. Tahiti: 4 -->
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+		
+        <!-- EXPAND_EVENTS_SPIKE_BUFFER_SIZE (LM buffer for local spike storage): 64-512 -->
+        <param id="EXPAND_EVENTS_SPIKE_BUFFER_SIZE">256</param>
+		
+        <!-- EXPAND_EVENTS_INTER_WF_COOPERATION: 0,1. Tahiti: 1-->
+        <param id="EXPAND_EVENTS_INTER_WF_COOPERATION">1</param>
+        
+        <!-- SCAN_WG_SIZE_WF: 1,2,4. Tahiti: 32:1, 64:4 -->
+        <param id="SCAN_WG_SIZE_WF">2</param>   
+        
+        <!-- SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 0 -->
+        <param id="SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">0</param>
+        
+        <!-- SCAN_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1-->
+        <param id="SCAN_OPTIMIZATION_2LEVEL_REDUCE">1</param>
+        
+        <!-- SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET: 0-15. Tahiti: 64-->
+        <param id="SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET">64</param>
+        
+        <!-- GROUP_EVENTS_WG_SIZE_WF: 1,2,4 Tahiti: 4-->
+        <param id="GROUP_EVENTS_WG_SIZE_WF">4</param>     
+        
+        <!-- GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG: 1 -->
+        <param id="GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG">1</param>
+        
+        <!-- GROUP_EVENTS_ELEMENTS_PER_WI: 2,4,8,16. Tahiti: 4,8 -->
+        <param id="GROUP_EVENTS_ELEMENTS_PER_WI">4</param>
+        
+        <!-- GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER: 8,16,32. Tahiti: 8,16 -->
+        <param id="GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER">16</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT: 0,1. Tahiti: 0 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT: 0,1. Tahiti: 1 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS: 0,1. Tahiti: 1 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 17 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">17</param>
+        
+        <!-- GROUP_EVENTS_TEST_MODE (deviation per cent of EVENT_DATA_BUFFER_SIZE capacity) -->
+        <param id="GROUP_EVENTS_TEST_MODE">10</param>
 
-
+        <!-- MAKE_EVENT_PTRS_WG_SIZE_WF: 1,2,4. Tahiti: 4. -->
+        <param id="MAKE_EVENT_PTRS_WG_SIZE_WF">4</param>
+        
+        <!-- MAKE_EVENT_PTRS_ELEMENTS_PER_WI: 2,4,8,16. Tahiti: 8 -->
+        <param id="MAKE_EVENT_PTRS_ELEMENTS_PER_WI">8</param>
+        
+        <!-- MAKE_EVENT_PTRS_GRID_SIZE_WG: 32,64,128. Tahiti: 128 or more -->
+        <param id="MAKE_EVENT_PTRS_GRID_SIZE_WG">128</param>
+        
+        <!-- MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE: 1024 -->
+        <param id="MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE">1024</param>
+        
+        <!-- UPDATE_NEURONS_ELEMENTS_PER_WI: 1 -->
+        <param id="UPDATE_NEURONS_ELEMENTS_PER_WI">1</param>
+        
+        <!-- UPDATE_NEURONS_WG_SIZE_WF_V00: 1,2,4 -->
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">1</param>
+        
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Profile</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="VerifyAll">
+          <param id="SIMULATION_MODE">0</param>
+          <param id="SIMULATION_TIME_STEPS">100</param>
+          <result id="PASS">Profile</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="VerifyQuick">
+          <param id="SIMULATION_MODE">1</param>
+          <param id="SIMULATION_TIME_STEPS">200</param>
+          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">50</param>
+          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">50</param>
+          <result id="PASS">Profile</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Profile">
+          <param id="SIMULATION_MODE">2</param>
+          <param id="SIMULATION_TIME_STEPS">1200</param>
+          <param id="START_PROFILING_AT_STEP">200</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    
+    
+    <!--  -->
+    
+    
   </specific_config>
   
   <report_config>

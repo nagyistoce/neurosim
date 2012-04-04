@@ -10,11 +10,114 @@
 
 /** ############################################################################################# **
 
-  I. Generic Parameters, Macros and Definitions
+  Optimization guidelines
+  
+  SI
+    Description: 
+      Scalar CUs, 4 vector ALUs and 1 scalar ALU / CU. Vector instruction executs 4x longer
+      than scalar. There are 512 SGPRs and 256 VGPRs / Vector ALU. SGPR allocation is in 
+      increments of 8, and VGPR allocation is in increments of 4. Scalar instructions are branch,
+      constant cache fetch. LDS: 64 KB / CU, max allocation is 32 KB / WG, allocation granularity 
+      is 256 B. L1: R/W, 16 KB / CU.
+    
+    Optimization tips:
+      - Have at least 1 WF/CU. Max is 10. Try to get 10.
+      - Max optimal Scalar/Vector instruction ratio = 1.
+      - Read coalescing does not work for 64-bit data sizes.
+      - WGs with 256 WIs ensure that each CU is being used.
+      - Overlap execution of different kernels where possible. Use multiple buffers.
   
 ** ############################################################################################# **/
 
 
+
+/** ############################################################################################# **
+
+  Configuration space. Use this space to overwrite default definitions.
+
+EXPAND_EVENTS:
+#define 	ENABLE_MASK	 	BIN_16(1000,0000,0000,0000)
+#define 	TOTAL_NEURON_BITS	 	17
+#define 	MAX_SYNAPSES_PER_NEURON	 	(24*64)
+#define   SYNAPSE_DEVIATION_RATIO 0.5
+#define 	SPIKE_PACKET_SIZE	 	128
+#define 	EVENT_DATA_BUFFER_SIZE	 	(32*1024)
+#define 	SPIKE_PACKETS	 	512
+#define 	EXPAND_EVENTS_WG_SIZE_WF	 	2
+#define 	EXPAND_EVENTS_TEST_MODE	 	5
+#define 	EXPAND_EVENTS_SPIKE_BUFFER_SIZE	 	128
+#define 	TOLERANCE_MODE	 	0
+#define 	SYNAPTIC_EVENT_BUFFERS	 	64
+#define 	PREINITIALIZE_NETWORK_STATE	 	0
+#define 	EXPAND_EVENTS_INTER_WF_COOPERATION	 	0
+
+#define 	SIMULATION_MODE	 	0
+#define 	EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT	 	(16*2+2)
+#define 	SIMULATION_TIME_STEPS	 	(16*2+1)
+
+//#define 	SIMULATION_MODE	 	4
+//#define 	EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT	 	117
+//#define 	SIMULATION_TIME_STEPS	 	116
+//#define 	START_PROFILING_AT_STEP	 	16
+
+#define 	SIMULATION_MODE	 	5
+#define 	EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT	 	33
+#define 	SIMULATION_TIME_STEPS	 	32
+
+SCAN_V00:
+#define 	ENABLE_MASK	 	BIN_16(0100,0000,0000,0000)
+#define 	SCAN_WG_SIZE_WF   4
+#define 	SYNAPTIC_EVENT_BUFFERS    (2*64)
+#define   SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET 17
+#define   SCAN_OPTIMIZATION_2LEVEL_REDUCE 1
+#define   SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET  0
+
+#define 	SIMULATION_MODE   0
+#define 	SIMULATION_TIME_STEPS   (16*2+1)
+
+#define 	SIMULATION_MODE   4
+#define 	SIMULATION_TIME_STEPS   1016
+#define 	START_PROFILING_AT_STEP   16
+
+SCAN_V01:
+#define 	ENABLE_MASK	 	BIN_16(0001,0000,0000,0000)
+#define 	SCAN_WG_SIZE_WF   4
+#define 	SYNAPTIC_EVENT_BUFFERS    (2*64)
+#define 	SIMULATION_MODE   0
+#define 	SIMULATION_TIME_STEPS   (16*2+1)
+//#define 	START_PROFILING_AT_STEP   16
+
+GROUP_EVENTS_V00:
+#define 	ENABLE_MASK   BIN_16(0010,0000,0000,0000)
+#define 	TOTAL_NEURON_BITS   17
+#define 	PREINITIALIZE_NETWORK_STATE   0
+#define 	EVENT_DATA_BUFFER_SIZE   (32*1024)
+#define 	SYNAPTIC_EVENT_BUFFERS   128
+#define 	GROUP_EVENTS_WG_SIZE_WF   4
+#define 	GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG   1
+#define   GROUP_EVENTS_ELEMENTS_PER_WI 4
+#define   GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER 16
+#define   GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS 1
+#define   GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE 1
+#define   GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT 1
+#define 	GROUP_EVENTS_TEST_MODE   0
+
+#define 	SIMULATION_MODE   0
+#define 	SIMULATION_TIME_STEPS   (16*2-1)
+
+#define 	SIMULATION_MODE   4
+#define 	SIMULATION_TIME_STEPS   20
+#define 	START_PROFILING_AT_STEP   0
+
+** ############################################################################################# **/
+
+
+
+/** ############################################################################################# **
+
+  I. Generic Parameters, Macros and Definitions
+  
+** ############################################################################################# **/
 
 /***************************************************************************************************
   Math macros
@@ -216,7 +319,7 @@
     char *str = (char *) calloc(0xFFFF, sizeof(char));\
     strcpy(str, tD);\
     char *pch;\
-    pch = strtok (str, ",");\
+    pch = strtok (str, ";");\
     while (pch != NULL)\
     {\
       for(deviceIterator = platformDevices.begin(); deviceIterator != platformDevices.end();\
@@ -229,7 +332,7 @@
         }\
       }\
       if(found){break;}\
-      pch = strtok (NULL, ",");\
+      pch = strtok (NULL, ";");\
     }\
     free(str);\
   }
@@ -373,7 +476,7 @@
 #define WF_SIZE_WI                                            64
 /*Target devices in the order of preference*/
 #if !(defined(TARGET_DEVICE_NAME))
-  #define TARGET_DEVICE_NAME                                  "Tahiti,Cayman"
+  #define TARGET_DEVICE_NAME                                  "Tahiti;Cayman"
 #endif
 /*Target Platform Vendor
 #define TARGET_PLATFORM_VENDOR                                "Advanced Micro Devices, Inc."*/
@@ -384,35 +487,48 @@
 /***************************************************************************************************
   Simulation parameters
 ***************************************************************************************************/
+/*Run simulation for this many steps*/
+#if !(defined(SIMULATION_TIME_STEPS))
+  #define SIMULATION_TIME_STEPS                               1200
+  #if !(defined(START_PROFILING_AT_STEP))
+    #define START_PROFILING_AT_STEP                           200
+  #endif
+#endif
 /*Network size in terms of bits (1<<TOTAL_NEURON_BITS)*/
 #if !(defined(TOTAL_NEURON_BITS))
-  #define TOTAL_NEURON_BITS                                   17 /*17*/
+  #define TOTAL_NEURON_BITS                                   17
 #endif
 /*Max number of synapses per neuron*/
 #if !(defined(MAX_SYNAPSES_PER_NEURON))
-  #define MAX_SYNAPSES_PER_NEURON                             (30*64) /*(20*64)*/
+  #define MAX_SYNAPSES_PER_NEURON                             1536
 #endif
 /*Synapse deviation ratio from max defined by MAX_SYNAPSES_PER_NEURON*/
-#define SYNAPSE_DEVIATION_RATIO                               0.5
+#if !(defined(SYNAPSE_DEVIATION_RATIO))
+  #define SYNAPSE_DEVIATION_RATIO                             0.1
+#endif
+/*Gabaergic synapse ratio in respect to total synapses*/
+#if !(defined(SYNAPSE_GABA_PERCENT))
+  #define SYNAPSE_GABA_PERCENT                                1.0
+#endif
 /*Size of spike packet buffer (spikes) per WF*/
-#if !(defined(SPIKE_DATA_BUFFER_SIZE))
-  #define SPIKE_DATA_BUFFER_SIZE                              128 /*128*/
+#if !(defined(SPIKE_PACKET_SIZE))
+  #define SPIKE_PACKET_SIZE                                   16
 #endif
 /*Size of event data buffer*/
 #if !(defined(EVENT_DATA_BUFFER_SIZE))
-  #define EVENT_DATA_BUFFER_SIZE                              (16*1024)
+  #define EVENT_DATA_BUFFER_SIZE                              (64*1024)
 #endif
 /*The number of spike packets*/
 #if !(defined(SPIKE_PACKETS))
-  #define SPIKE_PACKETS                                       128 /*128*/
+  #define SPIKE_PACKETS                                       512
 #endif
 /*The size of bin for event count histogram*/
-#if !(defined(HISTOGRAM_BIN_SIZE))
-  #define HISTOGRAM_BIN_SIZE                                  128 /*128*/
+#if !(defined(SYNAPTIC_EVENT_BUFFERS))
+  #define SYNAPTIC_EVENT_BUFFERS                              32
 #endif
 /*Solver error tolerance mode (see usage below)*/
 #if !(defined(TOLERANCE_MODE))
-  #define TOLERANCE_MODE                                      2 /*0,1,2*/
+  #define TOLERANCE_MODE                                      2
 #endif
 /*Max number of time slots (define the longest delay)*/
 #define EVENT_TIME_SLOTS                                      16
@@ -440,26 +556,26 @@
 #if !(defined(PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE))
   #define PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE  "neuron_variables_sample.csv"
 #endif
-/*Enable overwriting spike packet data until defined simulation step. Disabled if 0.
+/*Enable overwriting spike packet data until defined simulation step. Disabled if -1.
   (useful for initiating gradually increasing spiking activity during initial steps) */
 #if PREINITIALIZE_NETWORK_STATE
   #undef OVERWRITE_SPIKES_UNTILL_STEP
-  #define OVERWRITE_SPIKES_UNTILL_STEP                        0
+  #define OVERWRITE_SPIKES_UNTILL_STEP                        -1
 #else
   #if !(defined(OVERWRITE_SPIKES_UNTILL_STEP))
     #define OVERWRITE_SPIKES_UNTILL_STEP                      (2*EVENT_TIME_SLOTS)
   #endif
 #endif
 /*Spike buffer occupancy bounds during overwriting spike packet data*/
-#define OVERWRITE_SPIKES_MIN_MAX_PERCENT                      0.0, 0.9
-/*Enable injecting current until defined simulation step. Disabled if 0.
+#define OVERWRITE_SPIKES_MIN_MAX_PERCENT                      10.0, 90.0, NULL
+/*Enable injecting current until defined simulation step. Disabled if -1.
   (useful for initiating abruptly increasin spiking activity during initial steps) */
 #if PREINITIALIZE_NETWORK_STATE
   #undef INJECT_CURRENT_UNTILL_STEP
-  #define INJECT_CURRENT_UNTILL_STEP                          0
+  #define INJECT_CURRENT_UNTILL_STEP                          -1
 #else 
   #if !(defined(INJECT_CURRENT_UNTILL_STEP))
-    #define INJECT_CURRENT_UNTILL_STEP                        0
+    #define INJECT_CURRENT_UNTILL_STEP                        -1
   #endif
 #endif
 /*Start time profiling simulation at step*/
@@ -490,13 +606,7 @@
 
 /***************************************************************************************************
   Simulation Mode Configuration
-***************************************************************************************************/
-/*Run simulation for this many steps*/
-#if !(defined(SIMULATION_TIME_STEPS))
-  #define SIMULATION_TIME_STEPS                             (5*EVENT_TIME_SLOTS)
-#endif
-
-/*Simulation mode:
+  
   0 - Detailed verification of every kernel and unit tests. For unit tests set a single bit in 
       ENABLE_MASK. Useful in debugging and thorough verification.
   1 - Light high-level verification of the whole simulation. The verification takes much less
@@ -506,10 +616,10 @@
   3 - Application-level time profiling without verification and with relaxed math.
   4 - Kernel-level time profiling without verification and with relaxed math.
   5 - A run with non-blocking return (useful for APP Profiler)
-*/
+***************************************************************************************************/
 
 #if !(defined(SIMULATION_MODE))
-  #define SIMULATION_MODE                                     3
+  #define SIMULATION_MODE                                     2
 #endif
 
 #if SIMULATION_MODE == 0                             /*Simulation mode: verification and unit test*/
@@ -540,7 +650,8 @@
   #endif
   /*Debug mask, enables each kernel to have debug buffer r/w*/
   #define DEBUG_MASK                                          1
-  /*Enable compiler flags that allow device to produce same result as host*/
+  /*Enable compiler flags that allow device to produce same result as host by disabling math 
+    optimizations*/
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
   /*Profiling mode*/
   #define PROFILING_MODE                                      0
@@ -695,7 +806,9 @@
   Simulation parameters for the CPU implementation used as a verification reference
 ***************************************************************************************************/
 /*Synaptic event queue size limit per nrn: */
-#define REFERENCE_EVENT_QUEUE_SIZE                            1000
+#if !(defined(REFERENCE_EVENT_QUEUE_SIZE))
+#define REFERENCE_EVENT_QUEUE_SIZE                            750
+#endif
 #define FLIXIBLE_DELAYS_ENABLE                                1
 /**************************************************************************************************/
 
@@ -757,7 +870,16 @@
   /*CONTROL: enable verification*/
   #define EXPAND_EVENTS_VERIFY_ENABLE                         KERNEL_VERIFY_ENABLE
   /*CONTROL: reset data each EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT time step*/
+  #if !(defined(EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT))
   #define EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT               17
+  #endif
+  /*CONTROL: test mode, 
+    (-1) - all sizes of spike packets, 
+    between 0 and 100 - up to target percent range (0 - 100)%
+  */
+  #if !(defined(EXPAND_EVENTS_TEST_MODE))
+  #define EXPAND_EVENTS_TEST_MODE                             10
+  #endif
   
   /*Debugging*/
   /*CONTROL: enable debugging*/
@@ -770,6 +892,7 @@
   #define EXPAND_EVENTS_ERROR_TRACK_ENABLE                    ERROR_TRACK_ENABLE
   #define EXPAND_EVENTS_ERROR_BUFFER_SIZE_WORDS               1
   #define EXPAND_EVENTS_ERROR_CODE_1                          0x1 /*EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE overflow*/
+  #define EXPAND_EVENTS_ERROR_CODE_2                          0x2 /*EXPAND_EVENTS_SPIKE_BUFFER_SIZE overflow*/
   
   /*CONTROL: the number of spike packets*/
   #define EXPAND_EVENTS_SPIKE_PACKETS                         SPIKE_PACKETS
@@ -780,25 +903,42 @@
   #define EXPAND_EVENTS_WF_SIZE_WI                            WF_SIZE_WI
   /*CONTROL: number of WFs in a WG*/
   #if !(defined(EXPAND_EVENTS_WG_SIZE_WF))
-    #define EXPAND_EVENTS_WG_SIZE_WF                          1 /*Options: 1, 2, 4*/
+    #define EXPAND_EVENTS_WG_SIZE_WF                          4 /*Options: 1, 2, 4*/
+  #endif
+  /*0 - WFs work independently in a WG, 1 - WFs work cooperatively*/
+  #if !(defined(EXPAND_EVENTS_INTER_WF_COOPERATION))
+    #if (EXPAND_EVENTS_WG_SIZE_WF > 1)
+    #define EXPAND_EVENTS_INTER_WF_COOPERATION                1
+    #else
+    #define EXPAND_EVENTS_INTER_WF_COOPERATION                0
+    #endif
   #endif
   #define EXPAND_EVENTS_WG_SIZE_WI                            (EXPAND_EVENTS_WG_SIZE_WF*\
                                                               EXPAND_EVENTS_WF_SIZE_WI)
-  #define EXPAND_EVENTS_GRID_SIZE_WG                          HISTOGRAM_BIN_SIZE
+  #if EXPAND_EVENTS_INTER_WF_COOPERATION == 0
+    #define EXPAND_EVENTS_GRID_SIZE_WG                        (SYNAPTIC_EVENT_BUFFERS/\
+                                                              EXPAND_EVENTS_WG_SIZE_WF)
+  #else
+    #define EXPAND_EVENTS_GRID_SIZE_WG                        SYNAPTIC_EVENT_BUFFERS
+  #endif
   #define EXPAND_EVENTS_SPIKE_PACKETS_PER_WF                  (EXPAND_EVENTS_SPIKE_PACKETS/\
                                                               (EXPAND_EVENTS_GRID_SIZE_WG*\
                                                               EXPAND_EVENTS_WG_SIZE_WF))
   /*Spike data structure parameters (data in)*/
-  #define EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT                 0.0, 10.0
-  #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE                SPIKE_DATA_BUFFER_SIZE
+  #define EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT                 0.0, 10.0, NULL
+  #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE                SPIKE_PACKET_SIZE
   #define EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS            2
   #define EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS              (EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE *\
                                                               EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS)
-
+  /*Spike buffer size per WF in local memory*/
+  #if !(defined(EXPAND_EVENTS_SPIKE_BUFFER_SIZE))
+    #define EXPAND_EVENTS_SPIKE_BUFFER_SIZE                   128
+  #endif
+  
   /*Time slot (bin) buffer parameters (data out)*/
   /*CONTROL: Max number of time slots (define the longest delay)*/
   #define EXPAND_EVENTS_TIME_SLOTS                            EVENT_TIME_SLOTS
-  #define EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS                EXPAND_EVENTS_GRID_SIZE_WG
+  #define EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS                SYNAPTIC_EVENT_BUFFERS
   #define EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS            3
   #define EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE   EVENT_DATA_BUFFER_SIZE
   
@@ -811,7 +951,6 @@
                                                               
   /*Synaptic data structure parameters*/
   /*CONTROL: Max number of synapses per neuron*/
-  #define EXPAND_EVENTS_MAX_SYNAPTIC_DATA_SIZE                (MAX_SYNAPSES_PER_NEURON)
   #define EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE                 (EXPAND_EVENTS_TOTAL_NEURONS+1)
   
   /*Histogram of target neurons*/
@@ -824,8 +963,83 @@
   /*CONTROL: Minimum event delay latency*/
   #define EXPAND_EVENTS_MIN_DELAY                             (MINIMUM_PROPAGATION_DELAY)
 /*
-                                               Restrictions
+                                              Local memory layout
 */
+  #if EXPAND_EVENTS_INTER_WF_COOPERATION == 0
+
+  /*Local memory offsets*/
+  #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
+    #define EXPAND_EVENTS_CACHE_OFFSET_1                      (EXPAND_EVENTS_TIME_SLOTS*\
+                                                              EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS*\
+                                                              EXPAND_EVENTS_WG_SIZE_WF)
+  #else
+    #define EXPAND_EVENTS_CACHE_OFFSET_1    0
+  #endif
+  #define EXPAND_EVENTS_CACHE_OFFSET_2                        (EXPAND_EVENTS_CACHE_OFFSET_1 + \
+                                                              EXPAND_EVENTS_TIME_SLOTS*\
+                                                              EXPAND_EVENTS_WG_SIZE_WF)
+  #if EXPAND_EVENTS_SPIKE_BUFFER_SIZE > EXPAND_EVENTS_SPIKE_PACKETS_PER_WF
+    #define EXPAND_EVENTS_SPIKE_COUNT_PITCH                   EXPAND_EVENTS_SPIKE_BUFFER_SIZE
+  #else
+    #define EXPAND_EVENTS_SPIKE_COUNT_PITCH                   EXPAND_EVENTS_SPIKE_PACKETS_PER_WF
+  #endif
+  #define EXPAND_EVENTS_CACHE_OFFSET_3                        (EXPAND_EVENTS_CACHE_OFFSET_2 + \
+                                                              (EXPAND_EVENTS_SPIKE_BUFFER_SIZE*\
+                                                              EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS + \
+                                                              EXPAND_EVENTS_SPIKE_COUNT_PITCH)*\
+                                                              EXPAND_EVENTS_WG_SIZE_WF)
+  #define EXPAND_EVENTS_CACHE_SIZE_WORDS                      EXPAND_EVENTS_CACHE_OFFSET_3
+
+  /*Local memory accessors*/
+  #define HISTOGRAM(i)                                        cache[i]
+  #define TIME_SLOT_COUNTERS(i)                               cache[EXPAND_EVENTS_CACHE_OFFSET_1 + i]
+  #define SPIKE_DATA(i)                                       cache[EXPAND_EVENTS_CACHE_OFFSET_2 + i]
+  #else
+
+  /*Local memory offsets*/
+  #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
+    #define EXPAND_EVENTS_CACHE_OFFSET_1                      (EXPAND_EVENTS_TIME_SLOTS*\
+                                                              EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS)
+  #else
+    #define EXPAND_EVENTS_CACHE_OFFSET_1    0
+  #endif
+  #define EXPAND_EVENTS_CACHE_OFFSET_2                        (EXPAND_EVENTS_CACHE_OFFSET_1 + \
+                                                              EXPAND_EVENTS_TIME_SLOTS)
+  #define EXPAND_EVENTS_CACHE_OFFSET_3                        (EXPAND_EVENTS_CACHE_OFFSET_2 + 1)
+  #if EXPAND_EVENTS_SPIKE_BUFFER_SIZE > (EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF \
+    + EXPAND_EVENTS_WG_SIZE_WF)
+    #define EXPAND_EVENTS_SPIKE_COUNT_PITCH                   EXPAND_EVENTS_SPIKE_BUFFER_SIZE
+  #else
+    #define EXPAND_EVENTS_SPIKE_COUNT_PITCH                   (EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*\
+                                                              EXPAND_EVENTS_WG_SIZE_WF +\
+                                                              EXPAND_EVENTS_WG_SIZE_WF)
+  #endif
+  #define EXPAND_EVENTS_CACHE_OFFSET_4                        (EXPAND_EVENTS_CACHE_OFFSET_3 + \
+                                                              (EXPAND_EVENTS_SPIKE_BUFFER_SIZE*\
+                                                              EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS + \
+                                                              EXPAND_EVENTS_SPIKE_COUNT_PITCH))
+  #define EXPAND_EVENTS_CACHE_SIZE_WORDS                      EXPAND_EVENTS_CACHE_OFFSET_4
+
+  /*Local memory accessors*/
+  #define HISTOGRAM(i)                                        cache[i]
+  #define TIME_SLOT_COUNTERS(i)                               cache[EXPAND_EVENTS_CACHE_OFFSET_1 + i]
+  #define TOTAL_SPIKES                                        cache[EXPAND_EVENTS_CACHE_OFFSET_2]
+  #define SPIKE_DATA(i)                                       cache[EXPAND_EVENTS_CACHE_OFFSET_3 + i]
+  #endif
+/*
+                                              Optimizations
+*/
+  /*CONTROL: Reduce loops to if statements where possible*/
+  #define EXPAND_EVENTS_OPTIMIZATION_REDUCE_LOOPS             1
+/*
+                                              Restrictions
+*/
+#if EXPAND_EVENTS_INTER_WF_COOPERATION == 0
+#if	((SYNAPTIC_EVENT_BUFFERS%EXPAND_EVENTS_WG_SIZE_WF) != 0)
+  #error Parameter SYNAPTIC_EVENT_BUFFERS must be divisible by EXPAND_EVENTS_WG_SIZE_WF if\
+  EXPAND_EVENTS_INTER_WF_COOPERATION == 0
+#endif
+#endif
 #if	(EXPAND_EVENTS_SPIKE_PACKETS%(EXPAND_EVENTS_GRID_SIZE_WG*EXPAND_EVENTS_WG_SIZE_WF) != 0)
   #error Parameter EXPAND_EVENTS_SPIKE_PACKETS must be divisible by \
     (EXPAND_EVENTS_GRID_SIZE_WG*EXPAND_EVENTS_WG_SIZE_WF)
@@ -845,27 +1059,57 @@
                                                Generic parameters
 */
   /*Verification*/
+  /*CONTROL: enable verification*/
   #define SCAN_VERIFY_ENABLE                                  KERNEL_VERIFY_ENABLE
+  
   /*Debugging*/
+  /*CONTROL: enable debugging*/
   #define SCAN_DEBUG_ENABLE                                   (0)&DEBUG_MASK
-  #define SCAN_DEBUG_BUFFER_SIZE_WORDS                        (SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE)
+  /*CONTROL: debug buffer size*/
+  #define SCAN_DEBUG_BUFFER_SIZE_WORDS                        (1024*1024)
+  
   /*Error tracking and codes*/
+  /*CONTROL: enable error tracking*/
   #define SCAN_ERROR_TRACK_ENABLE                             0
   #define SCAN_ERROR_BUFFER_SIZE_WORDS                        1
   #define SCAN_ERROR_CODE_1                                   0x1
+  
   /*Scan kernel size parameters*/                               
   #define SCAN_KERNEL_FILE_NAME                               "Kernel_ScanHistogram.cl"
   #define SCAN_KERNEL_NAME                                    "scan_histogram"
-  #define SCAN_WF_SIZE_WI                                     WF_SIZE_WI /*Options: 64*/
-  #define SCAN_WG_SIZE_WF                                     2 /*Valid: 2, 4*/
+  #define SCAN_WF_SIZE_WI                                     WF_SIZE_WI
+  /*CONTROL: number of WFs in a WG*/
+  #if !(defined(SCAN_WG_SIZE_WF))
+    #define SCAN_WG_SIZE_WF                                   2 /*Options: 1, 2, 4*/
+  #endif
   #define SCAN_WG_SIZE_WI                                     (SCAN_WG_SIZE_WF*SCAN_WF_SIZE_WI)
-  #define SCAN_GRID_SIZE_WG                                   1
+  #define SCAN_GRID_SIZE_WG                                   1 /*Options: 1*/
+  
   /*Histogram of target neurons*/
-  #define SCAN_HISTOGRAM_TIME_SLOTS                           EVENT_TIME_SLOTS /*Options: 16*/
-  #define SCAN_HISTOGRAM_ELEMENTS_PER_WI                      16 /*Must div by 4. Cypress: 16, Cayman: 20*/
-  #define SCAN_USE_2LEVEL_REDUCE                              1
-  /*Maximum count of events per histogram item*/
-  #define SCAN_HISTOGRAM_MAX_COUNT                            (0xFFFF)
+  /*CONTROL: Max number of time slots (define the longest delay)*/
+  #define SCAN_HISTOGRAM_TIME_SLOTS                           EVENT_TIME_SLOTS
+/*
+                                              Optimizations
+*/
+  /*CONTROL: Reduction/prefix sum algorithm options*/
+  #if !(defined(SCAN_OPTIMIZATION_2LEVEL_REDUCE))
+    #define SCAN_OPTIMIZATION_2LEVEL_REDUCE                   1
+  #endif
+  /*CONTROL: Local memory offset. 0-17*/
+  #if !(defined(SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET))
+    #define SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET         0
+  #endif
+/*
+                                              Local memory layout
+*/
+  #if !(defined(SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET))
+    #define SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET           64
+  #endif
+  #define SCAN_WF_CACHE_SIZE_WORDS                            (192 - \
+                                                              SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET + \
+                                                              SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET)
+  #define SCAN_CACHE_SIZE_WORDS                               SCAN_WF_CACHE_SIZE_WORDS*\
+                                                              SCAN_WG_SIZE_WF
 /*
                                                Variants
 */
@@ -873,13 +1117,19 @@
 #if SCAN_ENABLE_V00
   /*Host and Device*/
   #define SCAN_HISTOGRAM_TOTAL_BINS_V00                       (1<<4)
-  #define SCAN_HISTOGRAM_BIN_SIZE_V00                         HISTOGRAM_BIN_SIZE
+  #define SCAN_HISTOGRAM_BIN_SIZE_V00                         SYNAPTIC_EVENT_BUFFERS
   #define SCAN_HISTOGRAM_IN_TYPE_V00                          0
+  #define SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V00               (0xFFFFFFFF/\
+                                                              (SCAN_HISTOGRAM_TOTAL_BINS_V00*\
+                                                              SCAN_HISTOGRAM_BIN_SIZE_V00))
   /*Device*/
 #ifdef SCAN_DEVICE_V00
   #define SCAN_HISTOGRAM_TOTAL_BINS                           SCAN_HISTOGRAM_TOTAL_BINS_V00
   #define SCAN_HISTOGRAM_BIN_SIZE                             SCAN_HISTOGRAM_BIN_SIZE_V00
   #define SCAN_HISTOGRAM_IN_TYPE                              SCAN_HISTOGRAM_IN_TYPE_V00
+  #define SCAN_HISTOGRAM_ELEMENTS_PER_WI                      ((SCAN_HISTOGRAM_TOTAL_BINS*\
+                                                              SCAN_HISTOGRAM_BIN_SIZE)/\
+                                                              SCAN_WG_SIZE_WI)
 #endif
 #endif  
 /*END VARIANT_00*/
@@ -887,31 +1137,33 @@
 #if SCAN_ENABLE_V01
   /*Host and Device*/
   #define SCAN_HISTOGRAM_TOTAL_BINS_V01                       (1<<4)
-  #define SCAN_HISTOGRAM_BIN_SIZE_V01                         HISTOGRAM_BIN_SIZE
+  #define SCAN_HISTOGRAM_BIN_SIZE_V01                         SYNAPTIC_EVENT_BUFFERS
   #define SCAN_HISTOGRAM_IN_TYPE_V01                          1
-  #define SCAN_HISTOGRAM_BIN_BACKETS                          128
+  #define SCAN_HISTOGRAM_BIN_BACKETS                          SYNAPTIC_EVENT_BUFFERS
+  #define SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V01               (0xFFFFFFFF/\
+                                                              (SCAN_HISTOGRAM_TOTAL_BINS_V01*\
+                                                              SCAN_HISTOGRAM_BIN_SIZE_V01*\
+                                                              SCAN_HISTOGRAM_BIN_BACKETS))
   /*Device*/
 #ifdef SCAN_DEVICE_V01
   #define SCAN_HISTOGRAM_TOTAL_BINS                           SCAN_HISTOGRAM_TOTAL_BINS_V01
   #define SCAN_HISTOGRAM_BIN_SIZE                             SCAN_HISTOGRAM_BIN_SIZE_V01
   #define SCAN_HISTOGRAM_IN_TYPE                              SCAN_HISTOGRAM_IN_TYPE_V01
+  #define SCAN_HISTOGRAM_ELEMENTS_PER_WI                      ((SCAN_HISTOGRAM_TOTAL_BINS*\
+                                                              SCAN_HISTOGRAM_BIN_SIZE)/\
+                                                              SCAN_WG_SIZE_WI)
 #endif
 #endif  
 /*END VARIANT_01*/
 /*
                                                Restrictions
 */
-#if	(SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE > SCAN_WG_SIZE_WI*SCAN_HISTOGRAM_ELEMENTS_PER_WI)
-  #error (Total number of histogram elements is more than kernel can handle)
+#if	((SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE)%SCAN_WG_SIZE_WI != 0)
+  #error (Parameter (SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE) must be divisible by \
+  SCAN_WG_SIZE_WI)
 #endif
 #if	(SCAN_HISTOGRAM_ELEMENTS_PER_WI%4 != 0)
   #error (Parameter SCAN_HISTOGRAM_ELEMENTS_PER_WI must be divisible by 4)
-#endif
-#if(SCAN_WG_SIZE_WF != 2 && SCAN_WG_SIZE_WF != 4)
-  #error (Parameter SCAN_WG_SIZE_WF must be either 2 or 4)
-#endif
-#if(!SCAN_USE_2LEVEL_REDUCE)
-  #error (Set option SCAN_USE_2LEVEL_REDUCE to 1)
 #endif
 #endif
 /**************************************************************************************************/
@@ -929,67 +1181,180 @@
                                                Generic parameters
 */
   /*Verification*/
+  /*CONTROL: enable verification*/
   #define GROUP_EVENTS_VERIFY_ENABLE                            KERNEL_VERIFY_ENABLE
+  
   /*Debugging*/
+  /*CONTROL: enable debugging*/
   #define GROUP_EVENTS_DEBUG_ENABLE                             (0)&DEBUG_MASK
-  #define GROUP_EVENTS_DEBUG_BUFFER_SIZE_WORDS                  (1024*128)
+  /*CONTROL: debug buffer size*/
+  #define GROUP_EVENTS_DEBUG_BUFFER_SIZE_WORDS                  (1024*1024*10)
+  
   /*Error tracking and codes*/
-  #define GROUP_EVENTS_ERROR_TRY_CATCH_ENABLE                   0
+  /*CONTROL: enable error tracking*/
   #define GROUP_EVENTS_ERROR_TRACK_ENABLE                       0
   #define GROUP_EVENTS_ERROR_BUFFER_SIZE_WORDS                  1
   #define GROUP_EVENTS_ERROR_CODE_1                             0x1
+  
+  /*Testing*/
+  /*CONTROL: test mode*/
+  #if !(defined(GROUP_EVENTS_TEST_MODE))
+    #define GROUP_EVENTS_TEST_MODE                             10
+  #endif
+  
+  /*Synaptic event buffer parameters*/
+  /*CONTROL: number of synaptic event buffers, which store synaptic events*/
+  #define GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS                   SYNAPTIC_EVENT_BUFFERS
+  /*CONTROL: size of event data buffer*/
+  #define GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE           EVENT_DATA_BUFFER_SIZE
+  #define GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE           (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS*\
+                                                                GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE)
+  /*CONTROL: how many buffers a single WG is assigned to process*/
+  #if !(defined(GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG))
+    #define GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG          1
+  #endif
+  #define GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS               3
+  
   /*Kernel size parameters*/
   #define GROUP_EVENTS_KERNEL_FILE_NAME                         "Kernel_GroupEvents.cl"
   #define GROUP_EVENTS_KERNEL_NAME                              "group_events"
-  #define GROUP_EVENTS_WF_SIZE_WI                               WF_SIZE_WI /*Options: 64*/
-  #define GROUP_EVENTS_WG_SIZE_WF                               1
+  #define GROUP_EVENTS_WF_SIZE_WI                               WF_SIZE_WI
+  /*CONTROL: Each WI takes this number of data elements*/
+  #if !(defined(GROUP_EVENTS_ELEMENTS_PER_WI))
+    #define GROUP_EVENTS_ELEMENTS_PER_WI                        4
+  #endif
+  /*CONTROL: number of WFs in a WG*/
+  #if !(defined(GROUP_EVENTS_WG_SIZE_WF))
+    #define GROUP_EVENTS_WG_SIZE_WF                             4
+  #endif
   #define GROUP_EVENTS_WG_SIZE_WI                               (GROUP_EVENTS_WG_SIZE_WF*\
                                                                 GROUP_EVENTS_WF_SIZE_WI)
   #define GROUP_EVENTS_GRID_SIZE_WG                             (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS/\
                                                                 GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG)
+  
   /*Incoming histogram of target neurons*/
   #define GROUP_EVENTS_HISTOGRAM_BIN_BITS                       4   /*Must be aligned with GROUP_EVENTS_HISTOGRAM_BIN_MASK*/
   #define GROUP_EVENTS_HISTOGRAM_BIN_MASK                       0xF /*Must be aligned with GROUP_EVENTS_HISTOGRAM_BIN_BITS*/
   #define GROUP_EVENTS_HISTOGRAM_TOTAL_BINS                     (1<<GROUP_EVENTS_HISTOGRAM_BIN_BITS)
   #define GROUP_EVENTS_HISTOGRAM_BIN_SIZE                       (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS)
-  #define GROUP_EVENTS_HISTOGRAM_MAX_COUNT                      (0xFFFF)/*(GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE)*/
+
   /*Outgoing histogram of target neurons*/
   #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT              1
   #define GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT                   4   /*Must be aligned with GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT*/
   #define GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT                   0xF /*Must be aligned with GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT*/
   #define GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT                 (1<<GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT)
-  #define GROUP_EVENTS_HISTOGRAM_BIN_SIZE_OUT                   (GROUP_EVENTS_GRID_SIZE_WG)
-  #define GROUP_EVENTS_HISTOGRAM_OUT_ELEMENTS_PER_WG            (GROUP_EVENTS_ELEMENTS_PER_WI*\
-                                                                GROUP_EVENTS_WG_SIZE_WI)
   #define GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE                  (GROUP_EVENTS_GRID_SIZE_WG)
-  /*Synaptic event buffer parameters*/
-  #define GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS                   128
-  #define GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS               3
-  #define GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE           EVENT_DATA_BUFFER_SIZE
-  #define GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE           (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS*\
-                                                                GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE)
-  #define GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG            1
+
   /*NN parameters*/
   #define GROUP_EVENTS_TOTAL_NEURON_BITS                        TOTAL_NEURON_BITS /*16*/
   #define GROUP_EVENTS_TOTAL_NEURONS                            (1<<GROUP_EVENTS_TOTAL_NEURON_BITS)
   #define GROUP_EVENTS_MAX_DELAY                                (GROUP_EVENTS_TIME_SLOTS-SIMULATION_STEP_SIZE)
   #define GROUP_EVENTS_MIN_DELAY                                1.0f
-  /*Time slots for storing events*/
+  
+  /*CONTROL: Time slots for storing events*/
   #define GROUP_EVENTS_TIME_SLOTS                               EVENT_TIME_SLOTS /*Options: 16*/
-  /*Each WI takes this number of data elements*/
-  #define GROUP_EVENTS_ELEMENTS_PER_WI                          4
+  
   /*Check data boundary condition before fetching*/
   #define GROUP_EVENTS_CHECK_BOUNDARY                           1
-  /*Reduction level option*/
-  #define GROUP_EVENTS_USE_2LEVEL_REDUCE                        1
-  /*Enable local sort*/
-  #define GROUP_EVENTS_LOCAL_SORT_ENABLE                        1
-  /*How many threads share a counter for computing local histogram*/
-  #define GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER               16
+  
+  /*CONTROL: Number of threads sharing a counter for computing local histogram*/
+  #if !(defined(GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER))
+    #define GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER             16
+  #endif
+  
+  #define GROUP_EVENTS_LOCAL_HISTOGRAM_WF_SIZE_WORDS            ((GROUP_EVENTS_WF_SIZE_WI/\
+                                                                GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER)*\
+                                                                GROUP_EVENTS_HISTOGRAM_TOTAL_BINS)
   /*Number of sort iterations for neuron ID depends on the max ID*/
 #define GROUP_EVENTS_NEURON_ID_SORT_ITERATIONS \
                               ((GROUP_EVENTS_TOTAL_NEURON_BITS/GROUP_EVENTS_HISTOGRAM_BIN_BITS) +\
                               ((GROUP_EVENTS_TOTAL_NEURON_BITS%GROUP_EVENTS_HISTOGRAM_BIN_BITS) > 0))
+/*
+                                              Optimizations
+*/
+  /*CONTROL: Reduce loops to if statements where possible*/
+  #if !(defined(GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS))
+    #define GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS              1
+  #endif
+  /*CONTROL: Reduction/prefix sum algorithm options*/
+  #if !(defined(GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE))
+    #define GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE             1
+  #endif
+  /*CONTROL: Enable sort instead of atomics if 1. 
+  Warning: atomics do not preserve the sort order for subsequent passes. Useful only for the
+  first pass*/
+  #if !(defined(GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT))
+    #define GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT                1
+  #endif
+  /*CONTROL: keep target histogram in GM/L1,L2 instead of LDS*/
+  #if !(defined(GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT))
+    #define GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT  1
+  #endif
+  /*CONTROL: prefix sume shared memory offset to control bank conflicts.*/
+  #if !(defined(GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET))
+    #define GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET   17
+  #endif
+/*
+                                              Local memory layout
+*/
+  #define GROUP_EVENTS_CACHE_PREFIX_SUM_WF_SIZE           (192 - \
+                                                          GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET)
+#define GROUP_EVENTS_CACHE_OFFSET_1                       (GROUP_EVENTS_CACHE_PREFIX_SUM_WF_SIZE)
+#if GROUP_EVENTS_CACHE_OFFSET_1 < (GROUP_EVENTS_WF_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI)
+  #undef GROUP_EVENTS_CACHE_OFFSET_1
+  #define GROUP_EVENTS_CACHE_OFFSET_1                     (GROUP_EVENTS_WF_SIZE_WI*\
+                                                          GROUP_EVENTS_ELEMENTS_PER_WI)
+#endif
+#if !GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT
+  #undef GROUP_EVENTS_CACHE_OFFSET_1
+  #define GROUP_EVENTS_CACHE_OFFSET_1                     0
+#endif
+#define GROUP_EVENTS_CACHE_OFFSET_2                       (GROUP_EVENTS_LOCAL_HISTOGRAM_WF_SIZE_WORDS)
+#define GROUP_EVENTS_CACHE_OFFSET_3                       (2*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS)
+
+  /*Define minimum per-WF cache size required for kernel*/
+#define GROUP_EVENTS_WF_CACHE_SIZE_WORDS                  GROUP_EVENTS_CACHE_OFFSET_1
+#if GROUP_EVENTS_WF_CACHE_SIZE_WORDS < GROUP_EVENTS_CACHE_OFFSET_2
+  #undef GROUP_EVENTS_WF_CACHE_SIZE_WORDS
+  #define GROUP_EVENTS_WF_CACHE_SIZE_WORDS                GROUP_EVENTS_CACHE_OFFSET_2
+#endif
+#if GROUP_EVENTS_WF_CACHE_SIZE_WORDS < GROUP_EVENTS_CACHE_OFFSET_3
+  #undef GROUP_EVENTS_WF_CACHE_SIZE_WORDS
+  #define GROUP_EVENTS_WF_CACHE_SIZE_WORDS                GROUP_EVENTS_CACHE_OFFSET_3
+#endif
+
+  /*Histogram offset has to be on the top of others*/
+#define GROUP_EVENTS_CACHE_OFFSET_4                       ((GROUP_EVENTS_WF_CACHE_SIZE_WORDS*\
+                                                          GROUP_EVENTS_WG_SIZE_WF) + \
+                                                          GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*\
+                                                          (GROUP_EVENTS_WG_SIZE_WF-1))
+                                                          
+  /*Define minimum total and per-WF cache size required for kernel*/
+#define GROUP_EVENTS_CACHE_SIZE_WORDS                     GROUP_EVENTS_WF_CACHE_SIZE_WORDS*\
+                                                          GROUP_EVENTS_WG_SIZE_WF
+#if (GROUP_EVENTS_WG_SIZE_WF > 1)
+#if GROUP_EVENTS_CACHE_SIZE_WORDS < GROUP_EVENTS_CACHE_OFFSET_4
+  #undef GROUP_EVENTS_CACHE_SIZE_WORDS
+  #define GROUP_EVENTS_CACHE_SIZE_WORDS                   GROUP_EVENTS_CACHE_OFFSET_4
+#endif
+#endif
+/*
+                                               Restrictions
+*/
+#if	(GROUP_EVENTS_WF_SIZE_WI%GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER != 0)
+  #error (Parameter GROUP_EVENTS_WF_SIZE_WI must be divisible by \
+          GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER)
+#endif
+#if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT && (GROUP_EVENTS_ELEMENTS_PER_WI != 4)
+  #error GROUP_EVENTS_ELEMENTS_PER_WI has to be 4 if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT is enabled
+#endif
+#if GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2 > GROUP_EVENTS_WF_SIZE_WI
+  #error GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2 can't be more than GROUP_EVENTS_WF_SIZE_WI
+#endif
+#if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT && (GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER != 16)
+  #error BUG: GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER has to be 16 if \
+    GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT is set
+#endif
 /*
                                                Variants
 */
@@ -1000,31 +1365,32 @@
             Computes new histogram for next stage.
 */
 #if GROUP_EVENTS_ENABLE_V00
+  /*Host and Device*/
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00                  0
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V00              4
+  #define GROUP_EVENTS_VALUES_MODE_V00                          1
+  #define GROUP_EVENTS_SOURCE_KEY_OFFSET_V00                    1
+  
   /*Device*/
 #ifdef GROUP_EVENTS_DEVICE_V00
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      0
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00
   /*Bit shift used for computing the outgoing histogram of target neurons*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  4
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V00
   /*Source events may be delivered in different data structures*/
   #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        0 /*Block-partitioned by exapnd kernel*/
   /*Linking step parameter to shift parameter used in masking bits for sort*/
   #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        0
   /*Each key gets a value of its address in GM*/
-  #define GROUP_EVENTS_VALUES_MODE                              1
+  #define GROUP_EVENTS_VALUES_MODE                              GROUP_EVENTS_VALUES_MODE_V00
   /*Key offset: which element to use as a key from GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS*/
-  #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        1
+  #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        GROUP_EVENTS_SOURCE_KEY_OFFSET_V00
   /*Relocate original values based on pointers stored in their place (useful for multiple values/key)*/
   #define GROUP_EVENTS_RELOCATE_VALUES                          0
   /*Replace key. Useful if need to sort with a new key.*/
   #define GROUP_EVENTS_REPLACE_KEY                              0
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   0
 #endif
-  /*Host and Device*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00                  0
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V00              4
-  #define GROUP_EVENTS_VALUES_MODE_V00                          1
-  #define GROUP_EVENTS_SOURCE_KEY_OFFSET_V00                    1
 #endif  /*END VARIANT_00*/
 /*
             VARIANT_01
@@ -1032,18 +1398,24 @@
             Computes new histogram for next stage.
 */
 #if GROUP_EVENTS_ENABLE_V01
+  /*Host-visible copies of device parameters*/
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01                  4
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01              4
+  #define GROUP_EVENTS_ENABLE_STEP_SHIFT_V01                    1
+  #define GROUP_EVENTS_VALUES_MODE_V01                          2
+  
   /*Device*/
 #ifdef GROUP_EVENTS_DEVICE_V01
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      4
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01
   /*Bit shift used for computing the outgoing histogram of target neurons*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  4
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01
   /*Source events may be delivered in different data structures*/
   #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        1 /*Contiguous*/
   /*Linking step parameter to shift parameter used in masking bits for sort*/
-  #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        1
+  #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        GROUP_EVENTS_ENABLE_STEP_SHIFT_V01
   /*Each key gets a value carried out from before*/
-  #define GROUP_EVENTS_VALUES_MODE                              2
+  #define GROUP_EVENTS_VALUES_MODE                              GROUP_EVENTS_VALUES_MODE_V01
   /*Key offset: which element to use as a key from GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS*/
   #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        0
   /*Relocate original values based on pointers stored in their place (useful for multiple values/key)*/
@@ -1052,11 +1424,6 @@
   #define GROUP_EVENTS_REPLACE_KEY                              0
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   0
 #endif
-  /*Host-visible copies of device parameters*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01                  4
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01              4
-  #define GROUP_EVENTS_ENABLE_STEP_SHIFT_V01                    1
-  #define GROUP_EVENTS_VALUES_MODE_V01                          2
 #endif/*END VARIANT_01*/
 /*
             VARIANT_02
@@ -1064,32 +1431,33 @@
             This allows to continue sorting with new key in the next stages.
 */
 #if GROUP_EVENTS_ENABLE_V02
-  /*Device*/
-#ifdef GROUP_EVENTS_DEVICE_V02
-  /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      4
-  /*Bit shift used for computing the outgoing histogram of target neurons*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  0
-  /*Source events may be delivered in different data structures*/
-  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        1 /*Contiguous*/
-  /*Linking step parameter to shift parameter used in masking bits for sort*/
-  #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        1
-  /*Each key gets a value carried out from before*/
-  #define GROUP_EVENTS_VALUES_MODE                              2
-  /*Key offset: which element to use as a key from GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS*/
-  #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        0
-  /*Relocate original values based on pointers stored in their place (useful for multiple values/key)*/
-  #define GROUP_EVENTS_RELOCATE_VALUES                          0
-  /*Replace key. Useful if need to sort with a new key.*/
-  #define GROUP_EVENTS_REPLACE_KEY                              1
-  #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   0
-#endif
   /*Host-visible copies of device parameters*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V02                  4
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V02              0
   #define GROUP_EVENTS_ENABLE_STEP_SHIFT_V02                    1
   #define GROUP_EVENTS_VALUES_MODE_V02                          2
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET_V02               0
+  
+  /*Device*/
+#ifdef GROUP_EVENTS_DEVICE_V02
+  /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V02
+  /*Bit shift used for computing the outgoing histogram of target neurons*/
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V02
+  /*Source events may be delivered in different data structures*/
+  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        1 /*Contiguous*/
+  /*Linking step parameter to shift parameter used in masking bits for sort*/
+  #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        GROUP_EVENTS_ENABLE_STEP_SHIFT_V02
+  /*Each key gets a value carried out from before*/
+  #define GROUP_EVENTS_VALUES_MODE                              GROUP_EVENTS_VALUES_MODE_V02
+  /*Key offset: which element to use as a key from GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS*/
+  #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        0
+  /*Relocate original values based on pointers stored in their place (useful for multiple values/key)*/
+  #define GROUP_EVENTS_RELOCATE_VALUES                          0
+  /*Replace key. Useful if need to sort with a new key.*/
+  #define GROUP_EVENTS_REPLACE_KEY                              1
+  #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   GROUP_EVENTS_REPLACEMENT_KEY_OFFSET_V02
+#endif
 #endif/*END VARIANT_02*/
 /*
             VARIANT_03
@@ -1098,18 +1466,24 @@
 */
 /*TODO: need to disable histogram out*/
 #if GROUP_EVENTS_ENABLE_V03
+  /*Host-visible copies of device parameters*/
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V03                  4
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V03              0
+  #define GROUP_EVENTS_ENABLE_STEP_SHIFT_V03                    1
+  #define GROUP_EVENTS_VALUES_MODE_V03                          2
+
   /*Device*/
 #ifdef GROUP_EVENTS_DEVICE_V03
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      4
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V03
   /*Bit shift used for computing the outgoing histogram of target neurons*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  0
+  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V03
   /*Source events may be delivered in different data structures*/
   #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        1 /*Contiguous*/
   /*Linking step parameter to shift parameter used in masking bits for sort*/
-  #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        1
+  #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        GROUP_EVENTS_ENABLE_STEP_SHIFT_V03
   /*Each key gets a value carried out from before*/
-  #define GROUP_EVENTS_VALUES_MODE                              2
+  #define GROUP_EVENTS_VALUES_MODE                              GROUP_EVENTS_VALUES_MODE_V03
   /*Key offset: which element to use as a key from GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS*/
   #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        0
   /*Relocate original values based on pointers stored in their place (useful for multiple values/key)*/
@@ -1118,11 +1492,6 @@
   #define GROUP_EVENTS_REPLACE_KEY                              0
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   0
 #endif
-  /*Host-visible copies of device parameters*/
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V03                  4
-  #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V03              0
-  #define GROUP_EVENTS_ENABLE_STEP_SHIFT_V03                    1
-  #define GROUP_EVENTS_VALUES_MODE_V03                          2
 #endif/*END VARIANT_03*/
 #endif /*GROUP_EVENTS_ENABLE*/
 /**************************************************************************************************/
@@ -1145,7 +1514,7 @@
   /*Debugging*/
   /*CONTROL: enable debug buffers*/
   #define MAKE_EVENT_PTRS_DEBUG_ENABLE                             (0)&DEBUG_MASK
-  #define MAKE_EVENT_PTRS_DEBUG_BUFFER_SIZE_WORDS                  (128*MAKE_EVENT_PTRS_WG_SIZE_WI*MAKE_EVENT_PTRS_GRID_SIZE_WG)
+  #define MAKE_EVENT_PTRS_DEBUG_BUFFER_SIZE_WORDS                  (1024*1024)
   
   /*Error tracking*/
   /*CONTROL: enable error logging at kernel level*/
@@ -1158,14 +1527,19 @@
   #define MAKE_EVENT_PTRS_KERNEL_NAME                               "make_event_pointers"
   #define MAKE_EVENT_PTRS_WF_SIZE_WI                                WF_SIZE_WI
   /*CONTROL: number of WFs in a WG*/
-  #define MAKE_EVENT_PTRS_WG_SIZE_WF                                2
-  #define MAKE_EVENT_PTRS_WG_SIZE_WI                                (MAKE_EVENT_PTRS_WG_SIZE_WF*MAKE_EVENT_PTRS_WF_SIZE_WI)
+  #if !(defined(MAKE_EVENT_PTRS_WG_SIZE_WF))
+    #define MAKE_EVENT_PTRS_WG_SIZE_WF                             4
+  #endif
+  #define MAKE_EVENT_PTRS_WG_SIZE_WI                                (MAKE_EVENT_PTRS_WG_SIZE_WF*\
+                                                                    MAKE_EVENT_PTRS_WF_SIZE_WI)
   /*CONTROL: each WI processes this number of data elements*/
-  #define MAKE_EVENT_PTRS_ELEMENTS_PER_WI                          4
+  #if !(defined(MAKE_EVENT_PTRS_ELEMENTS_PER_WI))
+    #define MAKE_EVENT_PTRS_ELEMENTS_PER_WI                        8
+  #endif
   
   /*NN parameters*/
   /*CONTROL: total neurons in the network*/
-  #define MAKE_EVENT_PTRS_TOTAL_NEURON_BITS                         TOTAL_NEURON_BITS /*16*/
+  #define MAKE_EVENT_PTRS_TOTAL_NEURON_BITS                         TOTAL_NEURON_BITS
   #define MAKE_EVENT_PTRS_TOTAL_NEURONS                             (1<<(MAKE_EVENT_PTRS_TOTAL_NEURON_BITS))
   
   /*Buffer and memory sizes*/
@@ -1173,10 +1547,11 @@
   /*Synaptic event input buffer parameters*/
   #define MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS                   3
   /*LM allocation for scan per WF. 
-  TODO: this can be reduced by 18 at least*/
+  TODO: this can be reduced by 17 at least*/
   #define MAKE_EVENT_PTRS_SCAN_WF_LM_SHARE                         192
   /*Offset in GM for location of total events*/
-  #define MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET                      (128*16)
+  #define MAKE_EVENT_PTRS_HISTOGRAM_BIN_BITS                       4   
+  #define MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET                      (SYNAPTIC_EVENT_BUFFERS*(1<<4))
   
   /*Event delivery mode:
     0 - array size of neuron count
@@ -1185,7 +1560,9 @@
   
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
   /*CONTROL: WG count*/
-  #define MAKE_EVENT_PTRS_GRID_SIZE_WG                              64
+  #if !(defined(MAKE_EVENT_PTRS_GRID_SIZE_WG))
+    #define MAKE_EVENT_PTRS_GRID_SIZE_WG                            128
+  #endif
   
   /*Output buffer size*/
   #define MAKE_EVENT_PTRS_STRUCTS                                   1
@@ -1196,16 +1573,19 @@
                                                                     MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE)
   /*Unit test related parameters*/
   /*CONTROL: Source data size for unit test. Can be viewed as elements per neuron*/
-  #define MAKE_EVENT_PTRS_SYNAPTIC_EVENT_BUFFERS                    128
   #if !(defined(MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE))
-  #define MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE                  (MAKE_EVENT_PTRS_SYNAPTIC_EVENT_BUFFERS*\
+  #define MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE                  (SYNAPTIC_EVENT_BUFFERS*\
                                                                     EVENT_DATA_BUFFER_SIZE)
   #endif
   /*CONTROL: Max neuron ID for unit test.*/
-  #define MAKE_EVENT_PTRS_TEST_MAX_NEURON_ID                       (MAKE_EVENT_PTRS_TOTAL_NEURONS-1)
+  #if !(defined(MAKE_EVENT_PTRS_TEST_MAX_NEURON_ID))
+    #define MAKE_EVENT_PTRS_TEST_MAX_NEURON_ID                     (MAKE_EVENT_PTRS_TOTAL_NEURONS-1)
+  #endif
   
   /*CONTROL: LM allocation for computing event counts per WF*/
-  #define MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE                   1024
+  #if !(defined(MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE))
+    #define MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE                 1024
+  #endif
   
   /*Small post-process kernel to glue WF results together*/
   #define GLUE_EVENT_PTRS_KERNEL_FILE_NAME                          "Kernel_MakeEventPointers.cl"
@@ -1271,37 +1651,47 @@
                                                Generic parameters
 */
   /*Verification*/
+  /*CONTROL: enable verification*/
   #define UPDATE_NEURONS_VERIFY_ENABLE                            KERNEL_VERIFY_ENABLE
+  
   /*Error tracking and codes*/
   /*CONTROL: enable error logging at kernel level*/
   #define UPDATE_NEURONS_ERROR_TRACK_ENABLE                       ERROR_TRACK_ENABLE
   #define UPDATE_NEURONS_ERROR_BUFFER_SIZE_WORDS                  1
-  #define UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK            0x00000012
+  #define UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK            0x000000D2
   #define UPDATE_NEURONS_ERROR_CODE_1                             1   /*UPDATE_NEURONS_PS_ORDER_LIMIT was hit*/
   #define UPDATE_NEURONS_ERROR_CODE_2                             2   /*A neuron spiked more than once*/
   #define UPDATE_NEURONS_ERROR_CODE_3                             4   /*UPDATE_NEURONS_NR_ORDER_LIMIT was hit*/
   #define UPDATE_NEURONS_ERROR_CODE_4                             8   /*NR diverged*/
   #define UPDATE_NEURONS_ERROR_CODE_5                             16  /*Spike packet size limit was hit*/
   #define UPDATE_NEURONS_ERROR_CODE_6                             32  /*PS divergence*/
+  #define UPDATE_NEURONS_ERROR_CODE_7                             64  /*Spike count in NN overflow*/
+  #define UPDATE_NEURONS_ERROR_CODE_8                             128 /*Event count overflow*/
+  
   /*Kernel file and name*/
   #define UPDATE_NEURONS_KERNEL_FILE_NAME                         "Kernel_UpdateNeurons.cl"
   #define UPDATE_NEURONS_KERNEL_NAME                              "update_neurons"
   #define UPDATE_NEURONS_SPIKED_KERNEL_NAME                       "update_spiked_neurons"
   /*WF size measured in WIs*/
   #define UPDATE_NEURONS_WF_SIZE_WI                               WF_SIZE_WI /*Options: 64*/
+  
   /*Size of element in event pointer struct*/
   #define UPDATE_NEURONS_STRUCT_ELEMENT_SIZE                      2
   /*Event input buffer element size*/
   #define UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS                   3
   /*CONTROL: each WI processes this number of neurons*/
-  #define UPDATE_NEURONS_ELEMENTS_PER_WI                          1
+  #if !(defined(UPDATE_NEURONS_ELEMENTS_PER_WI))
+    #define UPDATE_NEURONS_ELEMENTS_PER_WI                        1
+  #endif
   /*Size of time delay buffer*/
   #define UPDATE_NEURONS_TIME_SLOTS                               EVENT_TIME_SLOTS /*Options: 16*/
+  
   /*Sizes of model variables and parameters*/
   #define UPDATE_NEURONS_MODEL_VARIABLES                          4
   #define UPDATE_NEURONS_MODEL_PARAMETERS                         9
+  
   /*Spike data structure parameters*/
-  #define UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE                   SPIKE_DATA_BUFFER_SIZE
+  #define UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE                   SPIKE_PACKET_SIZE
   #define UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS               2
   #define UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS                  (UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE * \
                                                                   UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
@@ -1319,12 +1709,15 @@
   #define UPDATE_NEURONS_MIN_DELAY                                1.0f
   
   /*Debugging*/
+  /*CONTROL: enable debugging*/
   #define UPDATE_NEURONS_DEBUG_ENABLE                             (0)&DEBUG_MASK
+  /*CONTROL: debug buffer size*/
   #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (UPDATE_NEURONS_TOTAL_NEURONS*1024)
   
   /*CONTROL: Source data size for unit test*/
   #if !(defined(UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE))
-  #define UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE                 (128*EVENT_DATA_BUFFER_SIZE)
+  #define UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE                 (SYNAPTIC_EVENT_BUFFERS*\
+                                                                  EVENT_DATA_BUFFER_SIZE)
   #endif
   /*Simulation parameters*/
   /*Tolerance mode: 
@@ -1383,7 +1776,7 @@
   /*Wisible to Host and Device*/
   /*CONTROL: number of WFs per WG*/
   #if !(defined(UPDATE_NEURONS_WG_SIZE_WF_V00))
-  #define UPDATE_NEURONS_WG_SIZE_WF_V00                           2
+  #define UPDATE_NEURONS_WG_SIZE_WF_V00                           1
   #endif
   /*CONTROL: number of spike packets generated by kernel*/
   #define UPDATE_NEURONS_SPIKE_PACKETS_V00                        SPIKE_PACKETS

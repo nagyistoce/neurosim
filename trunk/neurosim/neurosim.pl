@@ -46,6 +46,7 @@ our $COMP = "";
 our $LINK = "";
 our $RMDIR = "";
 our $RM = "";
+our $CP = "";
 our $CD = "cd";
 our $AR = "";
 our $INSTALL = "";
@@ -112,7 +113,7 @@ our @APP_SRC_NAMES = ("iz_util.c", "integ_util.c", "IntegrationTest.cpp");
 our @APP_KERNEL_FILE_NAMES = ("Kernel_ExpandEvents.cl", "Kernel_GroupEvents.cl", 
   "Kernel_MakeEventPointers.cl", "Kernel_ScanHistogram.cl", "Kernel_SortSynapticEvents.cl", 
   "Kernel_UpdateNeurons.cl");
-our @APP_DEFINITION_FILE_NAMES = ("Definitions.h");
+our $APP_DEFINITION_FILE_NAME = "Definitions.h";
 our @APP_CONFIG_FILE_NAMES = ("neuron_variables_sample.csv", $OCL_COMPILER_OPTIONS_FILE);
 our $APP_COMPILER_OPS = "";
 our $APP_LINK_OPS = "";
@@ -295,6 +296,7 @@ if( $OS eq OS_WINDOWS )
   $MKDIR = "mkdir -p";
   $RMDIR = "rm -dfr";
   $RM = "rm";
+  $CP = "cp";
   $INSTALL = "install -D";
   
   # Create include directive to compiler
@@ -668,6 +670,7 @@ sub compileApp
     print "$temp\n";
     system( $temp );
     
+    # Link
     $temp = "$LINK $APP_LINK_OPS $APP_LIB_CONFIG ".
       "/OUT:\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME.exe\" ".
       "/ManifestFile:\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME.exe.intermediate.manifest\" ".
@@ -691,7 +694,7 @@ sub compileApp
     return 0;
   }
   
-  for my $n ((@APP_DEFINITION_FILE_NAMES, @APP_KERNEL_FILE_NAMES)) 
+  for my $n ($APP_DEFINITION_FILE_NAME, @APP_KERNEL_FILE_NAMES)
   {
     $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\" \"$APP_INSTALL_DIR/$n\"";
     print "$temp\n";
@@ -715,13 +718,37 @@ sub compileApp
     }
   }
   
+  # prepend defenitions
+  $temp = "";
+  my @configArray = split("/D", $config);
+  shift(@configArray); 
+  for my $n (@configArray) 
+  {
+    replaceSubStr($n, "=", " ");
+    replaceSubStr($n, "\\\"", "\"");
+    
+    $temp .= "#define $n\n";
+  }
+  my $optionsFile = "$APP_INSTALL_DIR/$APP_DEFINITION_FILE_NAME";
+  sysopen(MYINPUTFILE, $optionsFile, O_RDONLY) || 
+    die("compileApp: Cannot open file $optionsFile for read");
+  my @configFile = <MYINPUTFILE>; 
+  close(MYINPUTFILE);
+  sysopen(MYOUTFILE, $optionsFile, O_WRONLY|O_TRUNC|O_CREAT) || 
+    die("compileApp: Cannot open file $optionsFile for write");
+  print MYOUTFILE "\n".$temp."\n";
+  print MYOUTFILE @configFile;
+  close(MYOUTFILE);
+  
+=for
   replaceSubStr($config, "/D", "-D");
   my $optionsFile = "$APP_INSTALL_DIR/$OCL_COMPILER_OPTIONS_FILE";
   sysopen(MYOUTFILE, $optionsFile, O_WRONLY|O_APPEND|O_CREAT) || 
     die("compileApp: Cannot open file $optionsFile");
   print MYOUTFILE $config."\n";
   close(MYOUTFILE);
-  
+=cut
+
   return 1;
 }
 
