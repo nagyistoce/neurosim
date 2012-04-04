@@ -104,17 +104,27 @@ class IntegrationTest : public SDKSample
     std::ofstream     *traceFile;
     std::stringstream *dataToTraceFile;
 #endif
+
 #if (LOG_SIMULATION)
     std::ofstream     *simulationLogFile;
     std::stringstream *dataToSimulationLogFile;
 #endif
+
 #if (LOG_REPORT)
     std::ofstream     *reportLogFile;
     std::stringstream *dataToReportLogFile;
 #endif
+
 #if (SIMULATION_SNAPSHOT)
     std::ofstream     *snapshotLogFile;
     std::stringstream *dataToSnapshotLogFile;
+#endif
+
+#if STATISTICS_ENABLE
+    double averageEventsInNetwork;
+    double averageEventsInNetworkCounter;
+    double averageSpikesInNetwork;
+    double averageSpikesInNetworkCounter;
 #endif
 
 /**************************************************************************************************/
@@ -189,9 +199,8 @@ class IntegrationTest : public SDKSample
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03
-    cl_uint lmSortDataSizeBytes;
+    cl_uint lmCacheGroupEventsSizeBytes;
     cl_uint lmlocalHistogramReferenceSizeBytes;
-    cl_uint lmlocalHistogramScratchPadSizeBytes;
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     cl_uint dataDebugHostGroupEventsSize;
     cl_uint dataDebugHostGroupEventsSizeBytes;
@@ -224,11 +233,7 @@ class IntegrationTest : public SDKSample
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
-    cl_uint lmSpikesSizeBytes;
-    cl_uint lmTimeSlotCountersSizeBytes;
-#if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
-    cl_uint lmTargetNeuronHistogramSizeBytes;
-#endif
+    cl_uint lmExpandEventsSizeBytes;
 
     cl_uint dataUnsortedEventsTargetsVerifySize;
     cl_uint dataUnsortedEventsTargetsVerifySizeBytes;
@@ -547,16 +552,6 @@ public:
 #endif
 #endif
 /* *** */
-#if GROUP_EVENTS_ENABLE_V00
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-        dataDebugHostGroupEvents(NULL),
-        dataDebugDeviceGroupEvents(NULL),
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-        dataErrorGroupEvents(NULL),
-#endif
-#endif
-/* *** */
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
     MAKE_EVENT_PTRS_ENABLE
         dataHistogramGroupEventsTok(NULL),
@@ -718,16 +713,6 @@ public:
 /* *** */
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-        dataDebugHostGroupEvents(NULL),
-        dataDebugDeviceGroupEvents(NULL),
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-        dataErrorGroupEvents(NULL),
-#endif
-#endif
-/* *** */
-#if GROUP_EVENTS_ENABLE_V00
 #if (GROUP_EVENTS_DEBUG_ENABLE)
         dataDebugHostGroupEvents(NULL),
         dataDebugDeviceGroupEvents(NULL),
@@ -954,6 +939,7 @@ public:
       cl_uint histogramBitShift,
       cl_uint keyOffset,
       cl_float percentInhibitory,
+      double   percentBufferSizeDeviation,
       cl_uint *dataUnsortedEventCounts,
       cl_uint *dataUnsortedEventTargets,
       cl_uint *dataUnsortedEventDelays,
@@ -1059,14 +1045,22 @@ public:
     
     int verifyKernelGroupEventsV00(cl_uint keyOffset);
     
-    int initializeDataForKernelGroupEventsV01(int step, cl_uint keyOffset);
+    int 
+    initializeDataForKernelGroupEventsV01
+    (
+      int step, 
+      cl_uint keyOffset,
+      double percentBufferSizeDeviation
+    );
+
     int verifyKernelGroupEventsV01(cl_uint step);
 
     int
     initializeDataForKernelGroupEventsV02_V03
     (
       cl_uint step, 
-      cl_uint keyOffset
+      cl_uint keyOffset,
+      double percentBufferSizeDeviation
     );
     int verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset);
     int verifyKernelGroupEventsV03(cl_uint step);
@@ -1111,7 +1105,7 @@ public:
     psInit
     (
       cl_uint     totalNeurons,
-      cl_uint     injectCurrentUntilStep,
+      int         injectCurrentUntilStep,
       const char  *neuronVariablesSampleFile
     );
 
@@ -1123,7 +1117,7 @@ public:
       bool          resetEvents,
       bool          resetParameters,
       bool          resetVariables,
-      cl_uint       step,
+      double        gabaRatio,
       const char    *neuronVariablesSampleFile
     );
 
@@ -1198,7 +1192,7 @@ public:
     updateStep
     (
       bool    ignoreFailures,
-      cl_uint injectCurrentUntilStep,
+      int     injectCurrentUntilStep,
       cl_uint currentTimeStep,
       cl_uint totalNeurons,
       cl_uint psOrderLimit,
@@ -1242,7 +1236,8 @@ public:
     initializeSpikeData
     (
       double spikeBufferMinPercentFill,
-      double spikeBufferMaxPercentFill
+      double spikeBufferMaxPercentFill,
+      double spikeNeuronsPercent
     );
     
     double timeStampNs();

@@ -57,7 +57,7 @@ uint gpu_iz_ps_step
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
   __global    uint      *gm_error_code,
 #endif
-#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP > 0
               DATA_TYPE I,
 #endif
 #if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
@@ -86,7 +86,7 @@ uint gpu_iz_ps_step
   DATA_TYPE g_ampa = GA_RT;
   DATA_TYPE g_gaba = GG_RT;
   
-#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP > 0
   YP1(1) = MUL( CONST_CO(cm_coefficients,0,0), (vchi - u + MUL(E_ampa, g_ampa) + 
     MUL(E_gaba, g_gaba) + I) );
 #else
@@ -383,6 +383,14 @@ void update_neurons
     uint neuronEventPtrStart = *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE);
     int ev_count = *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1);
     ev_count++;
+    
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+    if(ev_count >= 0xFFFF)
+    {
+      atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_8);
+      ev_count = 0;
+    }
+#endif
 
     /*Load model variables*/
     DATA_TYPE v         = gm_model_variables[neuronId];
@@ -397,7 +405,7 @@ void update_neurons
     DATA_TYPE v_peak    = gm_model_parameters[6*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE E_ampa    = gm_model_parameters[7*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE E_gaba    = gm_model_parameters[8*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
-#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP > 0
     DATA_TYPE I = 0.0f;
     if(step < UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP)
     {
@@ -454,7 +462,7 @@ void update_neurons
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
       gm_error_code,
 #endif
-#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP > 0
       I,
 #endif
 #if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
@@ -474,6 +482,7 @@ void update_neurons
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
     if(ps_order >= UPDATE_NEURONS_PS_ORDER_LIMIT)
     {
+      ps_order = UPDATE_NEURONS_PS_ORDER_LIMIT-1;
       atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_1);
     }
 #endif
@@ -629,6 +638,14 @@ void update_spiked_neurons
   
   /*TODO: verify if this short version is faster than the one above*/
   uint  totalSpikes =  gm_spike_counts[GLOBAL_WF_ID(wg_id, wi_id)];
+  
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+  if(totalSpikes >= 0xFFFF)
+  {
+    atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_7);
+    totalSpikes = 0;
+  }
+#endif
 
   /*A WF works on allocated for it spike packet*/
   for(uint j = WI_ID_WF_SCOPE(wi_id); j < totalSpikes; j += UPDATE_NEURONS_WF_SIZE_WI)
@@ -642,6 +659,14 @@ void update_spiked_neurons
     uint neuronEventPtrStart = *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE);
     int ev_count = *(gm_event_ptr + neuronId*UPDATE_NEURONS_STRUCT_ELEMENT_SIZE + 1);
 
+#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+    if(ev_count >= 0xFFFF)
+    {
+      atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_8);
+      ev_count = 0;
+    }
+#endif
+    
     /*Load model variables*/
     DATA_TYPE v         = gm_model_variables[neuronId];
     DATA_TYPE u         = gm_model_variables[UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
@@ -657,7 +682,7 @@ void update_spiked_neurons
     DATA_TYPE v_peak    = gm_model_parameters[6*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE E_ampa    = gm_model_parameters[7*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
     DATA_TYPE E_gaba    = gm_model_parameters[8*UPDATE_NEURONS_TOTAL_NEURONS+neuronId];
-#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP > 0
     DATA_TYPE I = 0.0f;
     if(step < UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP)
     {
@@ -718,7 +743,7 @@ void update_spiked_neurons
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
       gm_error_code,
 #endif
-#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP
+#if UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP > 0
       I,
 #endif
 #if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
@@ -738,6 +763,7 @@ void update_spiked_neurons
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
     if(ps_order >= UPDATE_NEURONS_PS_ORDER_LIMIT)
     {
+      ps_order = UPDATE_NEURONS_PS_ORDER_LIMIT-1;
       atomic_or(gm_error_code,UPDATE_NEURONS_ERROR_CODE_1);
     }
 #endif
