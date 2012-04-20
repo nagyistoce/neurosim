@@ -1,57 +1,17 @@
-/* ============================================================
+/* ===============================================================================================
 
-============================================================ */
+
+
+  =============================================================================================== */
 
 #ifndef INTEGRATION_TEST_H_
 #define INTEGRATION_TEST_H_
 
-/* Enable OpenCL C++ exceptions */
-#if (ERROR_TRY_CATCH_ENABLE)
-#define __CL_ENABLE_EXCEPTIONS
-#endif
-
-#include "Definitions.h"
-#include "iz_util.h"
-#include "integ_util.h"
-#include <SDKCommon.hpp>
-#include <SDKApplication.hpp>
-#include <SDKFile.hpp>
-#include <SDKBitMap.hpp>
-#include <CL/cl.hpp>
-#include <stdio.h>
-#include <time.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-#include <map>
-#include <set>
-#include <vector>
-#include <limits>
-#include <iostream>
-#include <iomanip>
-#include <fstream>
-#include <cmath>
-#include <windows.h>
-#include <winbase.h>
 
 
-
-using std::map;
-using std::set;
-using std::vector;
-using std::ofstream;
+#include "Definitions.hpp"
 
 
-
-struct kernelStatistics {
-  /*map{kernel_name -> map{alloc_name -> alloc_size}}*/
-  map<std::string, map<std::string, cl_uint> > gmSizes;
-  map<std::string, map<std::string, cl_uint> > cmSizes;
-  map<std::string, map<std::string, cl_uint> > lmSizes;
-  set<std::string> kernelNames;
-  map<std::string, map<std::string, double> > execTime;
-  set<std::string> kernelNamesExecTime;
-};
 
 /**
 * IntegrationTest 
@@ -105,15 +65,11 @@ class IntegrationTest : public SDKSample
     std::stringstream *dataToTraceFile;
 #endif
 
-#if (LOG_SIMULATION)
     std::ofstream     *simulationLogFile;
     std::stringstream *dataToSimulationLogFile;
-#endif
 
-#if (LOG_REPORT)
     std::ofstream     *reportLogFile;
     std::stringstream *dataToReportLogFile;
-#endif
 
 #if (SIMULATION_SNAPSHOT)
     std::ofstream     *snapshotLogFile;
@@ -221,15 +177,7 @@ class IntegrationTest : public SDKSample
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-    cl_uint dataSpikePacketsSize;
-    cl_uint dataSpikePacketsSizeBytes;
-    cl_uint* dataSpikePackets;
-    cl::Buffer dataSpikePacketsBuffer;
-    
-    cl_uint dataSpikePacketCountsSize;
-    cl_uint dataSpikePacketCountsSizeBytes;
-    cl_uint* dataSpikePacketCounts;
-    cl::Buffer dataSpikePacketCountsBuffer;
+    SpikeEvents  spikeEvents;
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
@@ -498,11 +446,6 @@ public:
         dataHistogramVerify(NULL),
 #endif
 /* *** */
-#if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-        dataSpikePackets(NULL),
-        dataSpikePacketCounts(NULL),
-#endif
-/* *** */
 #if EXPAND_EVENTS_ENABLE
         dataUnsortedEventsTargetsVerify(NULL),
         dataUnsortedEventsDelaysVerify(NULL),
@@ -666,11 +609,6 @@ public:
      || GROUP_EVENTS_ENABLE_V00)
         dataHistogram(NULL),
         dataHistogramVerify(NULL),
-#endif
-/* *** */
-#if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-        dataSpikePackets(NULL),
-        dataSpikePacketCounts(NULL),
 #endif
 /* *** */
 #if EXPAND_EVENTS_ENABLE
@@ -990,10 +928,13 @@ public:
     );
     
     int initializeExpandEventsData();
+    
     int verifyKernelExpandEvents
     (
-      cl_uint timeSlot,
-      bool reset
+      cl_uint,
+      bool,
+      SpikeEvents&,
+      cl::CommandQueue&
     );
     
     int initializeDataForKernelScanHistogramV00(cl_uint timeSlot, cl_uint mode);
@@ -1203,20 +1144,19 @@ public:
     int
     verifyKernelUpdateNeurons
     (
-      bool          verify,
-      cl_uint       step,
-      cl_uint       sortedEventsSize,
-      unsigned int  *pointerStruct,
-      unsigned int  *sortedEvents,
-      unsigned int  *synapsePointer,
-      unsigned int  *synapseTargets,
-      DATA_TYPE     *synapseDelays,
-      DATA_TYPE     *synapseWeights,
-      unsigned int  *spikePacketCounts,
-      unsigned int  *spikePackets,
-      DATA_TYPE     *modelVariables,
-      unsigned int  *dataSpikePackets,
-      unsigned int  *dataSpikePacketCounts
+      bool,
+      bool,
+      cl_uint,
+      cl_uint,
+      unsigned int*,
+      unsigned int*,
+      unsigned int*,
+      unsigned int*,
+      DATA_TYPE*,
+      DATA_TYPE*,
+      DATA_TYPE*,
+      SpikeEvents&,
+      cl::CommandQueue&
     );
     
     int 
@@ -1242,27 +1182,19 @@ public:
     
     double timeStampNs();
 
-    template<typename T>
-    void swap2(T& a, T& b)
-    {
-      T tmp = a;
-      a = b;
-      b = tmp;
-    }
-    
 #if SIMULATION_SNAPSHOT
     int 
     takeSimulationSnapshot
     (
-      cl_uint   step,
-      cl_uint   sampleSizeNeurons,
-      cl_uint   *dataUnsortedEventCounts,
-      cl_uint   *dataUnsortedEventWeights,
-      cl_uint   *dataMakeEventPtrsStruct,
-      cl_uint   *dataGroupEventsTik,
-      cl_uint   *dataSpikePackets,
-      cl_uint   *dataSpikePacketCounts,
-      cl_float  *modelVariables
+      cl_uint,
+      cl_uint,
+      cl_uint*,
+      cl_uint*,
+      cl_uint*,
+      cl_uint*,
+      cl_float*,
+      SpikeEvents&,
+      cl::CommandQueue&
     );
 #endif
 };

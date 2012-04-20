@@ -5,11 +5,17 @@
   - PS order limit: continue in local memory if it hits register limit.
   - Restructire spike packet: contiguous neuronID part and contiguous spike time part
   - Spike packet per group instead of per WF?
-  - Investigate "missing a spike": It is possible to miss a spike if the membrane potential only has a brief superthreshold excursion and returns to subthreshold values before the end of the subinterval (Hanuschkin et al., http://www.nest-initiative.org).
+  - Spike handling kernel has to be scaled  differently than update kernel
+  - Investigate "missing a spike": It is possible to miss a spike if the membrane potential only 
+    has a brief superthreshold excursion and returns to subthreshold values before the end of the 
+    subinterval (Hanuschkin et al., http://www.nest-initiative.org).
   - NR divergence: find more robust method
-    - Adapted NR, converges at the first threshold crossing of the membrane potential. See D’Haene et al. Accelerating event-driven simulation of spiking neurons with multiple synaptic time constants.
+    - Adapted NR, converges at the first threshold crossing of the membrane potential. 
+      See D’Haene et al. Accelerating event-driven simulation of spiking neurons with multiple 
+      synaptic time constants.
     - D’Haene et al. Fast and exact simulation methods applied on a broad range of neuron models.
-    - Interpolation. Morrison et al. Exact subthreshold integration with continuous spike times in discrete time neural network simulations.
+    - Interpolation. Morrison et al. Exact subthreshold integration with continuous spike times 
+      in discrete time neural network simulations.
 */
 
 

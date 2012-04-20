@@ -2,8 +2,6 @@
   TODO:
     - bug. Fails if GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER is not 16 for WG sizes more than 1 and
       if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT is set.
-    - detect events with identical time and fuse them into a single event (need to sync with update
-      phase on that)
     - instead of using atomics on output histogram it could use same method of computing histogram
       as it does for local one.
     - tik-tok buffer size can be reduced by 1/3 since 2nd key space is not used. Key and value
@@ -883,8 +881,8 @@ void group_events
 #endif
 #else
 #if (GROUP_EVENTS_WG_SIZE_WF > 1)
-        myIdx += atomic_dec(&cache[local_wf_id*
-          GROUP_EVENTS_WF_CACHE_SIZE_WORDS + GROUP_EVENTS_HISTOGRAM_TOTAL_BINS + bin])-1;
+        myIdx += atomic_dec(&cache[local_wf_id*GROUP_EVENTS_WF_CACHE_SIZE_WORDS + 
+          GROUP_EVENTS_HISTOGRAM_TOTAL_BINS + bin])-1;
 #else
         myIdx += atomic_dec(&cache[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS + bin])-1;
 #endif

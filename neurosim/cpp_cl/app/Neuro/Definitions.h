@@ -113,6 +113,10 @@ GROUP_EVENTS_V00:
 
 
 
+/** PREPEND CUE (for compilation script, do not remove)**/
+
+
+
 /** ############################################################################################# **
 
   I. Generic Parameters, Macros and Definitions
@@ -166,11 +170,11 @@ GROUP_EVENTS_V00:
     checksum += ((1705662821u + data) % 2147483659u);\
   }
   
-#define SET_RANDOM_SEED(seed)\
+#define SET_RANDOM_SEED(seed, counter)\
   {\
     time_t t = time(NULL);\
-    seed = *((unsigned int *)(&t)) + srandCounter;\
-    srandCounter++;\
+    seed = *((unsigned int *)(&t)) + counter;\
+    counter++;\
     srand(seed);\
   }
   
@@ -273,6 +277,54 @@ GROUP_EVENTS_V00:
     kernelStats.kernelNames = kernels;\
   }
   
+#define REGISTER_MEMORY_O(device, kernel_name, mem_type, mem_name, kernelStats)\
+  {\
+    switch (mem_type)\
+    {\
+      case MEM_CONSTANT:\
+      {\
+        map<std::string, cl_uint> memSizes = kernelStats->cmSizes[kernel_name];\
+        memSizes[#mem_name] = mem_name ##SizeBytes;\
+        kernelStats->cmSizes[kernel_name] = memSizes;\
+      }\
+        break;\
+      case MEM_GLOBAL:\
+      {\
+        map<std::string, cl_uint> memSizes = kernelStats->gmSizes[kernel_name];\
+        memSizes[#mem_name] = mem_name ##SizeBytes;\
+        kernelStats->gmSizes[kernel_name] = memSizes;\
+      }\
+        break;\
+      case MEM_LOCAL:\
+      {\
+        map<std::string, cl_uint> memSizes = kernelStats->lmSizes[kernel_name];\
+        memSizes[#mem_name] = mem_name ##SizeBytes;\
+        kernelStats->lmSizes[kernel_name] = memSizes;\
+      }\
+        break;\
+      default:\
+        throw SimException("REGISTER_MEMORY_O: unsupported memory type.");\
+    }\
+    \
+    set<std::string> kernels = kernelStats->kernelNames;\
+    kernels.insert(kernel_name);\
+    kernelStats->kernelNames = kernels;\
+    \
+    cl_uint minDataTypeAlignSize = (device).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>();\
+    cl_ulong memMaxAllocactionSize = (device).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();\
+    cl_uint size = ((mem_name ##SizeBytes)/minDataTypeAlignSize + 1)*minDataTypeAlignSize;\
+    \
+    if(size > memMaxAllocactionSize)\
+    {\
+      std::stringstream ss;\
+      ss << "REGISTER_MEMORY_O: Memory object in kernel " << kernel_name\
+      << " with size identifier " << #mem_name << " and size "\
+      << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, "\
+      << ((float)memMaxAllocactionSize)/(1024.0*1024.0);\
+      throw SimException(ss.str());\
+    }\
+  }
+  
 /*Memory types*/
 #define MEM_CONSTANT                                          0
 #define MEM_GLOBAL                                            1
@@ -288,6 +340,22 @@ GROUP_EVENTS_V00:
     {\
       sampleCommon->error("Failed to allocate memory for (" #name ")");\
       return SDK_FAILURE;\
+    }\
+  }
+  
+#define CALLOC_O(name, type, size)\
+  {\
+    if(this->name != NULL)\
+    {\
+      throw SimException("CALLOC_O: Attempted to point not NULL pointer to memory space (" \
+        #name ")");\
+    }\
+    this->name ##Size = size;\
+    this->name ##SizeBytes = (this->name ##Size) * sizeof(type);\
+    this->name = (type *)calloc(this->name ##Size, sizeof(type));\
+    if(name == NULL)\
+    {\
+      throw SimException("CALLOC_O: Failed to allocate memory for (" #name ")");\
     }\
   }
 
@@ -356,6 +424,19 @@ GROUP_EVENTS_V00:
     }\
   }
   
+#define CREATE_BUFFER_O(context, flags, buffer, size)\
+  {\
+    cl_int err = CL_SUCCESS;\
+    buffer = cl::Buffer(context, flags, size, NULL, &err);\
+    if(err != CL_SUCCESS)\
+    {\
+      std::stringstream ss;\
+      ss << "CREATE_BUFFER_O: Failed to allocate " << #buffer << " due to error code " \
+        << err << "\n";\
+      throw SimException(ss.str());\
+    }\
+  }
+  
 /*Enqueu write buffer*/
 #define ENQUEUE_WRITE_BUFFER(block, buffer, size, data)\
   {\
@@ -383,6 +464,42 @@ GROUP_EVENTS_V00:
         cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS) failed. (" #buffer ")"))\
       {\
         return SDK_FAILURE;\
+      }\
+    }\
+  }
+  
+#define ENQUEUE_WRITE_BUFFER_O(block, queue, buffer, size, data)\
+  {\
+    cl_int status;\
+    cl::Event writeEvt = NULL;\
+    status = queue.enqueueWriteBuffer(buffer, block, 0, size, data, NULL, &writeEvt);\
+    if(status != CL_SUCCESS)\
+    {\
+      std::stringstream ss;\
+      ss << "ENQUEUE_WRITE_BUFFER_O: Failed to enqueue buffer " << #buffer \
+        << " for write due to error code " << status << "\n";\
+      throw SimException(ss.str());\
+    }\
+    \
+    status = queue.flush();\
+    if(status != CL_SUCCESS)\
+    {\
+      std::stringstream ss;\
+      ss << "ENQUEUE_WRITE_BUFFER_O: Failed to flush buffer" << #buffer \
+        << " for write due to error code " << status << "\n";\
+      throw SimException(ss.str());\
+    }\
+    \
+    cl_int eventStatus = CL_QUEUED;\
+    while(eventStatus != CL_COMPLETE)\
+    {\
+      status = writeEvt.getInfo<cl_int>(CL_EVENT_COMMAND_EXECUTION_STATUS,&eventStatus);\
+      if(status != CL_SUCCESS)\
+      {\
+        std::stringstream ss;\
+        ss << "ENQUEUE_WRITE_BUFFER_O: Failed to get successefull write event status "\
+          << "for buffer " << #buffer << " due to error code " << status << "\n";\
+        throw SimException(ss.str());\
       }\
     }\
   }
@@ -416,6 +533,42 @@ GROUP_EVENTS_V00:
       }\
     }\
   }
+#define ENQUEUE_READ_BUFFER_O(block, queue, buffer, size, data)\
+  {\
+    cl_int status;\
+    cl_int eventStatus = CL_QUEUED;\
+    cl::Event readEvt;\
+    status = queue.enqueueReadBuffer(buffer, block, 0, size, data, NULL, &readEvt);\
+    if(status != CL_SUCCESS)\
+    {\
+      std::stringstream ss;\
+      ss << "ENQUEUE_READ_BUFFER_O: Failed to enqueue buffer " << #buffer \
+        << " for read due to error code " << status << "\n";\
+      throw SimException(ss.str());\
+    }\
+    \
+    status = queue.flush();\
+    if(status != CL_SUCCESS)\
+    {\
+      std::stringstream ss;\
+      ss << "ENQUEUE_READ_BUFFER_O: Failed to flush buffer" << #buffer \
+        << " for read due to error code " << status << "\n";\
+      throw SimException(ss.str());\
+    }\
+    \
+    eventStatus = CL_QUEUED;\
+    while(eventStatus != CL_COMPLETE)\
+    {\
+      status = readEvt.getInfo<cl_int>(CL_EVENT_COMMAND_EXECUTION_STATUS, &eventStatus);\
+      if(status != CL_SUCCESS)\
+      {\
+        std::stringstream ss;\
+        ss << "ENQUEUE_READ_BUFFER_O: Failed to get successefull read event status "\
+          << "for buffer " << #buffer << " due to error code " << status << "\n";\
+        throw SimException(ss.str());\
+      }\
+    }\
+  }
   
 /*Set kernel argument*/
 #define SET_KERNEL_ARG(kernel, arg, argNum)\
@@ -435,36 +588,17 @@ GROUP_EVENTS_V00:
 /**************************************************************************************************/
 
 
-  
+
 /***************************************************************************************************
-  Log and Statistics Macros and Definitions
+  Exceptions
 ***************************************************************************************************/
-/*Log report messages*/
-#if !(defined(LOG_REPORT))
-  #define LOG_REPORT                                          0
-#endif
-#if !(defined(LOG_REPORT_FILE_NAME))
-  #define LOG_REPORT_FILE_NAME                                "log_report.txt"
-#endif
-#define LOG_MODEL_VARIABLES_NEURON_ID                         1
-#define LOG_SIMULATION_FILE_NAME                              "log_simulation.txt"
-#define LOG_MODEL_VARIABLES_FILE_NAME                         "log_model_variable_trace.csv"
-#define LOG_MODEL_VARIABLES_FILE_HEADER                       "v,u,g_ampa,g_gaba,v_peak,I"
-#define LOG_MODEL_VARIABLES_FILE_BODY(i)                      << nrn_ps[i].v << "," \
-                                                              << nrn_ps[i].u << "," \
-                                                              << nrn_ps[i].g_ampa << "," \
-                                                              << nrn_ps[i].g_gaba << "," \
-                                                              << nrn_ps[i].v_peak << "," \
-                                                              << nrn_ps[i].I << std::endl
-/*Compile methods for taking a snapshot of simulation state*/
-#if !(defined(SIMULATION_SNAPSHOT))
-  #define SIMULATION_SNAPSHOT                                 0
-#endif
-#if SIMULATION_SNAPSHOT
-  #if !(defined(LOG_SNAPSHOT_FILE_NAME))
-    #define LOG_SNAPSHOT_FILE_NAME                            "log_snapshot.txt"
-  #endif
-#endif
+
+#define CATCH(message, action)\
+  catch(SimException& e)\
+  {\
+    std::cerr << #message << ": " << e.what() << std::endl;\
+    action;\
+  }
 /**************************************************************************************************/
 
 
@@ -508,7 +642,7 @@ GROUP_EVENTS_V00:
 #endif
 /*Gabaergic synapse ratio in respect to total synapses*/
 #if !(defined(SYNAPSE_GABA_PERCENT))
-  #define SYNAPSE_GABA_PERCENT                                1.0
+  #define SYNAPSE_GABA_PERCENT                                0.5
 #endif
 /*Size of spike packet buffer (spikes) per WF*/
 #if !(defined(SPIKE_PACKET_SIZE))
@@ -591,8 +725,6 @@ GROUP_EVENTS_V00:
 /*Floating point standard*/
 #define DATA_TYPE                                             float
 #define CL_DATA_TYPE                                          cl_float
-/*Enable error try and catch if 1 or disable if 0*/
-#define ERROR_TRY_CATCH_ENABLE                                0
 /*Ignore exceptions related to solver math and relay on their handling by solver routine:
   PS divergence
   PS order overflow
@@ -657,6 +789,14 @@ GROUP_EVENTS_V00:
   #define PROFILING_MODE                                      0
   /*Enable gathering statistics*/
   #define STATISTICS_ENABLE                                   1
+  /*Define Device-Host data sync mode:
+    0 - sync is always off
+    1 - sync is always on
+    2 - sync is on only when required by specific mode
+  */
+  #if !(defined(DEVICE_HOST_DATA_COHERENCE))
+  #define DEVICE_HOST_DATA_COHERENCE                          1
+  #endif
 
 #elif SIMULATION_MODE == 1
   /*Has to be a full mask for this mode*/
@@ -679,6 +819,10 @@ GROUP_EVENTS_V00:
   /**/
   #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
   #define ERROR_TRACK_ACCESS_EVERY_STEPS                      1
+  #endif
+  /**/
+  #if !(defined(DEVICE_HOST_DATA_COHERENCE))
+  #define DEVICE_HOST_DATA_COHERENCE                          1
   #endif
   
 #elif SIMULATION_MODE == 2
@@ -704,6 +848,10 @@ GROUP_EVENTS_V00:
   #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
   #define ERROR_TRACK_ACCESS_EVERY_STEPS                      0
   #endif
+  /**/
+  #if !(defined(DEVICE_HOST_DATA_COHERENCE))
+  #define DEVICE_HOST_DATA_COHERENCE                          2
+  #endif
   
 #elif SIMULATION_MODE == 3
   #if !(defined(ENABLE_MASK))
@@ -727,6 +875,10 @@ GROUP_EVENTS_V00:
   /**/
   #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
   #define ERROR_TRACK_ACCESS_EVERY_STEPS                      0
+  #endif
+  /**/
+  #if !(defined(DEVICE_HOST_DATA_COHERENCE))
+  #define DEVICE_HOST_DATA_COHERENCE                          0
   #endif
   
 #elif SIMULATION_MODE == 4
@@ -752,6 +904,10 @@ GROUP_EVENTS_V00:
   #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
   #define ERROR_TRACK_ACCESS_EVERY_STEPS                      0
   #endif
+  /**/
+  #if !(defined(DEVICE_HOST_DATA_COHERENCE))
+  #define DEVICE_HOST_DATA_COHERENCE                          0
+  #endif
   
 #elif SIMULATION_MODE == 5
   #if !(defined(ENABLE_MASK))
@@ -775,6 +931,10 @@ GROUP_EVENTS_V00:
   /**/
   #if !(defined(ERROR_TRACK_ACCESS_EVERY_STEPS))
   #define ERROR_TRACK_ACCESS_EVERY_STEPS                      0
+  #endif
+  /**/
+  #if !(defined(DEVICE_HOST_DATA_COHERENCE))
+  #define DEVICE_HOST_DATA_COHERENCE                          0
   #endif
   
 #else
@@ -820,6 +980,68 @@ GROUP_EVENTS_V00:
 /*String used to tag statistics relevant to all kernels*/
 #define KERNEL_ALL                                            "All Kernels"
 #define OCL_COMPILER_OPTIONS_FILE_NAME                        "oclCompilerOptions.txt"
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Log and Statistics Macros and Definitions
+***************************************************************************************************/
+/*Log report messages*/
+#if !(defined(LOG_REPORT))
+  #define LOG_REPORT                                          0
+#endif
+#if !(defined(LOG_REPORT_FILE_NAME))
+  #define LOG_REPORT_FILE_NAME                                "log_report.txt"
+#endif
+#define LOG_MODEL_VARIABLES_NEURON_ID                         1
+#define LOG_SIMULATION_FILE_NAME                              "log_simulation.txt"
+#define LOG_MODEL_VARIABLES_FILE_NAME                         "log_model_variable_trace.csv"
+#define LOG_MODEL_VARIABLES_FILE_HEADER                       "v,u,g_ampa,g_gaba,v_peak,I"
+#define LOG_MODEL_VARIABLES_FILE_BODY(i)                      << nrn_ps[i].v << "," \
+                                                              << nrn_ps[i].u << "," \
+                                                              << nrn_ps[i].g_ampa << "," \
+                                                              << nrn_ps[i].g_gaba << "," \
+                                                              << nrn_ps[i].v_peak << "," \
+                                                              << nrn_ps[i].I << std::endl
+/*Compile methods for taking a snapshot of simulation state*/
+#if !(defined(SIMULATION_SNAPSHOT))
+  #define SIMULATION_SNAPSHOT                                 0
+#endif
+#if SIMULATION_SNAPSHOT
+  #if !(defined(LOG_SNAPSHOT_FILE_NAME))
+    #define LOG_SNAPSHOT_FILE_NAME                            "log_snapshot.txt"
+  #endif
+#endif
+
+/*Logging macro*/
+#if LOG_SIMULATION && LOG_REPORT
+  #define LOG(message, type)\
+    if(type == 0)\
+    {\
+      time_t t; time (&t); char *s=ctime(&t); s[strlen(s)-1]=0;\
+      *dataToSimulationLogFile << s << " " << message << std::endl;\
+    }\
+    if(type == 1)\
+    {\
+      *dataToReportLogFile << message << std::endl;\
+    }
+#elif LOG_SIMULATION
+  #define LOG(message, type)\
+    if(type == 0)\
+    {\
+      time_t t; time (&t); char *s=ctime(&t); s[strlen(s)-1]=0;\
+      *dataToSimulationLogFile << ctime(&t) << " " << message << std::endl;\
+    }
+#elif LOG_REPORT
+  #define LOG(message, type)\
+    if(type == 1)\
+    {\
+      *dataToReportLogFile << message << std::endl;\
+    }
+#else
+  #define LOG(message, type)
+#endif
 /**************************************************************************************************/
 
 
@@ -1818,5 +2040,34 @@ GROUP_EVENTS_V00:
 #endif  /*END VARIANT_00*/
 #endif /*UPDATE_NEURONS_ENABLE*/
 /**************************************************************************************************/
+
+
+
+/** ############################################################################################# **
+
+  III. Integration Restrictions
+  
+** ############################################################################################# **/
+
+
+
+/*If both EXPAND_EVENTS_ENABLE and UPDATE_NEURONS_ENABLE_V00 are enabled*/
+#if EXPAND_EVENTS_ENABLE && (UPDATE_NEURONS_ENABLE_V00)
+#if EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS != UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS
+  #error (EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS != UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
+#endif
+#if EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE != UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE
+  #error (EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE != UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE)
+#endif
+#if EXPAND_EVENTS_TOTAL_NEURONS != UPDATE_NEURONS_TOTAL_NEURONS
+  #error (EXPAND_EVENTS_TOTAL_NEURONS != UPDATE_NEURONS_TOTAL_NEURONS)
+#endif
+#if EXPAND_EVENTS_SPIKE_PACKETS != UPDATE_NEURONS_SPIKE_PACKETS_V00
+  #error (EXPAND_EVENTS_SPIKE_PACKETS != UPDATE_NEURONS_SPIKE_PACKETS_V00)
+#endif
+#if EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS != UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS
+  #error (EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS != UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS)
+#endif
+#endif
 
 #endif /*INC_DEFINITIONS_H*/

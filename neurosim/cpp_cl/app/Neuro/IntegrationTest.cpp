@@ -6,54 +6,11 @@
     structures.
   - review buffer flags fore read/write operations
   
-  
-  code snippets:
-  
-  for(cl_uint i = 0; i < EXPAND_EVENTS_GRID_SIZE_WG*EXPAND_EVENTS_WG_SIZE_WF; i++)
-  {
-    std::stringstream ss;
-    for(cl_uint j = 0; j < EXPAND_EVENTS_WF_SIZE_WI; j++)
-    {
-      ss << dataExpandEventsDebugDevice[i*EXPAND_EVENTS_WF_SIZE_WI + j] << ",";
-    }
-    LOG(ss.str(), 0)
-  }
-  
   =============================================================================================== */
 
 
 
 #include "IntegrationTest.hpp"
-
-
-
-#if LOG_SIMULATION && LOG_REPORT
-  #define LOG(message, type)\
-    if(type == 0)\
-    {\
-      time_t t; time (&t); char *s=ctime(&t); s[strlen(s)-1]=0;\
-      *dataToSimulationLogFile << s << " " << message << std::endl;\
-    }\
-    if(type == 1)\
-    {\
-      *dataToReportLogFile << message << std::endl;\
-    }
-#elif LOG_SIMULATION
-  #define LOG(message, type)\
-    if(type == 0)\
-    {\
-      time_t t; time (&t); char *s=ctime(&t); s[strlen(s)-1]=0;\
-      *dataToSimulationLogFile << ctime(&t) << " " << message << std::endl;\
-    }
-#elif LOG_REPORT
-  #define LOG(message, type)\
-    if(type == 1)\
-    {\
-      *dataToReportLogFile << message << std::endl;\
-    }
-#else
-  #define LOG(message, type)
-#endif
 
 
 
@@ -328,33 +285,6 @@ IntegrationTest::allocateHostData()
   }
 #endif
 /**************************************************************************************************/
-#if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-  {
-  /* allocate memory for spike data */
-#if EXPAND_EVENTS_ENABLE
-  size = (EXPAND_EVENTS_SPIKE_PACKETS*EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS);
-  CALLOC(dataSpikePacketCounts, cl_uint, EXPAND_EVENTS_SPIKE_PACKETS);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSpikePacketCounts);
-#endif
-#if UPDATE_NEURONS_ENABLE_V00
-  size = (UPDATE_NEURONS_SPIKE_PACKETS_V00*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS);
-  CALLOC(dataSpikePacketCounts, cl_uint, UPDATE_NEURONS_SPIKE_PACKETS_V00);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSpikePacketCounts);
-#endif
-  
-  CALLOC(dataSpikePackets, cl_uint, size);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataSpikePackets);
-  }
-#if EXPAND_EVENTS_ENABLE && (UPDATE_NEURONS_ENABLE_V00)
-#if EXPAND_EVENTS_SPIKE_PACKETS != UPDATE_NEURONS_SPIKE_PACKETS_V00
-  #error (EXPAND_EVENTS_SPIKE_PACKETS != UPDATE_NEURONS_SPIKE_PACKETS_V00)
-#endif
-#if EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS != UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS
-  #error (EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS != UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS)
-#endif
-#endif
-#endif
-/**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
   {
   /* allocate memory for synaptic counters */
@@ -520,141 +450,6 @@ IntegrationTest::allocateHostData()
 
 
 int 
-IntegrationTest::initializeSpikeData
-(
-  double spikeBufferMinPercentFill,
-  double spikeBufferMaxPercentFill,
-  double spikeNeuronsPermil
-)
-/**************************************************************************************************/
-{
-#if EXPAND_EVENTS_ENABLE
-  memset(dataSpikePackets, 0, dataSpikePacketsSizeBytes);
-  memset(dataSpikePacketCounts, 0, dataSpikePacketCountsSizeBytes);
-  
-  SET_RANDOM_SEED(srandSeed);
-  LOG("initializeSpikeData: set srand seed to " << srandSeed, 0);
-  
-  cl_uint neuronsPerPacket = EXPAND_EVENTS_TOTAL_NEURONS/EXPAND_EVENTS_SPIKE_PACKETS;
-  cl_uint maxSpikesPerPacket = neuronsPerPacket;
-  double targetPacketSpikes = 0;
-  cl_uint totalNetworkSpikes = 0;
-  
-  if(spikeNeuronsPermil != NULL)
-  {
-    maxSpikesPerPacket = cl_uint(ceil(1.5*(double)maxSpikesPerPacket*(spikeNeuronsPermil/1000)));
-    targetPacketSpikes = (double)neuronsPerPacket*(spikeNeuronsPermil/1000);
-    if(maxSpikesPerPacket < 1){maxSpikesPerPacket = 1;}
-    
-    if(maxSpikesPerPacket > EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE)
-    {
-      std::cerr << "ERROR, initializeSpikeData: can't fit spikes within " << 
-        EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE << " boundary" << std::endl;
-      return SDK_FAILURE;
-    }
-  }
-
-  LOG("initializeSpikeData: max spikes per packet is " << maxSpikesPerPacket, 0);
-  
-  /* init spike data */
-  for(cl_uint packet = 0; packet < EXPAND_EVENTS_SPIKE_PACKETS; packet++)
-  {
-    cl_uint packet_index = packet * EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS;
-    
-    int totalSpikes = EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE;
-    
-    if(spikeNeuronsPermil != NULL)
-    {
-      GET_RANDOM_INT(totalSpikes, maxSpikesPerPacket, 
-        spikeBufferMinPercentFill, spikeBufferMaxPercentFill);
-        
-      /* correct spikes if not achieving the target */
-      int spikeDifference =  int(targetPacketSpikes*packet - (double)totalNetworkSpikes);
-      
-      if(spikeDifference < 0)
-      {
-        totalSpikes = 0;
-      }
-      else if(spikeDifference > 0)
-      {
-        totalSpikes = ((cl_uint)spikeDifference < maxSpikesPerPacket)? 
-          spikeDifference : maxSpikesPerPacket;
-      }
-    }
-    else
-    {
-      GET_RANDOM_INT(totalSpikes, EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE, 
-        spikeBufferMinPercentFill, spikeBufferMaxPercentFill);
-    }
-    
-    totalNetworkSpikes += totalSpikes;
-    
-    if(totalSpikes == -1)
-    {
-      std::cerr << "ERROR, initializeSpikeData: not able to initialize spikes" << std::endl;
-      return SDK_FAILURE;
-    }
-    
-    dataSpikePacketCounts[packet] = totalSpikes;
-    if(totalSpikes <= 0){continue;}
-    
-    cl_uint packetNeuronsPerSpikeCount = neuronsPerPacket/totalSpikes;
-    
-    if(packetNeuronsPerSpikeCount > 2)
-    {
-      cl_uint currentNeuronIdStart = (neuronsPerPacket*packet);
-      for(int i = 0; i < totalSpikes; i++)
-      {
-        cl_uint spiked_neuron = currentNeuronIdStart +
-          cl_uint(abs((packetNeuronsPerSpikeCount-1)*((double)rand()/((double)RAND_MAX))));
-          
-        cl_float spike_time = 
-          cl_float(abs(cl_float(SIMULATION_STEP_SIZE)*((double)rand()/((double)RAND_MAX))));
-          
-        dataSpikePackets[packet_index + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i] 
-          = spiked_neuron;
-          
-        *((cl_float *)(&dataSpikePackets[packet_index + 
-          EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1])) 
-          = spike_time;
-          
-        currentNeuronIdStart += packetNeuronsPerSpikeCount;
-      }
-    }
-    else
-    {
-      for(int i = 0; i < totalSpikes; i++)
-      {
-        cl_uint spiked_neuron = (neuronsPerPacket*packet) + i;
-          
-        cl_float spike_time = 
-          cl_float(abs(cl_float(SIMULATION_STEP_SIZE)*((double)rand()/((double)RAND_MAX))));
-        
-        
-        dataSpikePackets[packet_index + EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i] 
-          = spiked_neuron;
-          
-        *((cl_float *)(&dataSpikePackets[packet_index + 
-          EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1])) 
-          = spike_time;
-      }
-    }
-  }
-  
-  LOG("initializeSpikeData: total spikes in the network " << totalNetworkSpikes, 0);
-  
-  return SDK_SUCCESS;
-#else
-  std::cerr << "ERROR, initializeSpikeData: (EXPAND_EVENTS_ENABLE is not true)" 
-    << std::endl;
-  return SDK_FAILURE;
-#endif
-}
-/**************************************************************************************************/
-
-
-
-int 
 IntegrationTest::initializeExpandEventsData()
 /**************************************************************************************************/
 {
@@ -678,7 +473,7 @@ IntegrationTest::initializeExpandEventsData()
   memset(dataHistogram, 0, dataHistogramSizeBytes);
 #endif
   
-  SET_RANDOM_SEED(srandSeed);
+  SET_RANDOM_SEED(srandSeed, srandCounter);
   LOG("initializeExpandEventsData: set srand seed to " << srandSeed, 0);
   
   /*init synaptic data*/
@@ -908,7 +703,7 @@ IntegrationTest::initializeEventBuffers
 )
 /**************************************************************************************************/
 {
-  SET_RANDOM_SEED(srandSeed);
+  SET_RANDOM_SEED(srandSeed, srandCounter);
   LOG("initializeEventBuffers: set srand seed to " << srandSeed, 0);
   
   std::stringstream ss;
@@ -2227,12 +2022,9 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
 #if UPDATE_NEURONS_ENABLE_V00
   int result = SDK_SUCCESS;
   
-  SET_RANDOM_SEED(srandSeed);
+  SET_RANDOM_SEED(srandSeed, srandCounter);
   LOG("initializeDataForKernelUpdateNeurons: set srand seed to " << srandSeed, 0);
-  
-  memset(dataSpikePackets, 0, dataSpikePacketsSizeBytes);
-  memset(dataSpikePacketCounts, 0, dataSpikePacketCountsSizeBytes);
-  
+
   if(resetVariables || resetParameters)
   {
     result = psInit(UPDATE_NEURONS_TOTAL_NEURONS, UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP, 
@@ -2819,11 +2611,6 @@ IntegrationTest::createKernel
     cl_int err = CL_SUCCESS;
     cl::Program program;
 
-#if (ERROR_TRY_CATCH_ENABLE)
-  try
-  {
-#endif
-
     /* create a CL program using the kernel source */
 
     streamsdk::SDKFile kernelFile;
@@ -2955,14 +2742,6 @@ IntegrationTest::createKernel
                 
       return SDK_FAILURE;
     }
-#if (ERROR_TRY_CATCH_ENABLE)
-  }
-  catch (cl::Error err) 
-  {
-    std::cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << std::endl;
-    return SDK_FAILURE;
-  }
-#endif
 
   return SDK_SUCCESS;
 }
@@ -3007,244 +2786,239 @@ IntegrationTest::findTargetDevice
 int 
 IntegrationTest::setupCL()
 {
-    cl_int err = CL_SUCCESS;
-    cl_device_type dType;
-    cl_uint myDeviceId;
-    bool found = false;
+  cl_int err = CL_SUCCESS;
+  cl_device_type dType;
+  cl_uint myDeviceId;
+  bool found = false;
 
-#if (ERROR_TRY_CATCH_ENABLE)
-  try
+  err = cl::Platform::get(&platforms);
+  if(!sampleCommon->checkVal(err, 
+      CL_SUCCESS,
+      "Platform::get() failed."))
   {
-#endif
-  
-    err = cl::Platform::get(&platforms);
-    if(!sampleCommon->checkVal(err, 
-        CL_SUCCESS,
-        "Platform::get() failed."))
-    {
-        return SDK_FAILURE;
-    }
+      return SDK_FAILURE;
+  }
 
-    /*Find target platform*/
-    found = false;
-    std::vector<cl::Platform>::iterator i;
-    for (i = platforms.begin(); i != platforms.end(); ++i) 
+  /*Find target platform*/
+  found = false;
+  std::vector<cl::Platform>::iterator i;
+  for (i = platforms.begin(); i != platforms.end(); ++i) 
+  {
+    /*if(!strcmp((*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), TARGET_PLATFORM_VENDOR))
     {
-      /*if(!strcmp((*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), TARGET_PLATFORM_VENDOR))
-      {
-        found = true; break;
-      }*/
       found = true; break;
-    }
-    
-    if(!found)
-    {
-      std::cout << "Unable to find target platform with vendor " << 
-        (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
-      return SDK_FAILURE;
-    }
-    
-    (*i).getDevices(CL_DEVICE_TYPE_ALL, &devices);
- 
-    std::vector<cl::Device>::iterator d;
+    }*/
+    found = true; break;
+  }
+  
+  if(!found)
+  {
+    std::cout << "Unable to find target platform with vendor " << 
+      (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
+    return SDK_FAILURE;
+  }
+  
+  (*i).getDevices(CL_DEVICE_TYPE_ALL, &devices);
 
-    FIND_TARGET_DEVICE(devices, TARGET_DEVICE_NAME, d, found);
-    
-    if(!found)
-    {
-      std::cout << "Unable to find target devices " << TARGET_DEVICE_NAME 
-        << " on platform from vendor "  << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
-      return SDK_FAILURE;
-    }
-    
-    std::cout << "Found device " << (*d).getInfo<CL_DEVICE_NAME>() << "\n";
-        
-    dType = (*d).getInfo<CL_DEVICE_TYPE>();
-    myDeviceId = (*d).getInfo<CL_DEVICE_VENDOR_ID>();
+  std::vector<cl::Device>::iterator d;
 
-    cl_context_properties cps[3] = 
-    { 
-        CL_CONTEXT_PLATFORM, 
-        (cl_context_properties)(*i)(),
-        0 
-    };
-
-    context = cl::Context(dType, cps, NULL, NULL, &err);
-    if(!sampleCommon->checkVal(err, 
-        CL_SUCCESS,
-        "Context::Context() failed."))
-    {
-        return SDK_FAILURE;
-    }
-
-    devices = context.getInfo<CL_CONTEXT_DEVICES>();
-    if(!sampleCommon->checkVal(err, 
-        CL_SUCCESS,
-        "Context::getInfo() failed."))
-    {
-        return SDK_FAILURE;
-    }
-    
-    int deviceCount = (int)devices.size();
-
-    FIND_TARGET_DEVICE(devices, TARGET_DEVICE_NAME, d, found);
-    
-    if(!found)
-    {
-      std::cout << "Unable to find target devices " << TARGET_DEVICE_NAME 
-        << " within created context on platform from vendor "  
-        << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
-      return SDK_FAILURE;
-    }
-    
-    device.push_back(*d);
-    
-    /*Validate mem allocations against device-specific restrictions for all registered kernels*/
-    {
-      bool print = 1;
-      set<std::string>::iterator kernel_name;
-      cl_uint memBaseAllignBytes = (*d).getInfo<CL_DEVICE_MEM_BASE_ADDR_ALIGN>()/8;
-      cl_uint minDataTypeAlignSize = (*d).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>();
-      cl_ulong memMaxAllocactionSize = (*d).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();
-      cl_ulong maxGlobalMemSize = (*d).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
-      cl_ulong maxConstantMemSize = (*d).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();
-      cl_ulong maxLocalMemSize = (*d).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
-
-      print ? std::cout << "Memory Allocations:" << std::endl, true : false;
+  FIND_TARGET_DEVICE(devices, TARGET_DEVICE_NAME, d, found);
+  
+  if(!found)
+  {
+    std::cout << "Unable to find target devices " << TARGET_DEVICE_NAME 
+      << " on platform from vendor "  << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
+    return SDK_FAILURE;
+  }
+  
+  std::cout << "Found device " << (*d).getInfo<CL_DEVICE_NAME>() << "\n";
       
+  dType = (*d).getInfo<CL_DEVICE_TYPE>();
+  myDeviceId = (*d).getInfo<CL_DEVICE_VENDOR_ID>();
+
+  cl_context_properties cps[3] = 
+  { 
+      CL_CONTEXT_PLATFORM, 
+      (cl_context_properties)(*i)(),
+      0 
+  };
+
+  context = cl::Context(dType, cps, NULL, NULL, &err);
+  if(!sampleCommon->checkVal(err, 
+      CL_SUCCESS,
+      "Context::Context() failed."))
+  {
+      return SDK_FAILURE;
+  }
+
+  devices = context.getInfo<CL_CONTEXT_DEVICES>();
+  if(!sampleCommon->checkVal(err, 
+      CL_SUCCESS,
+      "Context::getInfo() failed."))
+  {
+      return SDK_FAILURE;
+  }
+  
+  int deviceCount = (int)devices.size();
+
+  FIND_TARGET_DEVICE(devices, TARGET_DEVICE_NAME, d, found);
+  
+  if(!found)
+  {
+    std::cout << "Unable to find target devices " << TARGET_DEVICE_NAME 
+      << " within created context on platform from vendor "  
+      << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
+    return SDK_FAILURE;
+  }
+  
+  device.push_back(*d);
+  
+  /*TODO: get rid of it after object oriented re-factoring is done. It duplicates what is below 
+  and temporary here.*/
+  {
+    bool print = 1;
+    set<std::string>::iterator kernel_name;
+    cl_uint memBaseAllignBytes = (*d).getInfo<CL_DEVICE_MEM_BASE_ADDR_ALIGN>()/8;
+    cl_uint minDataTypeAlignSize = (*d).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>();
+    cl_ulong memMaxAllocactionSize = (*d).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();
+    cl_ulong maxGlobalMemSize = (*d).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
+    cl_ulong maxConstantMemSize = (*d).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();
+    cl_ulong maxLocalMemSize = (*d).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
+
+    print ? std::cout << "Memory Allocations:" << std::endl, true : false;
+    
+    for
+    (
+      kernel_name = kernelStats.kernelNames.begin();
+      kernel_name != kernelStats.kernelNames.end(); 
+      ++kernel_name
+    ){
+      map<std::string, cl_uint>::iterator m;
+      
+      print ? std::cout << " Kernel " << *kernel_name << ":" << std::endl, true : false;
+
+      /*Validate GM allocations*/
+      print ? std::cout << "  Global Memory (global scope):" << std::endl, true : false;
+      map<std::string, cl_uint> gmSizes = kernelStats.gmSizes[*kernel_name];
+      cl_ulong gmAllSizeBytes = 0, gmMaxSizeBytes = 0;
       for
       (
-        kernel_name = kernelStats.kernelNames.begin();
-        kernel_name != kernelStats.kernelNames.end(); 
-        ++kernel_name
+        m = gmSizes.begin(); 
+        m != gmSizes.end(); 
+        ++m
       ){
-        map<std::string, cl_uint>::iterator m;
+        std::string name = (m->first);
+        cl_uint size = (m->second);
         
-        print ? std::cout << " Kernel " << *kernel_name << ":" << std::endl, true : false;
-
-        /*Validate GM allocations*/
-        print ? std::cout << "  Global Memory (global scope):" << std::endl, true : false;
-        map<std::string, cl_uint> gmSizes = kernelStats.gmSizes[*kernel_name];
-        cl_ulong gmAllSizeBytes = 0, gmMaxSizeBytes = 0;
-        for
-        (
-          m = gmSizes.begin(); 
-          m != gmSizes.end(); 
-          ++m
-        ){
-          std::string name = (m->first);
-          cl_uint size = (m->second);
-          
-          size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
-          gmAllSizeBytes += size;
-          if(gmMaxSizeBytes < size){gmMaxSizeBytes = size;}
-          
-          print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0*1024.0) << " MB" 
-            << std::endl, true : false;
-          
-          if(size > memMaxAllocactionSize)
+        size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
+        gmAllSizeBytes += size;
+        if(gmMaxSizeBytes < size){gmMaxSizeBytes = size;}
+        
+        print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0*1024.0) << " MB" 
+          << std::endl, true : false;
+        
+        if(size > memMaxAllocactionSize)
+        {
+          std::cout << "Memory object in kernel " << (*kernel_name) 
+          << " with size identifier " << name << " and size " 
+          << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, " 
+          << ((float)memMaxAllocactionSize)/(1024.0*1024.0) << "\n";
+          if(*kernel_name == KERNEL_ALL)
           {
-            std::cout << "Memory object in kernel " << (*kernel_name) 
-            << " with size identifier " << name << " and size " 
-            << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, " 
-            << ((float)memMaxAllocactionSize)/(1024.0*1024.0) << "\n";
-            if(*kernel_name == KERNEL_ALL)
-            {
-              LOG("Max GM:" << (((float)size)/(1024.0*1024.0)), 1);
-            }
-            return SDK_FAILURE;
+            LOG("Max GM:" << (((float)size)/(1024.0*1024.0)), 1);
           }
-        }
-        print ? std::cout << "   TOTAL: " << ((float)gmAllSizeBytes)/(1024.0*1024.0) << " MB" 
-          << std::endl, true : false;
-          
-        if(*kernel_name == KERNEL_ALL)
-        {
-          LOG("Total GM:" << (((float)gmAllSizeBytes)/(1024.0*1024.0)), 1);
-          LOG("Max GM:" << (((float)gmMaxSizeBytes)/(1024.0*1024.0)), 1);
-        }
-
-        if(gmAllSizeBytes > maxGlobalMemSize)
-        {
-          std::cout << "Total allocation for global memory in kernel " << (*kernel_name) 
-          << ", " << ((float)gmAllSizeBytes)/(1024.0*1024.0) 
-          << " MB, exceeds CL_DEVICE_GLOBAL_MEM_SIZE, " 
-          << ((float)maxGlobalMemSize)/(1024.0*1024.0) << "\n";
           return SDK_FAILURE;
-        }
-        
-        /*Validate CM allocations*/
-        print ? std::cout << "  Constant Memory (global scope):" << std::endl, true : false;
-        map<std::string, cl_uint> cmSizes = kernelStats.cmSizes[*kernel_name];
-        cl_ulong cmAllSizeBytes = 0;
-        for
-        (
-          m = cmSizes.begin(); 
-          m != cmSizes.end(); 
-          ++m
-        ){
-          std::string name = (m->first);
-          cl_uint size = (m->second);
-          
-          size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
-          cmAllSizeBytes += size;
-          
-          print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0) << " KB" 
-            << std::endl, true : false;
-            
-        }
-        print ? std::cout << "   TOTAL: " << ((float)cmAllSizeBytes)/(1024.0) << " KB" 
-          << std::endl, true : false;
-        if(cmAllSizeBytes > maxConstantMemSize)
-        {
-          std::cout << "Total allocation for constant memory in kernel " << (*kernel_name) 
-          << ", " << ((float)cmAllSizeBytes)/(1024.0) 
-          << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, " 
-          << ((float)maxConstantMemSize)/(1024.0) << " KB\n";
-          return SDK_FAILURE;
-        }
-        
-        /*Validate LM allocations*/
-        print ? std::cout << "  Local Memory (WG scope):" << std::endl, true : false;
-        map<std::string, cl_uint> lmSizes = kernelStats.lmSizes[*kernel_name];
-        cl_ulong lmAllSizeBytes = 0;
-        for
-        (
-          m = lmSizes.begin(); 
-          m != lmSizes.end(); 
-          ++m
-        ){
-          std::string name = (m->first);
-          cl_uint size = (m->second);
-          
-          size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
-          lmAllSizeBytes += size;
-          
-          print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0) << " KB" 
-            << std::endl, true : false;
-            
-        }
-        print ? std::cout << "   TOTAL: " << ((float)lmAllSizeBytes)/(1024.0) << " KB" 
-          << std::endl, true : false;
-        if(lmAllSizeBytes > maxLocalMemSize)
-        {
-          std::cout << "Total allocation for local memory in kernel " << (*kernel_name) 
-          << ", " << ((float)lmAllSizeBytes)/(1024.0) 
-          << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, " 
-          << ((float)maxLocalMemSize)/(1024.0) << " KB\n";
-          /*return SDK_FAILURE;*/
         }
       }
-    }
+      print ? std::cout << "   TOTAL: " << ((float)gmAllSizeBytes)/(1024.0*1024.0) << " MB" 
+        << std::endl, true : false;
+        
+      if(*kernel_name == KERNEL_ALL)
+      {
+        LOG("Total GM:" << (((float)gmAllSizeBytes)/(1024.0*1024.0)), 1);
+        LOG("Max GM:" << (((float)gmMaxSizeBytes)/(1024.0*1024.0)), 1);
+      }
 
-    
-    std::cout << "Creating command queue for device " << (*d).getInfo<CL_DEVICE_NAME>() 
-      << std::endl;
-    commandQueue = cl::CommandQueue(context, *d, 0, &err);
-    if(!sampleCommon->checkVal(err, CL_SUCCESS, "CommandQueue::CommandQueue() failed."))
-    {
+      if(gmAllSizeBytes > maxGlobalMemSize)
+      {
+        std::cout << "Total allocation for global memory in kernel " << (*kernel_name) 
+        << ", " << ((float)gmAllSizeBytes)/(1024.0*1024.0) 
+        << " MB, exceeds CL_DEVICE_GLOBAL_MEM_SIZE, " 
+        << ((float)maxGlobalMemSize)/(1024.0*1024.0) << "\n";
         return SDK_FAILURE;
+      }
+      
+      /*Validate CM allocations*/
+      print ? std::cout << "  Constant Memory (global scope):" << std::endl, true : false;
+      map<std::string, cl_uint> cmSizes = kernelStats.cmSizes[*kernel_name];
+      cl_ulong cmAllSizeBytes = 0;
+      for
+      (
+        m = cmSizes.begin(); 
+        m != cmSizes.end(); 
+        ++m
+      ){
+        std::string name = (m->first);
+        cl_uint size = (m->second);
+        
+        size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
+        cmAllSizeBytes += size;
+        
+        print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0) << " KB" 
+          << std::endl, true : false;
+          
+      }
+      print ? std::cout << "   TOTAL: " << ((float)cmAllSizeBytes)/(1024.0) << " KB" 
+        << std::endl, true : false;
+      if(cmAllSizeBytes > maxConstantMemSize)
+      {
+        std::cout << "Total allocation for constant memory in kernel " << (*kernel_name) 
+        << ", " << ((float)cmAllSizeBytes)/(1024.0) 
+        << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, " 
+        << ((float)maxConstantMemSize)/(1024.0) << " KB\n";
+        return SDK_FAILURE;
+      }
+      
+      /*Validate LM allocations*/
+      print ? std::cout << "  Local Memory (WG scope):" << std::endl, true : false;
+      map<std::string, cl_uint> lmSizes = kernelStats.lmSizes[*kernel_name];
+      cl_ulong lmAllSizeBytes = 0;
+      for
+      (
+        m = lmSizes.begin(); 
+        m != lmSizes.end(); 
+        ++m
+      ){
+        std::string name = (m->first);
+        cl_uint size = (m->second);
+        
+        size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
+        lmAllSizeBytes += size;
+        
+        print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0) << " KB" 
+          << std::endl, true : false;
+          
+      }
+      print ? std::cout << "   TOTAL: " << ((float)lmAllSizeBytes)/(1024.0) << " KB" 
+        << std::endl, true : false;
+      if(lmAllSizeBytes > maxLocalMemSize)
+      {
+        std::cout << "Total allocation for local memory in kernel " << (*kernel_name) 
+        << ", " << ((float)lmAllSizeBytes)/(1024.0) 
+        << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, " 
+        << ((float)maxLocalMemSize)/(1024.0) << " KB\n";
+        return SDK_FAILURE;
+      }
     }
+  }
+
+  std::cout << "Creating command queue for device " << (*d).getInfo<CL_DEVICE_NAME>() 
+    << std::endl;
+  commandQueue = cl::CommandQueue(context, *d, 0, &err);
+  if(!sampleCommon->checkVal(err, CL_SUCCESS, "CommandQueue::CommandQueue() failed."))
+  {
+      return SDK_FAILURE;
+  }
 
     /*Create and initialize memory objects and kernels*/
     
@@ -3252,34 +3026,38 @@ IntegrationTest::setupCL()
      (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
-  CREATE_BUFFER(CL_MEM_READ_WRITE, dataHistogramGroupEventsTikBuffer, 
-    dataHistogramGroupEventsTikSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_WRITE, dataHistogramGroupEventsTikBuffer, 
+      dataHistogramGroupEventsTikSizeBytes);
 #endif
 
 #if EXPAND_EVENTS_ENABLE || GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V02 || \
     GROUP_EVENTS_ENABLE_V03
-  CREATE_BUFFER(CL_MEM_READ_WRITE, dataUnsortedEventCountsBuffer, dataUnsortedEventCountsSizeBytes);
-  CREATE_BUFFER(CL_MEM_READ_WRITE, dataUnsortedEventTargetsBuffer, dataUnsortedEventTargetsSizeBytes);
-  CREATE_BUFFER(CL_MEM_READ_WRITE, dataUnsortedEventDelaysBuffer, dataUnsortedEventDelaysSizeBytes);
-  CREATE_BUFFER(CL_MEM_READ_WRITE, dataUnsortedEventWeightsBuffer, dataUnsortedEventWeightsSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_WRITE, dataUnsortedEventCountsBuffer, 
+      dataUnsortedEventCountsSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_WRITE, dataUnsortedEventTargetsBuffer, 
+      dataUnsortedEventTargetsSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_WRITE, dataUnsortedEventDelaysBuffer, 
+      dataUnsortedEventDelaysSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_WRITE, dataUnsortedEventWeightsBuffer, 
+      dataUnsortedEventWeightsSizeBytes);
 #endif
 
 #if ((EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM) || SCAN_ENABLE_V00\
      || GROUP_EVENTS_ENABLE_V00)
-  CREATE_BUFFER(CL_MEM_READ_WRITE, dataHistogramBuffer, dataHistogramSizeBytes);
+    CREATE_BUFFER(CL_MEM_READ_WRITE, dataHistogramBuffer, dataHistogramSizeBytes);
 #endif
 
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-    {
+  {
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes);
-    }
+  }
 #endif
 
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03
-    {
+  {
 #if (GROUP_EVENTS_DEBUG_ENABLE)
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataDebugHostGroupEventsBuffer, 
       dataDebugHostGroupEventsSizeBytes);
@@ -3289,26 +3067,26 @@ IntegrationTest::setupCL()
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes);
 #endif
-    }
+  }
 #endif
 
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
     MAKE_EVENT_PTRS_ENABLE
-    {
+  {
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes);
-    }
+  }
 #endif
 
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-    {
+  {
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes);
-    }
+  }
 #endif
 
 #if SCAN_ENABLE_V00 || SCAN_ENABLE_V01
-    {
+  {
 #if (SCAN_DEBUG_ENABLE)
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataScanDebugHostBuffer, dataScanDebugHostSizeBytes);
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataScanDebugDeviceBuffer, dataScanDebugDeviceSizeBytes);
@@ -3316,18 +3094,50 @@ IntegrationTest::setupCL()
 #if (SCAN_ERROR_TRACK_ENABLE)
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataScanErrorBuffer, dataScanErrorSizeBytes);
 #endif
-    }
+  }
 #endif
 
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-    {
-    CREATE_BUFFER(CL_MEM_READ_WRITE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes);
-    CREATE_BUFFER(CL_MEM_READ_WRITE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes);
-    }
+  /* allocate memory for spike data */
+  try
+  {
+#if EXPAND_EVENTS_ENABLE
+    spikeEvents.initialize
+    (
+      context,
+      *d,
+      SIMULATION_STEP_SIZE,
+      EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS,
+      EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS,
+      EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE,
+      EXPAND_EVENTS_SPIKE_PACKETS,
+      EXPAND_EVENTS_TOTAL_NEURONS,
+      &kernelStats,
+      dataToSimulationLogFile,
+      dataToReportLogFile
+    );
+#elif UPDATE_NEURONS_ENABLE_V00
+    spikeEvents.initialize
+    (
+      context,
+      *d,
+      SIMULATION_STEP_SIZE,
+      UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS,
+      UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS,
+      UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE,
+      UPDATE_NEURONS_SPIKE_PACKETS_V00,
+      UPDATE_NEURONS_TOTAL_NEURONS,
+      &kernelStats,
+      dataToSimulationLogFile,
+      dataToReportLogFile
+    );
+#endif
+  }
+  CATCH(findTargetDevice, return SDK_FAILURE;)
 #endif
     
 #if EXPAND_EVENTS_ENABLE
-    {
+  {
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataExpandEventsDebugHostBuffer, 
       dataExpandEventsDebugHostSizeBytes);
@@ -3351,11 +3161,11 @@ IntegrationTest::setupCL()
       blockSizeX_KernelExpandEvents,
       blockSizeY_KernelExpandEvents
     );
-    }
+  }
 #endif
 
 #if SCAN_ENABLE_V00
-    {
+  {
     createKernel
     (
       kernelScanHistogramV00,
@@ -3365,11 +3175,11 @@ IntegrationTest::setupCL()
       blockSizeX_kernelScanHistogramV00,
       blockSizeY_kernelScanHistogramV00
     );
-    }
+  }
 #endif
 
 #if GROUP_EVENTS_ENABLE_V00
-    {
+  {
     createKernel
     (
       kernelGroupEventsV00,
@@ -3379,11 +3189,11 @@ IntegrationTest::setupCL()
       blockSizeX_kernelGroupEventsV00,
       blockSizeY_kernelGroupEventsV00
     );
-    }
+  }
 #endif
 
 #if SCAN_ENABLE_V01
-    {
+  {
     createKernel
     (
       kernelScanHistogramV01,
@@ -3393,11 +3203,11 @@ IntegrationTest::setupCL()
       blockSizeX_kernelScanHistogramV01,
       blockSizeY_kernelScanHistogramV01
     );
-    }
+  }
 #endif
 
 #if GROUP_EVENTS_ENABLE_V01 
-    {
+  {
     createKernel
     (
       kernelGroupEventsV01,
@@ -3407,11 +3217,11 @@ IntegrationTest::setupCL()
       blockSizeX_kernelGroupEventsV01,
       blockSizeY_kernelGroupEventsV01
     );
-    }
+  }
 #endif
 
 #if GROUP_EVENTS_ENABLE_V02
-    {
+  {
     createKernel
     (
       kernelGroupEventsV02,
@@ -3421,11 +3231,11 @@ IntegrationTest::setupCL()
       blockSizeX_kernelGroupEventsV02,
       blockSizeY_kernelGroupEventsV02
     );
-    }
+  }
 #endif
 
 #if GROUP_EVENTS_ENABLE_V03
-    {
+  {
     createKernel
     (
       kernelGroupEventsV03,
@@ -3435,18 +3245,18 @@ IntegrationTest::setupCL()
       blockSizeX_kernelGroupEventsV03,
       blockSizeY_kernelGroupEventsV03
     );
-    }
+  }
 #endif
 
 #if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-    {
+  {
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataMakeEventPtrsStructBuffer, 
       dataMakeEventPtrsStructSizeBytes);
-    }
+  }
 #endif
 
 #if MAKE_EVENT_PTRS_ENABLE
-    {
+  {
 #if (MAKE_EVENT_PTRS_DEBUG_ENABLE)
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataMakeEventPtrsDebugHostBuffer, 
       dataMakeEventPtrsDebugHostSizeBytes);
@@ -3476,11 +3286,11 @@ IntegrationTest::setupCL()
       blockSizeY_kernelGlueEventPtrs
     );
 #endif
-    }
+  }
 #endif
 
 #if UPDATE_NEURONS_ENABLE_V00
-    {
+  {
 #if (UPDATE_NEURONS_DEBUG_ENABLE)
     CREATE_BUFFER(CL_MEM_READ_WRITE, dataUpdateNeuronsDebugHostBuffer, 
       dataUpdateNeuronsDebugHostSizeBytes);
@@ -3530,17 +3340,146 @@ IntegrationTest::setupCL()
       blockSizeX_kernelUpdateNeuronsV00,
       blockSizeY_kernelUpdateNeuronsV00
     );
-    }
+  }
 #endif
 
-#if (ERROR_TRY_CATCH_ENABLE)
-  }
-  catch (cl::Error err) 
+  /*Validate mem allocations against device-specific restrictions for all registered kernels*/
   {
-    std::cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << std::endl;
-    return SDK_FAILURE;
+    bool print = 0; bool log = 0;
+    set<std::string>::iterator kernel_name;
+    cl_uint memBaseAllignBytes = (*d).getInfo<CL_DEVICE_MEM_BASE_ADDR_ALIGN>()/8;
+    cl_uint minDataTypeAlignSize = (*d).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>();
+    cl_ulong memMaxAllocactionSize = (*d).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();
+    cl_ulong maxGlobalMemSize = (*d).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
+    cl_ulong maxConstantMemSize = (*d).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();
+    cl_ulong maxLocalMemSize = (*d).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
+
+    print ? std::cout << "Memory Allocations:" << std::endl, true : false;
+    
+    for
+    (
+      kernel_name = kernelStats.kernelNames.begin();
+      kernel_name != kernelStats.kernelNames.end(); 
+      ++kernel_name
+    ){
+      map<std::string, cl_uint>::iterator m;
+      
+      print ? std::cout << " Kernel " << *kernel_name << ":" << std::endl, true : false;
+
+      /*Validate GM allocations*/
+      print ? std::cout << "  Global Memory (global scope):" << std::endl, true : false;
+      map<std::string, cl_uint> gmSizes = kernelStats.gmSizes[*kernel_name];
+      cl_ulong gmAllSizeBytes = 0, gmMaxSizeBytes = 0;
+      for
+      (
+        m = gmSizes.begin(); 
+        m != gmSizes.end(); 
+        ++m
+      ){
+        std::string name = (m->first);
+        cl_uint size = (m->second);
+        
+        size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
+        gmAllSizeBytes += size;
+        if(gmMaxSizeBytes < size){gmMaxSizeBytes = size;}
+        
+        print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0*1024.0) << " MB" 
+          << std::endl, true : false;
+        
+        if(size > memMaxAllocactionSize)
+        {
+          std::cout << "Memory object in kernel " << (*kernel_name) 
+          << " with size identifier " << name << " and size " 
+          << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, " 
+          << ((float)memMaxAllocactionSize)/(1024.0*1024.0) << "\n";
+          if(*kernel_name == KERNEL_ALL)
+          {
+            if(log){LOG("Max GM:" << (((float)size)/(1024.0*1024.0)), 1);}
+          }
+          return SDK_FAILURE;
+        }
+      }
+      print ? std::cout << "   TOTAL: " << ((float)gmAllSizeBytes)/(1024.0*1024.0) << " MB" 
+        << std::endl, true : false;
+        
+      if(*kernel_name == KERNEL_ALL)
+      {
+        if(log){LOG("Total GM:" << (((float)gmAllSizeBytes)/(1024.0*1024.0)), 1);}
+        if(log){LOG("Max GM:" << (((float)gmMaxSizeBytes)/(1024.0*1024.0)), 1);}
+      }
+
+      if(gmAllSizeBytes > maxGlobalMemSize)
+      {
+        std::cout << "Total allocation for global memory in kernel " << (*kernel_name) 
+        << ", " << ((float)gmAllSizeBytes)/(1024.0*1024.0) 
+        << " MB, exceeds CL_DEVICE_GLOBAL_MEM_SIZE, " 
+        << ((float)maxGlobalMemSize)/(1024.0*1024.0) << "\n";
+        return SDK_FAILURE;
+      }
+      
+      /*Validate CM allocations*/
+      print ? std::cout << "  Constant Memory (global scope):" << std::endl, true : false;
+      map<std::string, cl_uint> cmSizes = kernelStats.cmSizes[*kernel_name];
+      cl_ulong cmAllSizeBytes = 0;
+      for
+      (
+        m = cmSizes.begin(); 
+        m != cmSizes.end(); 
+        ++m
+      ){
+        std::string name = (m->first);
+        cl_uint size = (m->second);
+        
+        size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
+        cmAllSizeBytes += size;
+        
+        print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0) << " KB" 
+          << std::endl, true : false;
+          
+      }
+      print ? std::cout << "   TOTAL: " << ((float)cmAllSizeBytes)/(1024.0) << " KB" 
+        << std::endl, true : false;
+      if(cmAllSizeBytes > maxConstantMemSize)
+      {
+        std::cout << "Total allocation for constant memory in kernel " << (*kernel_name) 
+        << ", " << ((float)cmAllSizeBytes)/(1024.0) 
+        << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, " 
+        << ((float)maxConstantMemSize)/(1024.0) << " KB\n";
+        return SDK_FAILURE;
+      }
+      
+      /*Validate LM allocations*/
+      print ? std::cout << "  Local Memory (WG scope):" << std::endl, true : false;
+      map<std::string, cl_uint> lmSizes = kernelStats.lmSizes[*kernel_name];
+      cl_ulong lmAllSizeBytes = 0;
+      for
+      (
+        m = lmSizes.begin(); 
+        m != lmSizes.end(); 
+        ++m
+      ){
+        std::string name = (m->first);
+        cl_uint size = (m->second);
+        
+        size = (size/minDataTypeAlignSize + 1)*minDataTypeAlignSize;
+        lmAllSizeBytes += size;
+        
+        print ? std::cout << "   " << name << ": " << ((float)size)/(1024.0) << " KB" 
+          << std::endl, true : false;
+          
+      }
+      print ? std::cout << "   TOTAL: " << ((float)lmAllSizeBytes)/(1024.0) << " KB" 
+        << std::endl, true : false;
+      if(lmAllSizeBytes > maxLocalMemSize)
+      {
+        std::cout << "Total allocation for local memory in kernel " << (*kernel_name) 
+        << ", " << ((float)lmAllSizeBytes)/(1024.0) 
+        << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, " 
+        << ((float)maxLocalMemSize)/(1024.0) << " KB\n";
+        return SDK_FAILURE;
+      }
+    }
   }
-#endif
 
   return SDK_SUCCESS;
 }
@@ -3568,15 +3507,12 @@ IntegrationTest::runCLKernels()
   cl_int status;
   cl_int eventStatus = CL_QUEUED;
   cl::Event writeEvt = NULL;
-
-#if (ERROR_TRY_CATCH_ENABLE)
+  
   try
   {
-#endif
-
-/*
-  Initialize network
-*/
+  /*
+    Initialize network
+  */
 #if EXPAND_EVENTS_ENABLE
     if(initializeExpandEventsData() != SDK_SUCCESS)
     {
@@ -3584,16 +3520,24 @@ IntegrationTest::runCLKernels()
       return SDK_FAILURE;
     }
 #if PREINITIALIZE_NETWORK_STATE
-    if(initializeSpikeData(PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT, 
-      PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT, NULL) != SDK_SUCCESS)
+    spikeEvents.setEvents
+    (
+      commandQueue,
+      CL_FALSE,
+      PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT,
+      PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT,
+      NULL
+    );
 #else
-    if(initializeSpikeData(EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT) != SDK_SUCCESS)
+    spikeEvents.setEvents
+    (
+      commandQueue,
+      CL_FALSE,
+      EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT
+    );
 #endif
-    {
-      std::cout << "Failed initializeSpikeData" << std::endl;
-      return SDK_FAILURE;
-    }
 #endif
+
 #if PREINITIALIZE_NETWORK_STATE && GROUP_EVENTS_ENABLE_V00 && EXPAND_EVENTS_ENABLE
     {
       int res = initializeEventBuffers
@@ -3636,13 +3580,21 @@ IntegrationTest::runCLKernels()
         dataHistogramSizeBytes);
     }
 #endif
+
 #if MAKE_EVENT_PTRS_ENABLE
     if(initializeDataForKernelMakeEventPtrs(0, 0) != SDK_SUCCESS)
     {
       std::cout << "Failed initializeDataForKernelMakeEventPtrs" << std::endl; 
     }
 #endif
+
 #if UPDATE_NEURONS_ENABLE_V00
+    try
+    {
+      spikeEvents.clearEvents(commandQueue, CL_FALSE);
+    }
+    CATCH(runCLKernels, return SDK_FAILURE;)
+  
 #if PREINITIALIZE_NETWORK_STATE
     if(initializeDataForKernelUpdateNeurons(0, 1, 1, 0, 
       PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE) != SDK_SUCCESS)
@@ -3667,6 +3619,7 @@ IntegrationTest::runCLKernels()
     *dataToTraceFile << LOG_MODEL_VARIABLES_FILE_HEADER << std::endl;
 #endif
 #endif
+
 #if PREINITIALIZE_NETWORK_STATE && GROUP_EVENTS_ENABLE_V00 && EXPAND_EVENTS_ENABLE && \
     UPDATE_NEURONS_ENABLE_V00
     {
@@ -3691,6 +3644,7 @@ IntegrationTest::runCLKernels()
       }
     }
 #endif
+
 #if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) || SCAN_ENABLE_V01 ||\
      (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
@@ -3738,13 +3692,6 @@ IntegrationTest::runCLKernels()
     dataErrorGroupEvents);
 #endif
   }
-#endif
-
-#if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-    dataSpikePackets);
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-    dataSpikePacketCounts);
 #endif
 
 #if EXPAND_EVENTS_ENABLE
@@ -3846,8 +3793,8 @@ IntegrationTest::runCLKernels()
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
   SET_KERNEL_ARG(kernelExpandEvents, dataHistogramBuffer, argNumExpandEvents++);
 #endif
-  SET_KERNEL_ARG(kernelExpandEvents, dataSpikePacketCountsBuffer, argNumExpandEvents++);
-  SET_KERNEL_ARG(kernelExpandEvents, dataSpikePacketsBuffer, argNumExpandEvents++);
+  SET_KERNEL_ARG(kernelExpandEvents, spikeEvents.dataSpikePacketCountsBuffer, argNumExpandEvents++);
+  SET_KERNEL_ARG(kernelExpandEvents, spikeEvents.dataSpikePacketsBuffer, argNumExpandEvents++);
   SET_KERNEL_ARG(kernelExpandEvents, dataUnsortedEventCountsBuffer, argNumExpandEvents++);
   SET_KERNEL_ARG(kernelExpandEvents, dataUnsortedEventTargetsBuffer, argNumExpandEvents++);
   SET_KERNEL_ARG(kernelExpandEvents, dataUnsortedEventDelaysBuffer, argNumExpandEvents++);
@@ -3995,8 +3942,10 @@ IntegrationTest::runCLKernels()
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, constantCoefficientsBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, modelParametersBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, modelVariablesBuffer, argNumUpdateNeuronsV00++);
-  SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataSpikePacketCountsBuffer, argNumUpdateNeuronsV00++);
-  SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataSpikePacketsBuffer, argNumUpdateNeuronsV00++);
+  SET_KERNEL_ARG(kernelUpdateNeuronsV00, spikeEvents.dataSpikePacketCountsBuffer, 
+    argNumUpdateNeuronsV00++);
+  SET_KERNEL_ARG(kernelUpdateNeuronsV00, spikeEvents.dataSpikePacketsBuffer, 
+    argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataMakeEventPtrsStructBuffer, argNumUpdateNeuronsV00++);
   }
   
@@ -4022,9 +3971,9 @@ IntegrationTest::runCLKernels()
     argNumUpdateSpikedNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, modelVariablesBuffer, 
     argNumUpdateSpikedNeuronsV00++);
-  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataSpikePacketCountsBuffer, 
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, spikeEvents.dataSpikePacketCountsBuffer, 
     argNumUpdateSpikedNeuronsV00++);  
-  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataSpikePacketsBuffer, 
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, spikeEvents.dataSpikePacketsBuffer, 
     argNumUpdateSpikedNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataMakeEventPtrsStructBuffer, 
     argNumUpdateSpikedNeuronsV00++);
@@ -4149,16 +4098,18 @@ IntegrationTest::runCLKernels()
       verified = false; 
       break;
     }
-    if(initializeSpikeData(EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT) != SDK_SUCCESS)
+    
+    try
     {
-      std::cout << "Failed initializeSpikeData" << std::endl;
-      verified = false; 
-      break;
+      spikeEvents.setEvents
+      (
+        commandQueue,
+        CL_TRUE,
+        EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT
+      )
     }
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-      dataSpikePacketCounts);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-      dataSpikePackets);
+    CATCH(runCLKernels, verified = false; break;)
+      
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSynapseTargetsBuffer, dataSynapseTargetsSizeBytes, 
       dataSynapseTargets);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSynapseDelaysBuffer, dataSynapseDelaysSizeBytes, 
@@ -4181,66 +4132,80 @@ IntegrationTest::runCLKernels()
     }
     else
     {
-      int result = SDK_SUCCESS;
+      try
+      {
 #if EXPAND_EVENTS_TEST_MODE == -1
-      if(expandEventsTimeStep == 1)
-      {
-        result = initializeSpikeData(0.0, 0.0, NULL);
-      }
-      else if(expandEventsTimeStep == EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT - 1)
-      {
-        result = initializeSpikeData(100.0, 100.0, NULL);
-      }
-      else
-      {
-        result = initializeSpikeData(0.0, 
-          (double)(100*expandEventsTimeStep/EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT), NULL);
-      }
+        if(expandEventsTimeStep == 1)
+        {
+          spikeEvents.setEvents
+          (
+            commandQueue,
+            CL_TRUE,
+            0.0, 0.0, NULL
+          );
+        }
+        else if(expandEventsTimeStep == EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT - 1)
+        {
+          spikeEvents.setEvents
+          (
+            commandQueue,
+            CL_TRUE,
+            100.0, 100.0, NULL
+          );
+        }
+        else
+        {
+          spikeEvents.setEvents
+          (
+            commandQueue,
+            CL_TRUE,
+            0.0, 
+            (double)(100*expandEventsTimeStep/EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT), 
+            NULL
+          );
+        }
 #elif (EXPAND_EVENTS_TEST_MODE >= 0) && (EXPAND_EVENTS_TEST_MODE <= 1000)
-      result = initializeSpikeData(0.0, 100.0, EXPAND_EVENTS_TEST_MODE);
+        spikeEvents.setEvents
+        (
+          commandQueue,
+          CL_TRUE,
+          0.0, 100.0, EXPAND_EVENTS_TEST_MODE
+        );
 #endif
-      if(result != SDK_SUCCESS)
-      {
-        std::cout << "Failed initializeSpikeData" << std::endl; 
-        verified = false; 
-        break;
       }
-      ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-        dataSpikePacketCounts);
-      ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-        dataSpikePackets);
+      CATCH(runCLKernels, verified = false; break;)
     }
 /*End unit test initialization*/
+
 #elif OVERWRITE_SPIKES_UNTILL_STEP > 0
   if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
   {
-    if(initializeSpikeData(OVERWRITE_SPIKES_MIN_MAX_PERCENT) != SDK_SUCCESS)
+    try
     {
-      std::cout << "Failed initializeSpikeData" << std::endl; 
-      verified = false; 
-      break;
+      spikeEvents.setEvents
+      (
+        commandQueue,
+        CL_TRUE,
+        OVERWRITE_SPIKES_MIN_MAX_PERCENT
+      );
     }
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-      dataSpikePacketCounts);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-      dataSpikePackets);
+    CATCH(runCLKernels, verified = false; break;)
+
     if(currentTimeStep == OVERWRITE_SPIKES_UNTILL_STEP-1)
     {
       std::cout << "\nCompleted injecting spikes at step " << currentTimeStep << std::endl;
     }
   }
 #endif
+
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataExpandEventsDebugHostBuffer, 
       dataExpandEventsDebugHostSizeBytes, dataExpandEventsDebugHost);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, dataExpandEventsDebugDeviceBuffer, 
       dataExpandEventsDebugDeviceSizeBytes, dataExpandEventsDebugDevice);
 #endif
+
 #if EXPAND_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-      dataSpikePacketCounts);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-      dataSpikePackets);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapseTargetsBuffer, dataSynapseTargetsSizeBytes, 
       dataSynapseTargets);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapseDelaysBuffer, dataSynapseDelaysSizeBytes, 
@@ -4250,16 +4215,20 @@ IntegrationTest::runCLKernels()
     ENQUEUE_READ_BUFFER(CL_TRUE, dataSynapsePointerBuffer, dataSynapsePointerSizeBytes, 
       dataSynapsePointer);
 #endif
+
     SET_KERNEL_ARG(kernelExpandEvents, expandEventsTimeStep, argNumExpandEvents);
+    
 #if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelExpandEvents, cl::NullRange, 
       globalThreadsExpandEvents, localThreadsExpandEvents, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+
 #if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
@@ -4272,12 +4241,14 @@ IntegrationTest::runCLKernels()
       REGISTER_TIME(kernelExpandEvents, (endAppTime-startAppTime), 1.0)
     }
 #endif
+
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
     ENQUEUE_READ_BUFFER(CL_TRUE, dataExpandEventsDebugHostBuffer, 
       dataExpandEventsDebugHostSizeBytes, dataExpandEventsDebugHost);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataExpandEventsDebugDeviceBuffer, 
       dataExpandEventsDebugDeviceSizeBytes, dataExpandEventsDebugDevice);
 #endif
+
 #if EXPAND_EVENTS_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUnsortedEventCountsBuffer, dataUnsortedEventCountsSizeBytes, 
       dataUnsortedEventCounts);
@@ -4288,6 +4259,7 @@ IntegrationTest::runCLKernels()
         dataUnsortedEventCounts);
     }
 #endif
+
 #if (EXPAND_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
@@ -4301,6 +4273,7 @@ IntegrationTest::runCLKernels()
       }
     }
 #endif
+
 #if EXPAND_EVENTS_VERIFY_ENABLE
     ENQUEUE_READ_BUFFER(CL_TRUE, dataUnsortedEventTargetsBuffer, dataUnsortedEventTargetsSizeBytes, 
       dataUnsortedEventTargets);
@@ -4311,8 +4284,16 @@ IntegrationTest::runCLKernels()
 #if EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM
     ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramBuffer, dataHistogramSizeBytes, dataHistogram);
 #endif
-    if(verifyKernelExpandEvents(expandEventsTimeStep, 
-      (!expandEventsTimeStep)&(!PREINITIALIZE_NETWORK_STATE)) != SDK_SUCCESS)
+    if
+    (
+      verifyKernelExpandEvents
+      (
+        expandEventsTimeStep, 
+        (!expandEventsTimeStep)&(!PREINITIALIZE_NETWORK_STATE),
+        spikeEvents,
+        commandQueue
+      ) != SDK_SUCCESS
+    )
     {
       std::cout << "Failed verifyKernelExpandEvents" << std::endl; 
       verified = false; 
@@ -5438,6 +5419,13 @@ IntegrationTest::runCLKernels()
 #if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02 &&\
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && EXPAND_EVENTS_ENABLE)
     bool resetVarsAndParams = (currentTimeStep==0); /*TODO: fix, doesnt work with !(currentTimeStep%17);*/
+
+    try
+    {
+      spikeEvents.clearEvents(commandQueue, CL_TRUE);
+    }
+    CATCH(runCLKernels, verified = false; break;)
+    
     if(initializeDataForKernelUpdateNeurons(!(MAKE_EVENT_PTRS_ENABLE), 
       resetVarsAndParams, resetVarsAndParams, 5.0*(!(currentTimeStep%3)), "") != SDK_SUCCESS)
     {
@@ -5452,10 +5440,6 @@ IntegrationTest::runCLKernels()
       ENQUEUE_WRITE_BUFFER(CL_TRUE, psToleranceBuffer, psToleranceSizeBytes, 
         psTolerance);
 #endif
-      ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-        dataSpikePacketCounts);
-      ENQUEUE_WRITE_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-        dataSpikePackets);
       ENQUEUE_WRITE_BUFFER(CL_TRUE, constantCoefficientsBuffer, constantCoefficientsSizeBytes, 
         constantCoefficients);
       ENQUEUE_WRITE_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
@@ -5522,15 +5506,22 @@ device modifies it.*/
 /*Set loop-dependent arguments for update kernel and equeue it*/
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataGroupEventsTikBuffer, argNumUpdateNeuronsV00);
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, currentTimeStep, argNumUpdateNeuronsV00+1);
+    
 #if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
 #endif
+
     status = commandQueue.enqueueNDRangeKernel(kernelUpdateNeuronsV00, cl::NullRange, 
       globalThreadsUpdateNeuronsV00, localThreadsUpdateNeuronsV00, NULL, &ndrEvt);
     if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
     {
       return SDK_FAILURE;
     }
+    
+#if DEVICE_HOST_DATA_COHERENCE
+    try{spikeEvents.invalidateEvents();}CATCH(runCLKernels, return SDK_FAILURE;);
+#endif
+
 #if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
     {
@@ -5560,6 +5551,10 @@ device modifies it.*/
     {
       return SDK_FAILURE;
     }
+    
+#if DEVICE_HOST_DATA_COHERENCE
+    try{spikeEvents.invalidateEvents();}CATCH(runCLKernels, return SDK_FAILURE;);
+#endif
     
 #if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
     if(currentTimeStep >= START_PROFILING_AT_STEP)
@@ -5639,21 +5634,11 @@ device modifies it.*/
 #if OVERWRITE_SPIKES_UNTILL_STEP > 0
     if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
     {
-      cl_uint *dataSpikePacketCountsToInject = (cl_uint *)calloc(UPDATE_NEURONS_SPIKE_PACKETS_V00, 
-        sizeof(cl_uint));
-      memcpy(dataSpikePacketCountsToInject, dataSpikePacketCounts, 
-        (UPDATE_NEURONS_SPIKE_PACKETS_V00*sizeof(cl_uint)));
-      cl_uint size = (UPDATE_NEURONS_SPIKE_PACKETS_V00*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS);
-      cl_uint *dataSpikePacketsToInject = (cl_uint *)calloc(size, sizeof(cl_uint));
-      memcpy(dataSpikePacketsToInject, dataSpikePackets, (size*sizeof(cl_uint)));
-  
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-        dataSpikePacketCounts);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-        dataSpikePackets);
-        
-      if(verifyKernelUpdateNeurons
+      if
+      (
+        verifyKernelUpdateNeurons
         (
+          true,
           true,
           currentTimeStep,
           dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
@@ -5663,48 +5648,40 @@ device modifies it.*/
           dataSynapseTargets,
           dataSynapseDelays,
           dataSynapseWeights,
-          dataSpikePacketCountsToInject,
-          dataSpikePacketsToInject,
           modelVariables,
-          dataSpikePackets,
-          dataSpikePacketCounts
+          spikeEvents,
+          commandQueue
         ) != SDK_SUCCESS
-      ){
+      )
+      {
         std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
         verified = false; 
       }
-      free(dataSpikePacketCountsToInject);
-      free(dataSpikePacketsToInject);
       if(verified == false){break;}
     }
     else
 #endif
     {
-      if(verify)
+      if
+      (
+        verifyKernelUpdateNeurons
+        (
+          verify,
+          false,
+          currentTimeStep,
+          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+          dataMakeEventPtrsStruct,
+          dataGroupEventsTik,
+          dataSynapsePointer,
+          dataSynapseTargets,
+          dataSynapseDelays,
+          dataSynapseWeights,
+          modelVariables,
+          spikeEvents,
+          commandQueue
+        ) != SDK_SUCCESS
+      )
       {
-        ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-          dataSpikePacketCounts);
-        ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-          dataSpikePackets);
-      }
-      if(verifyKernelUpdateNeurons
-          (
-            verify,
-            currentTimeStep,
-            dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
-            dataMakeEventPtrsStruct,
-            dataGroupEventsTik,
-            dataSynapsePointer,
-            dataSynapseTargets,
-            dataSynapseDelays,
-            dataSynapseWeights,
-            NULL,
-            NULL,
-            modelVariables,
-            dataSpikePackets,
-            dataSpikePacketCounts
-          ) != SDK_SUCCESS
-      ){
         std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
         verified = false; 
         break;
@@ -5723,22 +5700,12 @@ device modifies it.*/
         modelVariables);
       ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
-      
-      cl_uint *dataSpikePacketCountsToInject = (cl_uint *)calloc(UPDATE_NEURONS_SPIKE_PACKETS_V00, 
-        sizeof(cl_uint));
-      memcpy(dataSpikePacketCountsToInject, dataSpikePacketCounts, 
-        (UPDATE_NEURONS_SPIKE_PACKETS_V00*sizeof(cl_uint)));
-      cl_uint size = (UPDATE_NEURONS_SPIKE_PACKETS_V00*UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS);
-      cl_uint *dataSpikePacketsToInject = (cl_uint *)calloc(size, sizeof(cl_uint));
-      memcpy(dataSpikePacketsToInject, dataSpikePackets, (size*sizeof(cl_uint)));
-  
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-        dataSpikePacketCounts);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-        dataSpikePackets);
-        
-      if(verifyKernelUpdateNeurons
+
+      if
+      (
+        verifyKernelUpdateNeurons
         (
+          true,
           true,
           currentTimeStep,
           dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
@@ -5748,18 +5715,15 @@ device modifies it.*/
           dataSynapseTargets,
           dataSynapseDelays,
           dataSynapseWeights,
-          dataSpikePacketCountsToInject,
-          dataSpikePacketsToInject,
           modelVariables,
-          dataSpikePackets,
-          dataSpikePacketCounts
-        ) != SDK_SUCCESS)
+          spikeEvents,
+          commandQueue
+        ) != SDK_SUCCESS
+      )
       {
         std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
         verified = false; 
       }
-      free(dataSpikePacketCountsToInject);
-      free(dataSpikePacketsToInject);
       if(verified == false){break;}
     }
 #elif INJECT_CURRENT_UNTILL_STEP > 0
@@ -5769,14 +5733,13 @@ device modifies it.*/
         modelVariables);
       ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-        dataSpikePacketCounts);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-        dataSpikePackets);
 
-      if(verifyKernelUpdateNeurons
+      if
+      (
+        verifyKernelUpdateNeurons
         (
           true,
+          false,
           currentTimeStep,
           dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
@@ -5785,12 +5748,11 @@ device modifies it.*/
           dataSynapseTargets,
           dataSynapseDelays,
           dataSynapseWeights,
-          NULL,
-          NULL,
           modelVariables,
-          dataSpikePackets,
-          dataSpikePacketCounts
-        ) != SDK_SUCCESS)
+          spikeEvents,
+          commandQueue
+        ) != SDK_SUCCESS
+      )
       {
         std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
         verified = false;
@@ -5804,14 +5766,13 @@ device modifies it.*/
         modelVariables);
       ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-        dataSpikePacketCounts);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-        dataSpikePackets);
         
-      if(verifyKernelUpdateNeurons
+      if
+      (
+        verifyKernelUpdateNeurons
         (
           true,
+          false,
           currentTimeStep,
           dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
@@ -5820,12 +5781,11 @@ device modifies it.*/
           dataSynapseTargets,
           dataSynapseDelays,
           dataSynapseWeights,
-          NULL,
-          NULL,
           modelVariables,
-          dataSpikePackets,
-          dataSpikePacketCounts
-        ) != SDK_SUCCESS)
+          spikeEvents,
+          commandQueue
+        ) != SDK_SUCCESS
+      )
       {
         std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
         verified = false; 
@@ -5840,28 +5800,27 @@ device modifies it.*/
 #else
     ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
       modelVariables);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-      dataSpikePacketCounts);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-      dataSpikePackets);
-    if(verifyKernelUpdateNeurons
-        (
-          true,
-          currentTimeStep,
-          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
-          dataMakeEventPtrsStruct,
-          dataGroupEventsTik,
-          NULL,
-          NULL,
-          NULL,
-          NULL,
-          NULL,
-          NULL,
-          modelVariables,
-          dataSpikePackets,
-          dataSpikePacketCounts
-        ) != SDK_SUCCESS
-    ){
+      
+    if
+    (
+      verifyKernelUpdateNeurons
+      (
+        true,
+        false,
+        currentTimeStep,
+        dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+        dataMakeEventPtrsStruct,
+        dataGroupEventsTik,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        modelVariables,
+        spikeEvents,
+        commandQueue
+      ) != SDK_SUCCESS
+    )
+    {
       std::cout << "Failed verifyKernelUpdateNeurons" << std::endl; 
       verified = false; 
       break;
@@ -5877,10 +5836,6 @@ device modifies it.*/
     EXPAND_EVENTS_ENABLE && UPDATE_NEURONS_ENABLE_V00)
   if(takeSimSnapshot)
   {
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketCountsBuffer, dataSpikePacketCountsSizeBytes, 
-      dataSpikePacketCounts);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataSpikePacketsBuffer, dataSpikePacketsSizeBytes, 
-      dataSpikePackets);
     ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
       modelVariables);
     ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
@@ -5894,9 +5849,9 @@ device modifies it.*/
       dataUnsortedEventWeights,
       dataMakeEventPtrsStruct,
       dataGroupEventsTik,
-      dataSpikePackets,
-      dataSpikePacketCounts,
-      modelVariables
+      modelVariables,
+      spikeEvents,
+      commandQueue
     );
   }
 #endif
@@ -6029,15 +5984,8 @@ device modifies it.*/
   LOG("Total Time:" << totalExecTime, 1);
   std::cout.setf(std::ios::scientific,std::ios::floatfield);
 #endif
-
-#if (ERROR_TRY_CATCH_ENABLE)
   }
-  catch (cl::Error err) 
-  {
-    std::cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << std::endl;
-    return SDK_FAILURE;
-  }
-#endif
+  CATCH(runCLKernels, return SDK_FAILURE;)
 
   return SDK_SUCCESS;
 }
@@ -6114,7 +6062,7 @@ IntegrationTest::setup()
   /* Allocate host memory*/
   if(allocateHostData() != SDK_SUCCESS)
       return SDK_FAILURE;
-      
+
   /* Init host memory
   if(initializeHostData() != SDK_SUCCESS)
       return SDK_FAILURE;*/
@@ -6193,14 +6141,17 @@ IntegrationTest::verifyResults()
 int 
 IntegrationTest::verifyKernelExpandEvents
 (
-  cl_uint timeStep,
-  bool reset
+  cl_uint           timeStep,
+  bool              reset,
+  SpikeEvents       &spikeEvents,
+  cl::CommandQueue  &queue
 )
 /**************************************************************************************************/
 {
   bool result = SDK_SUCCESS;
   
 #if EXPAND_EVENTS_ENABLE
+  try
   {
   /*Reset data (useful for unit test)*/
   if(reset)
@@ -6245,17 +6196,15 @@ IntegrationTest::verifyKernelExpandEvents
   /*Iterate through spike packets*/
   for(cl_uint packet = 0; packet < EXPAND_EVENTS_SPIKE_PACKETS; packet++)
   {
-    cl_uint packet_index = packet * EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS;
-    cl_uint total_spikes = dataSpikePacketCounts[packet];
+    cl_uint total_spikes = spikeEvents.getSpikeCount(queue, packet);
 
     /*Iterate through spikes in a current packet*/
     for(cl_uint i = 0; i < total_spikes; i++)
     {
-      cl_uint spiked_neuron = dataSpikePackets[packet_index + 
-        EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
-      cl_float spike_time = *((cl_float *)(&dataSpikePackets[packet_index + 
-        EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1]));
-        
+      cl_uint spiked_neuron = 0;
+      cl_float spike_time = 0;
+      spikeEvents.getSpike(queue, packet, i, spiked_neuron, spike_time);
+
       cl_uint synapsePointer = dataSynapsePointer[spiked_neuron];
       cl_uint synapse_count = dataSynapsePointer[spiked_neuron + 1] - synapsePointer;
       
@@ -6485,6 +6434,7 @@ IntegrationTest::verifyKernelExpandEvents
   }
 #endif
   }
+  CATCH(verifyKernelExpandEvents, return SDK_FAILURE;)
 #endif
 
   return result;
@@ -8708,61 +8658,65 @@ IntegrationTest::updateStep
 int 
 IntegrationTest::verifyKernelUpdateNeurons
 (
-  bool          verify,
-  cl_uint       step,
-  cl_uint       sortedEventsSize,
-  unsigned int  *pointerStruct,
-  unsigned int  *sortedEvents,
-  unsigned int  *synapsePointer,
-  unsigned int  *synapseTargets,
-  DATA_TYPE     *synapseDelays,
-  DATA_TYPE     *synapseWeights,
-  unsigned int  *spikePacketCounts,
-  unsigned int  *spikePackets,
-  DATA_TYPE     *modelVariables,
-  unsigned int  *dataSpikePackets,
-  unsigned int  *dataSpikePacketCounts
+  bool              verify,
+  bool              injectSpikes,
+  cl_uint           step,
+  cl_uint           sortedEventsSize,
+  unsigned int      *pointerStruct,
+  unsigned int      *sortedEvents,
+  unsigned int      *synapsePointer,
+  unsigned int      *synapseTargets,
+  DATA_TYPE         *synapseDelays,
+  DATA_TYPE         *synapseWeights,
+  DATA_TYPE         *modelVariables,
+  SpikeEvents       &spikeEvents,
+  cl::CommandQueue  &queue
 )
 /**************************************************************************************************/
 {
   int result = SDK_SUCCESS;
 #if UPDATE_NEURONS_ENABLE_V00
-  
+  try
+  {
   bool breakOnFailure = 1;
   bool ignoreSolverFailuresHost = IGNORE_SOLVER_EXCEPTIONS;
 
   if((synapsePointer != NULL) && (synapseTargets != NULL) && (synapseDelays != NULL) &&
     (synapseWeights != NULL))
   {
-    if((spikePackets != NULL) && (spikePacketCounts != NULL))
+    if(injectSpikes)
     {
-      memset(ne, 0, UPDATE_NEURONS_TOTAL_NEURONS*sizeof(int));
-      
-      /*Iterate through spike packets*/
-      for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
+      try
       {
-        cl_uint packet_index = packet * UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS;
-        cl_uint total_spikes = spikePacketCounts[packet];
-
-        /*Iterate through spikes in a current packet and inject spikes*/
-        for(cl_uint i = 0; i < total_spikes; i++)
+        memset(ne, 0, UPDATE_NEURONS_TOTAL_NEURONS*sizeof(int));
+        
+        /*Iterate through spike packets*/
+        for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
         {
-          cl_uint spiked_neuron = spikePackets[packet_index + 
-            UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
-          cl_float spike_time = *((cl_float *)(&spikePackets[packet_index + 
-            UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1]));
-            
-          if(ne[spiked_neuron] == 1)
+          cl_uint total_spikes = spikeEvents.getPastSpikeCount(queue, packet);
+
+          /*Iterate through spikes in a current packet and inject spikes*/
+          for(cl_uint i = 0; i < total_spikes; i++)
           {
-            std::cerr << "ERROR, verifyKernelUpdateNeurons, duplicate entry detected for neuron ID " 
-              << spiked_neuron << " while injecting its spike: 1)" << spike_time << ", 2)" 
-              << te_ps[spiked_neuron] << std::endl;
-            return SDK_FAILURE;
+            cl_uint spiked_neuron = 0;
+            cl_float spike_time = 0;
+            spikeEvents.getPastSpike(queue, packet, i, spiked_neuron, spike_time);
+              
+            if(ne[spiked_neuron] == 1)
+            {
+              std::cerr << "ERROR, verifyKernelUpdateNeurons, duplicate entry detected for neuron ID " 
+                << spiked_neuron << " while injecting its spike: 1)" << spike_time << ", 2)" 
+                << te_ps[spiked_neuron] << std::endl;
+              return SDK_FAILURE;
+            }
+            ne[spiked_neuron] = 1;
+            te_ps[spiked_neuron] = spike_time;
           }
-          ne[spiked_neuron] = 1;
-          te_ps[spiked_neuron] = spike_time;
         }
+        
+        spikeEvents.deletePastEvents();
       }
+      CATCH(verifyKernelUpdateNeurons, return SDK_FAILURE;)
     }
     
     result = propagateSpikes
@@ -8909,34 +8863,36 @@ IntegrationTest::verifyKernelUpdateNeurons
   char *spikeCheck = (char *)calloc(UPDATE_NEURONS_TOTAL_NEURONS, sizeof(char));
   
   /*All verified spikes have equivalents in the reference data*/
-  for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
+  try
   {
-    cl_uint packet_index = packet * UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS;
-    cl_uint total_spikes = dataSpikePacketCounts[packet];
-
-    /*Iterate through spikes in a current packet*/
-    for(cl_uint i = 0; i < total_spikes; i++)
+    for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
     {
-      cl_uint spiked_neuron = dataSpikePackets[packet_index + 
-        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
-      cl_float spike_time = *((cl_float *)(&dataSpikePackets[packet_index + 
-        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i 
-        + 1]));
-      if(te_ps[spiked_neuron] != spike_time)
+      cl_uint total_spikes = spikeEvents.getSpikeCount(queue, packet);
+
+      /*Iterate through spikes in a current packet*/
+      for(cl_uint i = 0; i < total_spikes; i++)
       {
-        std::cerr << "ERROR, verifyKernelUpdateNeurons, spike time mismatch for neuron " 
-          << spiked_neuron << ", packet " << packet << ": " << te_ps[spiked_neuron] << "!=" 
-          << spike_time << std::endl;
-        result = SDK_FAILURE;
-        if(breakOnFailure){break;}
+        cl_uint spiked_neuron = 0;
+        cl_float spike_time = 0;
+        spikeEvents.getSpike(queue, packet, i, spiked_neuron, spike_time);  
+          
+        if(te_ps[spiked_neuron] != spike_time)
+        {
+          std::cerr << "ERROR, verifyKernelUpdateNeurons, spike time mismatch for neuron " 
+            << spiked_neuron << ", packet " << packet << ": " << te_ps[spiked_neuron] << "!=" 
+            << spike_time << std::endl;
+          result = SDK_FAILURE;
+          if(breakOnFailure){break;}
+        }
+        else
+        {
+          spikeCheck[spiked_neuron] = 1;
+        }
       }
-      else
-      {
-        spikeCheck[spiked_neuron] = 1;
-      }
+      if(breakOnFailure && (result == SDK_FAILURE)){break;}
     }
-    if(breakOnFailure && (result == SDK_FAILURE)){break;}
   }
+  CATCH(verifyKernelUpdateNeurons, result = SDK_FAILURE;)
   
   /*There are no reference spikes, which are not present in the verified data*/
   if(result != SDK_FAILURE)
@@ -8956,6 +8912,8 @@ IntegrationTest::verifyKernelUpdateNeurons
   free(spikeCheck);
   }
 #endif
+  }
+  CATCH(verifyKernelUpdateNeurons, return SDK_FAILURE;)
 #endif
 
   return result;
@@ -9336,19 +9294,21 @@ IntegrationTest::captureUnsortedEvents
 int 
 IntegrationTest::takeSimulationSnapshot
 (
-  cl_uint   step,
-  cl_uint   sampleSizeNeurons,
-  cl_uint   *dataUnsortedEventCounts,
-  cl_uint   *dataUnsortedEventWeights,
-  cl_uint   *dataMakeEventPtrsStruct,
-  cl_uint   *dataGroupEventsTik,
-  cl_uint   *dataSpikePackets,
-  cl_uint   *dataSpikePacketCounts,
-  cl_float  *modelVariables
+  cl_uint           step,
+  cl_uint           sampleSizeNeurons,
+  cl_uint           *dataUnsortedEventCounts,
+  cl_uint           *dataUnsortedEventWeights,
+  cl_uint           *dataMakeEventPtrsStruct,
+  cl_uint           *dataGroupEventsTik,
+  cl_float          *modelVariables,
+  SpikeEvents       &spikeEvents,
+  cl::CommandQueue  &queue
 )
 /**************************************************************************************************/
 {
-  SET_RANDOM_SEED(srandSeed);
+  try
+  {
+  SET_RANDOM_SEED(srandSeed, srandCounter);
   LOG("takeSimulationSnapshot: set srand seed to " << srandSeed, 0);
   (*dataToSnapshotLogFile).str("");
   *dataToSnapshotLogFile << "\n\nSNAPSHOT AT STEP: " << step << "\n\n";
@@ -9452,27 +9412,29 @@ IntegrationTest::takeSimulationSnapshot
   cl_float spikeTimeMax = 0.0f, spikeTimeMin = 100.0f;
   
   /*Iterate through spike packets*/
-  for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
+  try
   {
-    cl_uint packetIndex = packet * UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS;
-    cl_uint spikes = dataSpikePacketCounts[packet];
-    
-    totalSpikes += spikes;
-    if(spikesPerPacketMax < spikes){spikesPerPacketMax = spikes;}
-    if(spikesPerPacketMin > spikes){spikesPerPacketMin = spikes;}
-
-    /*Iterate through spikes in a current packet*/
-    for(cl_uint i = 0; i < spikes; i++)
+    for(cl_uint packet = 0; packet < UPDATE_NEURONS_SPIKE_PACKETS_V00; packet++)
     {
-      cl_uint spiked_neuron = dataSpikePackets[packetIndex + 
-        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i];
-      cl_float spike_time = *((cl_float *)(&dataSpikePackets[packetIndex + 
-        UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS * i + 1]));
+      cl_uint spikes = spikeEvents.getSpikeCount(queue, packet);
+      
+      totalSpikes += spikes;
+      if(spikesPerPacketMax < spikes){spikesPerPacketMax = spikes;}
+      if(spikesPerPacketMin > spikes){spikesPerPacketMin = spikes;}
 
-      if(spikeTimeMax < spike_time){spikeTimeMax = spike_time;}
-      if(spikeTimeMin > spike_time){spikeTimeMin = spike_time;}
+      /*Iterate through spikes in a current packet*/
+      for(cl_uint i = 0; i < spikes; i++)
+      {
+        cl_uint spiked_neuron = 0;
+        cl_float spike_time = 0;
+        spikeEvents.getSpike(queue, packet, i, spiked_neuron, spike_time);
+
+        if(spikeTimeMax < spike_time){spikeTimeMax = spike_time;}
+        if(spikeTimeMin > spike_time){spikeTimeMin = spike_time;}
+      }
     }
   }
+  CATCH(takeSimulationSnapshot, return SDK_FAILURE;)
   
   *dataToSnapshotLogFile << "Total Spikes," << totalSpikes << std::endl
     << "Packet Spikes Max," << spikesPerPacketMax << std::endl
@@ -9501,6 +9463,8 @@ IntegrationTest::takeSimulationSnapshot
 
   *snapshotLogFile << (*dataToSnapshotLogFile).str();
   (*dataToSnapshotLogFile).str("");
+  }
+  CATCH(takeSimulationSnapshot, return SDK_FAILURE;)
   
   return SDK_SUCCESS;
 }
@@ -9573,13 +9537,6 @@ IntegrationTest::cleanup()
   if(dataErrorGroupEvents)
       free(dataErrorGroupEvents);
 #endif
-#endif
-/**************************************************************************************************/
-#if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-  if(dataSpikePackets) 
-      free(dataSpikePackets);
-  if(dataSpikePacketCounts) 
-      free(dataSpikePacketCounts);
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
@@ -9734,6 +9691,8 @@ IntegrationTest::printStats()
 int 
 main(int argc, char *argv[])
 {
+  _putenv("GPU_DUMP_DEVICE_KERNEL=3");
+  
   IntegrationTest test("OpenCL IntegrationTest");
 
   if(test.initialize() !=  SDK_SUCCESS)

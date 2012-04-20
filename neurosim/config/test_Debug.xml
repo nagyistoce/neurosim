@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+<all>
+
+  <!-- Config parameters common to all tests in this file -->
+  <common_config>
+    <!--  -->
+    <param id="LOG_REPORT">1</param>
+    <param id="TARGET_DEVICE_NAME">'\\"Tahiti;Cayman\\"'</param>
+    <param id="PREINITIALIZE_NETWORK_TIME_SLOT_DELTA">50</param>
+    <param id="PREINITIALIZE_NETWORK_TIME_SLOT_DELTA_DEVIATION">25.0</param>
+    <param id="PREINITIALIZE_NETWORK_PERCENT_INHIBITORY">10.0</param>
+    <param id="PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT">0.0</param>
+    <param id="PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT">5.0</param>
+    <param id="PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE">'\\"neuron_variables_sample.csv\\"'</param>
+    <param id="OVERWRITE_SPIKES_UNTILL_STEP">(2*16)</param>
+    <param id="INJECT_CURRENT_UNTILL_STEP">0</param>
+    <!--  -->
+  </common_config>
+  
+  <!-- Test-specific config parameters. Refer to test_Generic.xml for usage -->
+  <specific_config>
+
+    
+    <!--  -->
+    
+    
+    <exe name="0" tag="noskip">
+      <id>Debug1</id>
+      <!-- Configuration -->
+      <config>
+        <!-- ENABLE_MASK: oct("0b1111111110000000"), oct("0b0000000000000000") -->
+        <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
+        
+        <!-- REFERENCE_EVENT_QUEUE_SIZE: 10000 -->
+        <param id="REFERENCE_EVENT_QUEUE_SIZE">750</param>
+        
+        <!-- TOTAL_NEURON_BITS: 17 -->
+        <param id="TOTAL_NEURON_BITS">17</param>
+        
+        <!-- PREINITIALIZE_NETWORK_STATE: 1 -->
+        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+        
+        <!-- SYNAPTIC_EVENT_BUFFERS: 32,64,128,256,512,1024. Tahiti: 32,64 -->
+        <param id="SYNAPTIC_EVENT_BUFFERS">32</param>
+        
+        <!-- SYNAPSE_GABA_PERCENT: 0.0 - 100.0 -->
+        <param id="SYNAPSE_GABA_PERCENT">0.0</param>
+        
+        <!-- EVENT_DATA_BUFFER_SIZE: -->
+        <param id="EVENT_DATA_BUFFER_SIZE">(64*1024)</param>
+		
+        <!-- SPIKE_PACKET_SIZE (affects problem partitioning): 4-512 -->
+        <param id="SPIKE_PACKET_SIZE">16</param>
+		
+        <!-- SPIKE_PACKETS (affects problem partitioning): 64-2048 -->
+        <param id="SPIKE_PACKETS">512</param>
+		
+        <!-- SYNAPSE_DEVIATION_RATIO (affects problem size): 0.5 -->
+        <param id="SYNAPSE_DEVIATION_RATIO">0.1</param>
+		
+        <!-- MAX_SYNAPSES_PER_NEURON (affects problem size): 32-16384 -->
+        <param id="MAX_SYNAPSES_PER_NEURON">1536</param>
+        
+        <!-- TOLERANCE_MODE: 0,1,2 -->
+        <param id="TOLERANCE_MODE">2</param>
+		
+        <!-- EXPAND_EVENTS_TEST_MODE (per mil of spiked neurons, affects problem size): 5-20 -->
+        <param id="EXPAND_EVENTS_TEST_MODE">10</param>
+		
+        <!-- EXPAND_EVENTS_WG_SIZE_WF: 1,2,4. Tahiti: 4 -->
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">4</param>
+		
+        <!-- EXPAND_EVENTS_SPIKE_BUFFER_SIZE (LM buffer for local spike storage): 64-512 -->
+        <param id="EXPAND_EVENTS_SPIKE_BUFFER_SIZE">128</param>
+		
+        <!-- EXPAND_EVENTS_INTER_WF_COOPERATION: 0,1. Tahiti: 1-->
+        <param id="EXPAND_EVENTS_INTER_WF_COOPERATION">1</param>
+        
+        <!-- SCAN_WG_SIZE_WF: 1,2,4. Tahiti: 32:1, 64:4 -->
+        <param id="SCAN_WG_SIZE_WF">2</param>   
+        
+        <!-- SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 0 -->
+        <param id="SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">0</param>
+        
+        <!-- SCAN_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1-->
+        <param id="SCAN_OPTIMIZATION_2LEVEL_REDUCE">1</param>
+        
+        <!-- SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET: 0-15. Tahiti: 64-->
+        <param id="SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET">64</param>
+        
+        <!-- GROUP_EVENTS_WG_SIZE_WF: 1,2,4 Tahiti: 4-->
+        <param id="GROUP_EVENTS_WG_SIZE_WF">4</param>     
+        
+        <!-- GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG: 1 -->
+        <param id="GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG">1</param>
+        
+        <!-- GROUP_EVENTS_ELEMENTS_PER_WI: 2,4,8,16. Tahiti: 4,8 -->
+        <param id="GROUP_EVENTS_ELEMENTS_PER_WI">4</param>
+        
+        <!-- GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER: 8,16,32. Tahiti: 8,16 -->
+        <param id="GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER">16</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT: 0,1. Tahiti: 0 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT: 0,1. Tahiti: 1 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS: 0,1. Tahiti: 1 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS">1</param>
+        
+        <!-- GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 17 -->
+        <param id="GROUP_EVENTS_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">17</param>
+        
+        <!-- GROUP_EVENTS_TEST_MODE (deviation per cent of EVENT_DATA_BUFFER_SIZE capacity) -->
+        <param id="GROUP_EVENTS_TEST_MODE">10</param>
+
+        <!-- MAKE_EVENT_PTRS_WG_SIZE_WF: 1,2,4. Tahiti: 4. -->
+        <param id="MAKE_EVENT_PTRS_WG_SIZE_WF">4</param>
+        
+        <!-- MAKE_EVENT_PTRS_ELEMENTS_PER_WI: 2,4,8,16. Tahiti: 8 -->
+        <param id="MAKE_EVENT_PTRS_ELEMENTS_PER_WI">8</param>
+        
+        <!-- MAKE_EVENT_PTRS_GRID_SIZE_WG: 32,64,128. Tahiti: 128 or more -->
+        <param id="MAKE_EVENT_PTRS_GRID_SIZE_WG">128</param>
+        
+        <!-- MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE: 1024 -->
+        <param id="MAKE_EVENT_PTRS_EVENT_COUNT_WF_LM_SHARE">1024</param>
+        
+        <!-- UPDATE_NEURONS_ELEMENTS_PER_WI: 1 -->
+        <param id="UPDATE_NEURONS_ELEMENTS_PER_WI">1</param>
+        
+        <!-- UPDATE_NEURONS_WG_SIZE_WF_V00: 1,2,4 -->
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">1</param>
+        
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">VerifyAll</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="VerifyAll">
+          <param id="SIMULATION_MODE">0</param>
+          <param id="SIMULATION_TIME_STEPS">100</param>
+          <param id="SIMULATION_SNAPSHOT">1</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="VerifyQuick">
+          <param id="SIMULATION_MODE">1</param>
+          <param id="SIMULATION_TIME_STEPS">200</param>
+          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">50</param>
+          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">50</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Profile">
+          <param id="SIMULATION_MODE">2</param>
+          <param id="SIMULATION_TIME_STEPS">120</param>
+          <param id="START_PROFILING_AT_STEP">20</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    
+    
+    <!--  -->
+    
+    
+    <exe name="1" tag="skip">
+      <id>Debug2</id>
+      <!-- Configuration -->
+      <config>
+        <param id="ENABLE_MASK">oct("0b1100000010000000")</param>
+        <param id="SIMULATION_MODE">0</param>
+        <param id="SIMULATION_TIME_STEPS">(16*2+1)</param>
+        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+        <param id="TOTAL_NEURON_BITS">17</param>
+        <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
+        <param id="TOLERANCE_MODE">0</param>
+        <param id="SPIKE_PACKET_SIZE">128</param>
+        <param id="SPIKE_PACKETS">(4*64)</param>
+        <param id="SYNAPTIC_EVENT_BUFFERS">(2*64)</param>
+        <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">2</param>
+        <param id="UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE">(2**20)</param>
+        <param id="EXPAND_EVENTS_WG_SIZE_WF">2</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Debug</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Debug">
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    
+    
+    <!--  -->
+    
+    
+  </specific_config>
+  
+  <report_config>
+    <!-- Report data keys for tagging data passed from reports generated by executable -->
+    <report_tags>
+      <param id="Total GM"></param>
+      <param id="Max GM"></param>
+      <param id="Gaba Synapse Count"></param>
+      <param id="Ampa Synapse Count"></param>
+      <param id="Total Synapse Count"></param>
+      <param id="Max Synapses/Neuron"></param>
+      <param id="Min Synapses/Neuron"></param>
+      <param id="Average Synapses/Neuron"></param>
+      <param id="Average Events/Iteration"></param>
+      <param id="Average Spikes/Iteration"></param>
+      <param id="Total Time"></param>
+      <param id="Kernel kernelExpandEvents Total Time"></param>
+      <param id="Kernel kernelExpandEvents Average Time"></param>
+      <param id="Kernel kernelExpandEvents Execution Count"></param>
+      <param id="Kernel kernelGlueEventPtrs Total Time"></param>
+      <param id="Kernel kernelGlueEventPtrs Average Time"></param>
+      <param id="Kernel kernelGlueEventPtrs Execution Count"></param>
+      <param id="Kernel kernelGroupEventsV00 Total Time"></param>
+      <param id="Kernel kernelGroupEventsV00 Average Time"></param>
+      <param id="Kernel kernelGroupEventsV00 Execution Count"></param>
+      <param id="Kernel kernelGroupEventsV01 Total Time"></param>
+      <param id="Kernel kernelGroupEventsV01 Average Time"></param>
+      <param id="Kernel kernelGroupEventsV01 Execution Count"></param>
+      <param id="Kernel kernelGroupEventsV02 Total Time"></param>
+      <param id="Kernel kernelGroupEventsV02 Average Time"></param>
+      <param id="Kernel kernelGroupEventsV02 Execution Count"></param>
+      <param id="Kernel kernelGroupEventsV03 Total Time"></param>
+      <param id="Kernel kernelGroupEventsV03 Average Time"></param>
+      <param id="Kernel kernelGroupEventsV03 Execution Count"></param>
+      <param id="Kernel kernelMakeEventPtrs Total Time"></param>
+      <param id="Kernel kernelMakeEventPtrs Average Time"></param>
+      <param id="Kernel kernelMakeEventPtrs Execution Count"></param>
+      <param id="Kernel kernelScanHistogramV00 Total Time"></param>
+      <param id="Kernel kernelScanHistogramV00 Average Time"></param>
+      <param id="Kernel kernelScanHistogramV00 Execution Count"></param>
+      <param id="Kernel kernelScanHistogramV01 Total Time"></param>
+      <param id="Kernel kernelScanHistogramV01 Average Time"></param>
+      <param id="Kernel kernelScanHistogramV01 Execution Count"></param>
+      <param id="Kernel kernelUpdateNeuronsV00 Total Time"></param>
+      <param id="Kernel kernelUpdateNeuronsV00 Average Time"></param>
+      <param id="Kernel kernelUpdateNeuronsV00 Execution Count"></param>
+      <param id="Kernel kernelUpdateSpikedNeuronsV00 Total Time"></param>
+      <param id="Kernel kernelUpdateSpikedNeuronsV00 Average Time"></param>
+      <param id="Kernel kernelUpdateSpikedNeuronsV00 Execution Count"></param>
+    </report_tags>
+    <!--  -->
+  </report_config>
+
+</all>

@@ -1,17 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="Release|x64">
       <Configuration>Release</Configuration>
@@ -20,20 +12,25 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Definitions.h" />
+    <ClInclude Include="Definitions.hpp" />
     <ClInclude Include="IntegrationTest.hpp" />
     <ClInclude Include="integ_util.h" />
     <ClInclude Include="iz_util.h" />
+    <ClInclude Include="Kernel_Primitives.h" />
+    <ClInclude Include="SpikeEvents.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="IntegrationTest.cpp" />
     <ClCompile Include="integ_util.c" />
     <ClCompile Include="iz_util.c" />
+    <ClCompile Include="SpikeEvents.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="IntegrationTest.vcxproj.user" />
     <None Include="Kernel_ExpandEvents.cl" />
     <None Include="Kernel_GroupEvents.cl" />
     <None Include="Kernel_MakeEventPointers.cl" />
+    <None Include="Kernel_Primitives.cl" />
     <None Include="Kernel_ScanHistogram.cl" />
     <None Include="Kernel_UpdateNeurons.cl" />
   </ItemGroup>
@@ -44,20 +41,9 @@
     <ProjectName>IntegrationTest</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -69,60 +55,24 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\..\common\openclsdk_debugVS10.props" />
-  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\..\common\openclsdk_debug_x64_VS10.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\..\common\openclsdk_releaseVS10.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\..\common\openclsdk_release_x64_VS10.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(ProjectDir)\bin\debug\x86\</OutDir>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(ProjectDir)\bin\debug\x86_64\</OutDir>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(ProjectDir)\bin\release\x86\</OutDir>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(ProjectDir)\bin\release\x86_64\</OutDir>
+    <OutDir>$(SolutionDir)\bin\x86_64\</OutDir>
+    <IntDir>bin\x86_64\</IntDir>
   </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
-      <WarningLevel>Level3</WarningLevel>
-      <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(AMDAPPSDKROOT)\include;$(SolutionDir)\include\SDKUtil;$(SolutionDir)\include</AdditionalIncludeDirectories>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(AMDAPPSDKROOT)\lib\x86;$(SolutionDir)\lib\x86;$(SolutionDir)\lib\SDKUtil\debug\x86</AdditionalLibraryDirectories>
-    </Link>
-    <PostBuildEvent>
-      <Command>copy Kernel_ObtainSynapticEvents.cl "$(OUTDIR)"\Kernel_ObtainSynapticEvents.cl
-copy Scratchpad.cl "$(OUTDIR)"\Scratchpad.cl
-copy Definitions.h "$(OUTDIR)"\Definitions.h
-copy compilerOptions.txt "$(OUTDIR)"\compilerOptions.txt</Command>
-    </PostBuildEvent>
-  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <PrecompiledHeader>
@@ -138,29 +88,14 @@ copy compilerOptions.txt "$(OUTDIR)"\compilerOptions.txt</Command>
       <AdditionalLibraryDirectories>$(AMDAPPSDKROOT)\lib\x86_64;$(SolutionDir)\lib\x86_64;$(SolutionDir)\lib\SDKUtil\debug\x86_64</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>copy Kernel_SortSynapticEvents.cl "$(OUTDIR)"\Kernel_SortSynapticEvents.cl</Command>
-    </PostBuildEvent>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
-      <Optimization>MaxSpeed</Optimization>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(AMDAPPSDKROOT)\include;$(SolutionDir)\include\SDKUtil;$(SolutionDir)\include</AdditionalIncludeDirectories>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>$(AMDAPPSDKROOT)\lib\x86;$(SolutionDir)\lib\x86;$(SolutionDir)\lib\SDKUtil\release\x86</AdditionalLibraryDirectories>
-    </Link>
-    <PostBuildEvent>
-      <Command>copy Kernel_SortSynapticEvents.cl "$(OUTDIR)"\Kernel_SortSynapticEvents.cl</Command>
+      <Command>copy "$(ProjectDir)"\Kernel_ExpandEvents.cl "$(OUTDIR)"\Kernel_ExpandEvents.cl
+copy "$(ProjectDir)"\Kernel_ScanHistogram.cl "$(OUTDIR)"\Kernel_ScanHistogram.cl
+copy "$(ProjectDir)"\Kernel_GroupEvents.cl "$(OUTDIR)"\Kernel_GroupEvents.cl
+copy "$(ProjectDir)"\Kernel_MakeEventPointers.cl "$(OUTDIR)"\Kernel_MakeEventPointers.cl
+copy "$(ProjectDir)"\Kernel_UpdateNeurons.cl "$(OUTDIR)"\Kernel_UpdateNeurons.cl
+copy "$(ProjectDir)"\Definitions.h "$(OUTDIR)"\Definitions.h
+copy "$(ProjectDir)"\oclCompilerOptions.txt "$(OUTDIR)"\oclCompilerOptions.txt
+copy "$(ProjectDir)"\neuron_variables_sample.csv "$(OUTDIR)"\neuron_variables_sample.csv</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -187,6 +122,8 @@ copy Kernel_ScanHistogram.cl "$(OUTDIR)"\Kernel_ScanHistogram.cl
 copy Kernel_GroupEvents.cl "$(OUTDIR)"\Kernel_GroupEvents.cl
 copy Kernel_MakeEventPointers.cl "$(OUTDIR)"\Kernel_MakeEventPointers.cl
 copy Kernel_UpdateNeurons.cl "$(OUTDIR)"\Kernel_UpdateNeurons.cl
+copy Kernel_Primitives.cl "$(OUTDIR)"\Kernel_Primitives.cl
+copy Kernel_Primitives.h "$(OUTDIR)"\Kernel_Primitives.h
 copy Definitions.h "$(OUTDIR)"\Definitions.h
 copy "$(SolutionDir)"\config\oclCompilerOptions.txt "$(OUTDIR)"\oclCompilerOptions.txt
 copy "$(SolutionDir)"\config\oclCompilerOptions.txt oclCompilerOptions.txt
