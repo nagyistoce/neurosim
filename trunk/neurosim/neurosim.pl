@@ -31,6 +31,7 @@ use constant OS_WINDOWS                                       => "MSWin32";
 use constant OS_LINUX                                         => "linux";
 use constant NODE_COMPILE                                     => "Node Compile";
 use constant NODE_EXECUTE                                     => "Node Execute";
+use constant PREPEND_CUE                                      => "PREPEND CUE";
 
 # Globals:
 our $CONFIG;
@@ -94,7 +95,7 @@ if(not($TARGET_ARCHITECTURE eq TARGET_ARC_X86_64))
 # Library build parameters
 our $UTIL_NAME = "SDKUtil";
 our $UTIL_SRC_DIR = "cpp_cl/util/$UTIL_NAME";
-our $UTIL_BIN_DIR = "$UTIL_SRC_DIR/build/release/$TARGET_ARCHITECTURE";
+our $UTIL_BIN_DIR = "$UTIL_SRC_DIR/build/$TARGET_ARCHITECTURE";
 our @UTIL_NAMES = ("SDKApplication", "SDKBitMap", "SDKCommandArgs", "SDKCommon", "SDKFile", 
   "SDKThread");
 our @UTIL_INCL_DIR = ("include", "include/$UTIL_NAME", "include/GL");
@@ -106,13 +107,15 @@ our $UTIL_INSTALL_DIR = "lib/$TARGET_ARCHITECTURE";
 our $OCL_COMPILER_OPTIONS_FILE = "oclCompilerOptions.txt";
 our $APP_NAME = "Neuro";
 our $APP_SRC_DIR = "cpp_cl/app/$APP_NAME";
-our $APP_BIN_DIR = "$APP_SRC_DIR/bin/release/$TARGET_ARCHITECTURE";
+our $APP_BIN_DIR = "$APP_SRC_DIR/bin/$TARGET_ARCHITECTURE";
 our @APP_INCL_DIR = ("include", "include/$UTIL_NAME", "include/GL");
 our $APP_INCL_DIR = "";
-our @APP_SRC_NAMES = ("iz_util.c", "integ_util.c", "IntegrationTest.cpp");
+our @APP_SRC_C = ("iz_util.c", "integ_util.c", "IntegrationTest.cpp", "SpikeEvents.cpp");
+our @APP_SRC_H = ("iz_util.h", "integ_util.h", "IntegrationTest.hpp", "SpikeEvents.hpp",
+  "Definitions.h", "Definitions.hpp");
 our @APP_KERNEL_FILE_NAMES = ("Kernel_ExpandEvents.cl", "Kernel_GroupEvents.cl", 
-  "Kernel_MakeEventPointers.cl", "Kernel_ScanHistogram.cl", "Kernel_SortSynapticEvents.cl", 
-  "Kernel_UpdateNeurons.cl");
+  "Kernel_MakeEventPointers.cl", "Kernel_ScanHistogram.cl", "Kernel_UpdateNeurons.cl",
+  "Kernel_Primitives.cl", "Kernel_Primitives.h");
 our $APP_DEFINITION_FILE_NAME = "Definitions.h";
 our @APP_CONFIG_FILE_NAMES = ("neuron_variables_sample.csv", $OCL_COMPILER_OPTIONS_FILE);
 our $APP_COMPILER_OPS = "";
@@ -628,7 +631,7 @@ sub compileApp
   if( $WIN_COMPILER eq WIN_COMPILER_MINGW ) 
   {
     # Build
-    for my $n (@APP_SRC_NAMES) 
+    for my $n (@APP_SRC_C) 
     {
       $temp = "$COMP $APP_COMPILER_OPS $config $APP_INCL_DIR ".
         "-o \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n.o\" ".
@@ -640,7 +643,7 @@ sub compileApp
 
     # Link
     $temp = "$LINK $APP_LINK_OPS -o \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME\"";
-    for my $n (@APP_SRC_NAMES) 
+    for my $n (@APP_SRC_C) 
     {
       $temp .= " \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n.o\"";
     }
@@ -652,17 +655,53 @@ sub compileApp
   
   if( $WIN_COMPILER eq WIN_COMPILER_VC ) 
   {
+    # Copy src files into build dir
+    for my $n (@APP_SRC_C, @APP_SRC_H) 
+    {
+      system( "$CP \"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\" \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/\"" );
+    }
+    
+    # Prepend configuration-specific defenitions at predetermined cue
+    $temp = "";
+    my @configArray = split("/D", $config);
+    shift(@configArray); 
+    for my $n (@configArray) 
+    {
+      replaceSubStr($n, "=", " ");
+      replaceSubStr($n, "\\\"", "\"");
+      
+      $temp .= "#define $n\n";
+    }
+    my $optionsFile = "$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_DEFINITION_FILE_NAME";
+    sysopen(MYINPUTFILE, $optionsFile, O_RDONLY) || 
+      die("compileApp: Cannot open file $optionsFile for read");
+    my @configFile = <MYINPUTFILE>; 
+    close(MYINPUTFILE);
+    foreach my $i (0..(scalar(@configFile)-1)) 
+    {
+      if (index($configFile[$i], PREPEND_CUE) != -1)
+      {
+        $configFile[$i] = "\n".$temp."\n";
+        last;
+      }
+    }
+    sysopen(MYOUTFILE, $optionsFile, O_WRONLY|O_TRUNC|O_CREAT) || 
+      die("compileApp: Cannot open file $optionsFile for write");
+    print MYOUTFILE @configFile;
+    close(MYOUTFILE);
+    
+    # Assemble src and obj file paths
     my $tempS = ""; 
     my $tempO = "";
-    for my $n (@APP_SRC_NAMES) 
+    for my $n (@APP_SRC_C) 
     {
-      $tempS .= "\"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\" ";
+      $tempS .= "\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n\" ";
       my @pureName = split(/\./, $n);
       $tempO .= "\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/".$pureName[0].".obj\" ";
     }
     
     # Build
-    $temp = "$COMP $APP_COMPILER_OPS $config $APP_INCL_DIR ".
+    $temp = "$COMP $APP_COMPILER_OPS $APP_INCL_DIR ".
       "/Fo\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/\" ".
       "/Fd\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/vc100.pdb\" ".
       "$tempS";
@@ -717,37 +756,6 @@ sub compileApp
       return 0;
     }
   }
-  
-  # prepend defenitions
-  $temp = "";
-  my @configArray = split("/D", $config);
-  shift(@configArray); 
-  for my $n (@configArray) 
-  {
-    replaceSubStr($n, "=", " ");
-    replaceSubStr($n, "\\\"", "\"");
-    
-    $temp .= "#define $n\n";
-  }
-  my $optionsFile = "$APP_INSTALL_DIR/$APP_DEFINITION_FILE_NAME";
-  sysopen(MYINPUTFILE, $optionsFile, O_RDONLY) || 
-    die("compileApp: Cannot open file $optionsFile for read");
-  my @configFile = <MYINPUTFILE>; 
-  close(MYINPUTFILE);
-  sysopen(MYOUTFILE, $optionsFile, O_WRONLY|O_TRUNC|O_CREAT) || 
-    die("compileApp: Cannot open file $optionsFile for write");
-  print MYOUTFILE "\n".$temp."\n";
-  print MYOUTFILE @configFile;
-  close(MYOUTFILE);
-  
-=for
-  replaceSubStr($config, "/D", "-D");
-  my $optionsFile = "$APP_INSTALL_DIR/$OCL_COMPILER_OPTIONS_FILE";
-  sysopen(MYOUTFILE, $optionsFile, O_WRONLY|O_APPEND|O_CREAT) || 
-    die("compileApp: Cannot open file $optionsFile");
-  print MYOUTFILE $config."\n";
-  close(MYOUTFILE);
-=cut
 
   return 1;
 }

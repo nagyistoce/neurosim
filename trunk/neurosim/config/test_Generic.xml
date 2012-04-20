@@ -276,43 +276,6 @@
     
     
     <!--  -->
-    
-    
-    <exe name="4" tag="skip">
-      <id>Debug</id>
-      <!-- Configuration -->
-      <config>
-        <param id="ENABLE_MASK">oct("0b1100000010000000")</param>
-        <param id="SIMULATION_MODE">0</param>
-        <param id="SIMULATION_TIME_STEPS">(16*2+1)</param>
-        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
-        <param id="TOTAL_NEURON_BITS">17</param>
-        <param id="MAX_SYNAPSES_PER_NEURON">(30*64)</param>
-        <param id="TOLERANCE_MODE">0</param>
-        <param id="SPIKE_PACKET_SIZE">128</param>
-        <param id="SPIKE_PACKETS">(4*64)</param>
-        <param id="SYNAPTIC_EVENT_BUFFERS">(2*64)</param>
-        <param id="EVENT_DATA_BUFFER_SIZE">(16*1024)</param>
-        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">2</param>
-        <param id="UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE">(2**20)</param>
-        <param id="EXPAND_EVENTS_WG_SIZE_WF">2</param>
-      </config>
-      <!-- Execution flow -->
-      <flow>
-        <!-- Start node is alwasy the first -->
-        <node name="Start">
-          <result id="PASS">Debug</result>
-          <result id="FAIL">Exit</result>
-        </node>
-        <node name="Debug">
-          <result id="PASS">Exit</result>
-          <result id="FAIL">Exit</result>
-        </node>
-      </flow>
-    </exe>
-    
-    
-    <!--  -->
 
 
   </specific_config>

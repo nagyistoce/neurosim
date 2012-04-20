@@ -58,5 +58,12 @@
     
     <!--  -->
     
+    <test name="8" tag="general">
+      <id>skip</id>
+      <path>config/test_Debug.xml</path>
+    </test>
+    
+    <!--  -->
+    
   </tests>
 </all>
