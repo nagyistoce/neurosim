@@ -43,6 +43,7 @@
 #include <SDKFile.hpp>
 #include <SDKBitMap.hpp>
 #include "SpikeEvents.hpp"
+#include "Connectome.hpp"
 
 
 
