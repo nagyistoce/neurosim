@@ -797,6 +797,9 @@ GROUP_EVENTS_V00:
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          1
   #endif
+  
+  /*Enable validation of parameters, data ranges, etc in classes*/
+  #define CLASS_VALIDATION_ENABLE                             1
 
 #elif SIMULATION_MODE == 1
   /*Has to be a full mask for this mode*/
@@ -824,6 +827,7 @@ GROUP_EVENTS_V00:
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          1
   #endif
+  #define CLASS_VALIDATION_ENABLE                             1
   
 #elif SIMULATION_MODE == 2
   #if !(defined(ENABLE_MASK))
@@ -852,6 +856,7 @@ GROUP_EVENTS_V00:
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          2
   #endif
+  #define CLASS_VALIDATION_ENABLE                             0
   
 #elif SIMULATION_MODE == 3
   #if !(defined(ENABLE_MASK))
@@ -880,6 +885,7 @@ GROUP_EVENTS_V00:
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          0
   #endif
+  #define CLASS_VALIDATION_ENABLE                             0
   
 #elif SIMULATION_MODE == 4
   #if !(defined(ENABLE_MASK))
@@ -908,6 +914,7 @@ GROUP_EVENTS_V00:
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          0
   #endif
+  #define CLASS_VALIDATION_ENABLE                             0
   
 #elif SIMULATION_MODE == 5
   #if !(defined(ENABLE_MASK))
@@ -936,6 +943,7 @@ GROUP_EVENTS_V00:
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          0
   #endif
+  #define CLASS_VALIDATION_ENABLE                             0
   
 #else
   #error Unknown simulation mode
@@ -958,6 +966,15 @@ GROUP_EVENTS_V00:
 #define GROUP_EVENTS_ENABLE_V03                               (ENABLE_MASK&512)
 #define MAKE_EVENT_PTRS_ENABLE                                (ENABLE_MASK&264)
 #define UPDATE_NEURONS_ENABLE_V00                             (ENABLE_MASK&128)
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Enable validation of parameters, data ranges, etc in classes for highly used methods
+***************************************************************************************************/
+#define CONNECTOME_VALIDATION_ENABLE                          CLASS_VALIDATION_ENABLE
+#define SPIKE_EVENTS_VALIDATION_ENABLE                        CLASS_VALIDATION_ENABLE
 /**************************************************************************************************/
 
 
@@ -1170,11 +1187,7 @@ GROUP_EVENTS_V00:
   #define EXPAND_EVENTS_TOTAL_NEURONS                         (1<<EXPAND_EVENTS_TOTAL_NEURON_BITS)
   #define EXPAND_EVENTS_MAX_DELAY                             (EXPAND_EVENTS_TIME_SLOTS-\
                                                               SIMULATION_STEP_SIZE)
-                                                              
-  /*Synaptic data structure parameters*/
-  /*CONTROL: Max number of synapses per neuron*/
-  #define EXPAND_EVENTS_SYNAPTIC_POINTER_SIZE                 (EXPAND_EVENTS_TOTAL_NEURONS+1)
-  
+
   /*Histogram of target neurons*/
   #define EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM               1
   #define EXPAND_EVENTS_HISTOGRAM_BIT_SHIFT                   0

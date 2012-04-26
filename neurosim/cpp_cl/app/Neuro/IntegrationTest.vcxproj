@@ -11,6 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Connectome.hpp" />
     <ClInclude Include="Definitions.h" />
     <ClInclude Include="Definitions.hpp" />
     <ClInclude Include="IntegrationTest.hpp" />
@@ -20,6 +21,7 @@
     <ClInclude Include="SpikeEvents.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Connectome.cpp" />
     <ClCompile Include="IntegrationTest.cpp" />
     <ClCompile Include="integ_util.c" />
     <ClCompile Include="iz_util.c" />

@@ -57,6 +57,8 @@ our $CURRENT_DIR  = "";
 our $CURRENT_REPORT_LOG  = "";
 # Find application root directory
 our $SCRIPT_ROOT_DIR = $FindBin::Bin; chomp( $SCRIPT_ROOT_DIR );
+# Log directory
+our $REPORT_LOG_DIR = "$SCRIPT_ROOT_DIR/log";
 # Configuration definitions file
 our $CONFIG_FILE = "$SCRIPT_ROOT_DIR/config/config.xml";
 # Detect OS
@@ -110,9 +112,10 @@ our $APP_SRC_DIR = "cpp_cl/app/$APP_NAME";
 our $APP_BIN_DIR = "$APP_SRC_DIR/bin/$TARGET_ARCHITECTURE";
 our @APP_INCL_DIR = ("include", "include/$UTIL_NAME", "include/GL");
 our $APP_INCL_DIR = "";
-our @APP_SRC_C = ("iz_util.c", "integ_util.c", "IntegrationTest.cpp", "SpikeEvents.cpp");
+our @APP_SRC_C = ("iz_util.c", "integ_util.c", "IntegrationTest.cpp", "SpikeEvents.cpp", 
+  "Connectome.cpp");
 our @APP_SRC_H = ("iz_util.h", "integ_util.h", "IntegrationTest.hpp", "SpikeEvents.hpp",
-  "Definitions.h", "Definitions.hpp");
+  "Connectome.hpp", "Definitions.h", "Definitions.hpp");
 our @APP_KERNEL_FILE_NAMES = ("Kernel_ExpandEvents.cl", "Kernel_GroupEvents.cl", 
   "Kernel_MakeEventPointers.cl", "Kernel_ScanHistogram.cl", "Kernel_UpdateNeurons.cl",
   "Kernel_Primitives.cl", "Kernel_Primitives.h");
@@ -315,6 +318,11 @@ if( $OS eq OS_WINDOWS )
   {
     $APP_INCL_DIR .= " $I \"$SCRIPT_ROOT_DIR/$n\"";
   }
+  
+  if(not(-d $REPORT_LOG_DIR)) 
+  {
+    system( "$MKDIR \"$REPORT_LOG_DIR\"" );
+  }
 }
 else
 {
@@ -380,7 +388,7 @@ sub main
     my $time_stamp = POSIX::strftime("%Y_%m_%d_%H_%M_%S", localtime);
 
     my $report_file_name = "report_".$test->{id}."_".$time_stamp.".csv";
-    $CURRENT_REPORT_LOG = "$SCRIPT_ROOT_DIR/log/$report_file_name";
+    $CURRENT_REPORT_LOG = "$REPORT_LOG_DIR/$report_file_name";
     my $config;
     
     # parse current test:
@@ -661,38 +669,52 @@ sub compileApp
       system( "$CP \"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\" \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/\"" );
     }
     
-    # Prepend configuration-specific defenitions at predetermined cue
-    $temp = "";
-    my @configArray = split("/D", $config);
-    shift(@configArray); 
-    for my $n (@configArray) 
+    # Insert configuration-specific defenitions at predetermined cue
     {
-      replaceSubStr($n, "=", " ");
-      replaceSubStr($n, "\\\"", "\"");
+      $temp = "";
       
-      $temp .= "#define $n\n";
-    }
-    my $optionsFile = "$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_DEFINITION_FILE_NAME";
-    sysopen(MYINPUTFILE, $optionsFile, O_RDONLY) || 
-      die("compileApp: Cannot open file $optionsFile for read");
-    my @configFile = <MYINPUTFILE>; 
-    close(MYINPUTFILE);
-    foreach my $i (0..(scalar(@configFile)-1)) 
-    {
-      if (index($configFile[$i], PREPEND_CUE) != -1)
+      my @configArray = split("/D", $config);
+      
+      shift(@configArray); 
+      
+      for my $n (@configArray) 
       {
-        $configFile[$i] = "\n".$temp."\n";
-        last;
+        replaceSubStr($n, "=", " ");
+        replaceSubStr($n, "\\\"", "\"");
+        
+        $temp .= "#define $n\n";
       }
+      
+      my $optionsFile = "$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_DEFINITION_FILE_NAME";
+      sysopen(MYINPUTFILE, $optionsFile, O_RDONLY) || 
+        die("compileApp: Cannot open file $optionsFile for read");
+      my @configFile = <MYINPUTFILE>; 
+      close(MYINPUTFILE);
+      
+      my $inserted = 0;
+      
+      foreach my $i (0..(scalar(@configFile)-1)) 
+      {
+        if (index($configFile[$i], PREPEND_CUE) != -1)
+        {
+          $configFile[$i] = "\n".$temp."\n"; $inserted = 1; last;
+        }
+      }
+      
+      if($inserted == 0)
+      {
+        die("compileApp: Cannot insert configuration-specific defenitions in ".
+          "$APP_DEFINITION_FILE_NAME");
+      }
+      
+      sysopen(MYOUTFILE, $optionsFile, O_WRONLY|O_TRUNC|O_CREAT) || 
+        die("compileApp: Cannot open file $optionsFile for write");
+      print MYOUTFILE @configFile;
+      close(MYOUTFILE);
     }
-    sysopen(MYOUTFILE, $optionsFile, O_WRONLY|O_TRUNC|O_CREAT) || 
-      die("compileApp: Cannot open file $optionsFile for write");
-    print MYOUTFILE @configFile;
-    close(MYOUTFILE);
-    
+
     # Assemble src and obj file paths
-    my $tempS = ""; 
-    my $tempO = "";
+    my $tempS = ""; my $tempO = "";
     for my $n (@APP_SRC_C) 
     {
       $tempS .= "\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n\" ";
@@ -721,39 +743,45 @@ sub compileApp
   }
   
   # Install the app
-  print "Installing application $APP_NAME.exe\n";
-  system( "$MKDIR \"$APP_INSTALL_DIR\"" );
-  $temp = 
-    "$INSTALL \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME.exe\" \"$APP_INSTALL_DIR/$APP_NAME.exe\"";
-  print "$temp\n";
-  system( $temp );
-  if( not(-e "$APP_INSTALL_DIR/$APP_NAME.exe") ) 
   {
-    print "The application was not installed in \"$APP_INSTALL_DIR/$APP_NAME.exe\"\n";
-    return 0;
-  }
-  
-  for my $n ($APP_DEFINITION_FILE_NAME, @APP_KERNEL_FILE_NAMES)
-  {
-    $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\" \"$APP_INSTALL_DIR/$n\"";
-    print "$temp\n";
-    system( $temp );
-    if( not(-e "$APP_INSTALL_DIR/$n") ) 
+    print "Installing application\n";
+    
+    system( "$MKDIR \"$APP_INSTALL_DIR\"" );
+    
+    for my $n ("$APP_NAME.exe", $APP_DEFINITION_FILE_NAME)
     {
-      print "The file $n was not installed in \"$APP_INSTALL_DIR/$n\"\n";
-      return 0;
+      $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n\" \"$APP_INSTALL_DIR/$n\"";
+      print "$temp\n";
+      system( $temp );
+      if( not(-e "$APP_INSTALL_DIR/$n") ) 
+      {
+        print "The file $n was not installed in \"$APP_INSTALL_DIR/$n\"\n";
+        return 0;
+      }
     }
-  }
-  
-  for my $n (@APP_CONFIG_FILE_NAMES) 
-  {
-    $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/config/$n\" \"$APP_INSTALL_DIR/$n\"";
-    print "$temp\n";
-    system( $temp );
-    if( not(-e "$APP_INSTALL_DIR/$n") ) 
+    
+    for my $n (@APP_KERNEL_FILE_NAMES)
     {
-      print "The file $n was not installed in \"$APP_INSTALL_DIR/$n\"\n";
-      return 0;
+      $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\" \"$APP_INSTALL_DIR/$n\"";
+      print "$temp\n";
+      system( $temp );
+      if( not(-e "$APP_INSTALL_DIR/$n") ) 
+      {
+        print "The file $n was not installed in \"$APP_INSTALL_DIR/$n\"\n";
+        return 0;
+      }
+    }
+    
+    for my $n (@APP_CONFIG_FILE_NAMES) 
+    {
+      $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/config/$n\" \"$APP_INSTALL_DIR/$n\"";
+      print "$temp\n";
+      system( $temp );
+      if( not(-e "$APP_INSTALL_DIR/$n") ) 
+      {
+        print "The file $n was not installed in \"$APP_INSTALL_DIR/$n\"\n";
+        return 0;
+      }
     }
   }
 

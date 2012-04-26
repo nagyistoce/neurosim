@@ -177,7 +177,8 @@ class IntegrationTest : public SDKSample
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-    SpikeEvents  spikeEvents;
+    SpikeEvents spikeEvents;
+    Connectome  connectome;
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE
@@ -194,30 +195,10 @@ class IntegrationTest : public SDKSample
     cl_uint dataUnsortedEventsWeightsVerifySize;
     cl_uint dataUnsortedEventsWeightsVerifySizeBytes;
     cl_uint* dataUnsortedEventsWeightsVerify;
-    
+
     cl_uint dataUnsortedEventCountsVerifySize;
     cl_uint dataUnsortedEventCountsVerifySizeBytes;
     cl_uint* dataUnsortedEventCountsVerify;
-    
-    cl_uint dataSynapsePointerSize;
-    cl_uint dataSynapsePointerSizeBytes;
-    cl_uint* dataSynapsePointer;
-    cl::Buffer dataSynapsePointerBuffer;
-    
-    cl_uint dataSynapseTargetsSize;
-    cl_uint dataSynapseTargetsSizeBytes;
-    cl_uint* dataSynapseTargets;
-    cl::Buffer dataSynapseTargetsBuffer;
-    
-    cl_uint dataSynapseDelaysSize;
-    cl_uint dataSynapseDelaysSizeBytes;
-    cl_float* dataSynapseDelays;
-    cl::Buffer dataSynapseDelaysBuffer;
-    
-    cl_uint dataSynapseWeightsSize;
-    cl_uint dataSynapseWeightsSizeBytes;
-    cl_float* dataSynapseWeights;
-    cl::Buffer dataSynapseWeightsBuffer;
 
     size_t blockSizeX_KernelExpandEvents;
     size_t blockSizeY_KernelExpandEvents;
@@ -451,10 +432,6 @@ public:
         dataUnsortedEventsDelaysVerify(NULL),
         dataUnsortedEventsWeightsVerify(NULL),
         dataUnsortedEventCountsVerify(NULL),
-        dataSynapsePointer(NULL),
-        dataSynapseTargets(NULL),
-        dataSynapseDelays(NULL),
-        dataSynapseWeights(NULL),
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
         dataExpandEventsDebugHost(NULL),
         dataExpandEventsDebugDevice(NULL),
@@ -616,10 +593,6 @@ public:
         dataUnsortedEventsDelaysVerify(NULL),
         dataUnsortedEventsWeightsVerify(NULL),
         dataUnsortedEventCountsVerify(NULL),
-        dataSynapsePointer(NULL),
-        dataSynapseTargets(NULL),
-        dataSynapseDelays(NULL),
-        dataSynapseWeights(NULL),
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
         dataExpandEventsDebugHost(NULL),
         dataExpandEventsDebugDevice(NULL),
@@ -934,6 +907,7 @@ public:
       cl_uint,
       bool,
       SpikeEvents&,
+      Connectome&,
       cl::CommandQueue&
     );
     
@@ -1065,15 +1039,13 @@ public:
     int 
     propagateSpikes
     (
-      unsigned int  totalNeurons,
-      unsigned int  eventQueueSize,
-      neuron_iz_ps  *nrn,
-      int           *ne,
-      DATA_TYPE     *te,
-      unsigned int  *synapsePointer,
-      unsigned int  *synapseTargets,
-      DATA_TYPE     *synapseDelays,
-      DATA_TYPE     *synapseWeights
+      unsigned int,
+      unsigned int,
+      neuron_iz_ps*,
+      int*,
+      DATA_TYPE*,
+      Connectome&,
+      cl::CommandQueue&
     );
     
     int 
@@ -1146,16 +1118,14 @@ public:
     (
       bool,
       bool,
+      bool,
       cl_uint,
       cl_uint,
       unsigned int*,
       unsigned int*,
-      unsigned int*,
-      unsigned int*,
-      DATA_TYPE*,
-      DATA_TYPE*,
       DATA_TYPE*,
       SpikeEvents&,
+      Connectome&,
       cl::CommandQueue&
     );
     

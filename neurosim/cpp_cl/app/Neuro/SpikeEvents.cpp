@@ -198,7 +198,7 @@ SpikeEvents::setEvents
           
         this->dataSpikePackets[packet_index + (this->spikeDatumSize) * i] = spiked_neuron;
           
-        *((CL_DATA_TYPE *)(&(this->dataSpikePackets[packet_index + (this->spikeDatumSize) * i + 1]))) 
+        *((CL_DATA_TYPE *)(&(this->dataSpikePackets[packet_index + (this->spikeDatumSize)*i + 1]))) 
           = spike_time;
           
         currentNeuronIdStart += packetNeuronsPerSpikeCount;
@@ -215,7 +215,7 @@ SpikeEvents::setEvents
 
         this->dataSpikePackets[packet_index + (this->spikeDatumSize) * i] = spiked_neuron;
           
-        *((CL_DATA_TYPE *)(&(this->dataSpikePackets[packet_index + (this->spikeDatumSize) * i + 1]))) 
+        *((CL_DATA_TYPE *)(&(this->dataSpikePackets[packet_index + (this->spikeDatumSize)*i + 1]))) 
           = spike_time;
       }
     }
@@ -237,13 +237,15 @@ SpikeEvents::getSpikeCount
 )
 /**************************************************************************************************/
 {
+#if SPIKE_EVENTS_VALIDATION_ENABLE
   this->isInitialized();
   
   if(packet >= this->spikePackets)
   {
     throw SimException("SpikeEvents::getSpikeCount: packet ID exceeds packet count");
   }
-  
+#endif
+
   getSpikeEvents(queue, CL_TRUE);
   
   return this->dataSpikePacketCounts[packet];
@@ -260,13 +262,15 @@ SpikeEvents::getPastSpikeCount
 )
 /**************************************************************************************************/
 {
+#if SPIKE_EVENTS_VALIDATION_ENABLE
   this->isInitialized();
   
   if(packet >= this->spikePackets)
   {
     throw SimException("SpikeEvents::getPastSpikeCount: packet ID exceeds packet count");
   }
-  
+#endif
+
   this->getPastSpikeEvents(queue, CL_TRUE);
   
   return this->dataPastSpikePacketCounts[packet];
@@ -286,6 +290,7 @@ SpikeEvents::getSpike
 )
 /**************************************************************************************************/
 {
+#if SPIKE_EVENTS_VALIDATION_ENABLE
   this->isInitialized();
   
   if(packet >= this->spikePackets)
@@ -297,6 +302,7 @@ SpikeEvents::getSpike
   {
     throw SimException("SpikeEvents::getSpikeCount: spike ID exceeds spike packet boundary");
   }
+#endif
 
   getSpikeEvents(queue, CL_TRUE);
   
@@ -319,6 +325,7 @@ SpikeEvents::getPastSpike
 )
 /**************************************************************************************************/
 {
+#if SPIKE_EVENTS_VALIDATION_ENABLE
   this->isInitialized();
   
   if(packet >= this->spikePackets)
@@ -330,6 +337,7 @@ SpikeEvents::getPastSpike
   {
     throw SimException("SpikeEvents::getPastSpike: spike ID exceeds spike packet boundary");
   }
+#endif
 
   this->getPastSpikeEvents(queue, CL_TRUE);
   
@@ -366,7 +374,10 @@ SpikeEvents::invalidateEvents
 ()
 /**************************************************************************************************/
 {
+#if SPIKE_EVENTS_VALIDATION_ENABLE
   this->isInitialized();
+#endif
+
   this->dataValid = false;
 }
 /**************************************************************************************************/
@@ -509,7 +520,7 @@ SpikeEvents::storeBuffers
   ENQUEUE_WRITE_BUFFER_O(block, queue, this->dataSpikePacketCountsBuffer, 
     this->dataSpikePacketCountsSizeBytes, this->dataSpikePacketCounts);
     
-  dataValid = true;
+  this->dataValid = true;
 }
 /**************************************************************************************************/
 

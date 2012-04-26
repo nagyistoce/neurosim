@@ -1,6 +1,6 @@
 
-#ifndef SPIKE_EVENTS_H_
-#define SPIKE_EVENTS_H_
+#ifndef CONNECTOME_H_
+#define CONNECTOME_H_
 
 
 
@@ -9,15 +9,15 @@
 
 
 /**
-  @class SpikeEvents
+  @class Connectome
 
-  Models spike events.
+  Models connectome (synaptic connections).
 
   @author Dmitri Yudanov, dxy7370@gmail.com
 
-  @date 2012/04/17
+  @date 2012/04/23
  */
-class SpikeEvents 
+class Connectome 
 {
 /**************************************************************************************************/
   public:  /*public variables*/
@@ -25,8 +25,10 @@ class SpikeEvents
   
   
   
-  cl::Buffer dataSpikePacketsBuffer;
-  cl::Buffer dataSpikePacketCountsBuffer;
+  cl::Buffer dataSynapsePointerBuffer;
+  cl::Buffer dataSynapseTargetsBuffer;
+  cl::Buffer dataSynapseDelaysBuffer;
+  cl::Buffer dataSynapseWeightsBuffer;
   
   
   
@@ -43,25 +45,27 @@ class SpikeEvents
   unsigned int srandCounter;
   
   cl_uint neuronCount;
-  cl_uint spikePacketSize;
-  cl_uint spikePacketSizeWords;
-  cl_uint spikePackets;
-  cl_uint simulationTimeSteps;
-  cl_uint spikeDatumSize;
   
   std::stringstream *dataToSimulationLogFile;
   std::stringstream *dataToReportLogFile;
   
-  cl_uint dataSpikePacketsSize;
-  cl_uint dataSpikePacketsSizeBytes;
-  cl_uint *dataSpikePackets;
+  cl_uint dataSynapsePointerSize;
+  cl_uint dataSynapsePointerSizeBytes;
+  cl_uint* dataSynapsePointer;
   
-  cl_uint dataSpikePacketCountsSize;
-  cl_uint dataSpikePacketCountsSizeBytes;
-  cl_uint *dataSpikePacketCounts;
-
-  cl_uint *dataPastSpikePackets;
-  cl_uint *dataPastSpikePacketCounts;
+  cl_uint dataSynapseTargetsSize;
+  cl_uint dataSynapseTargetsSizeBytes;
+  cl_uint* dataSynapseTargets;
+  
+  cl_uint dataSynapseDelaysSize;
+  cl_uint dataSynapseDelaysSizeBytes;
+  cl_float* dataSynapseDelays;
+  
+  cl_uint dataSynapseWeightsSize;
+  cl_uint dataSynapseWeightsSizeBytes;
+  cl_float* dataSynapseWeights;
+  
+  
   
 /**************************************************************************************************/
   public: /*public methods*/
@@ -73,7 +77,7 @@ class SpikeEvents
   /**
     Constructor.
   */
-  SpikeEvents
+  Connectome
   ();
 /**************************************************************************************************/
 
@@ -83,7 +87,7 @@ class SpikeEvents
   /**
     Destructor.
   */
-  ~SpikeEvents
+  ~Connectome
   ();
 /**************************************************************************************************/
 
@@ -100,10 +104,7 @@ class SpikeEvents
     cl::Device&,
     cl_uint, 
     cl_uint,
-    cl_uint, 
-    cl_uint,
-    cl_uint, 
-    cl_uint,
+    double, 
     struct kernelStatistics*,
     std::stringstream*,
     std::stringstream*
@@ -114,24 +115,10 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Clears all spike events.
-  */
-  void
-  clearEvents
-  (
-    cl::CommandQueue&,
-    cl_bool
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Sets all spike events according to parameters
+    Sets all connections according to parameters
   */
   void 
-  setEvents
+  setConnections
   (
     cl::CommandQueue&,
     cl_bool,
@@ -145,10 +132,10 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Returns current spike count.
+    Returns synapse count.
   */
   cl_uint
-  getSpikeCount
+  getSynapseCount
   (
     cl::CommandQueue&,
     cl_uint
@@ -159,69 +146,19 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Returns the past spike count.
-  */
-  cl_uint
-  getPastSpikeCount
-  (
-    cl::CommandQueue&,
-    cl_uint
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Returns spike datum (spiked neuron and time) by reference for given spike and packet number.
+    Returns synapse datum (target neuron ID, weight, delay) by reference for a given source neurons
+    ID and synapse ID.
   */
   void
-  getSpike
+  getSynapse
   (
     cl::CommandQueue&,
     cl_uint,
     cl_uint,
     cl_uint&,
+    CL_DATA_TYPE&,
     CL_DATA_TYPE&
   );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Returns by reference the past spike datum for given spike and packet number.
-  */
-  void
-  getPastSpike
-  (
-    cl::CommandQueue&,
-    cl_uint,
-    cl_uint,
-    cl_uint&,
-    CL_DATA_TYPE&
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Clears all past spike events.
-  */
-  void 
-  deletePastEvents
-  ();
-/**************************************************************************************************/
-
-
-/**************************************************************************************************/
-  /**
-    Invalidates current spike events (they become past spikes).
-  */
-  void 
-  invalidateEvents
-  ();
 /**************************************************************************************************/
 
 
@@ -234,24 +171,10 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Loads connectome from the device if it is invalid on the host.
   */
   void
-  getSpikeEvents
-  (
-    cl::CommandQueue&,
-    cl_bool
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Saves past spikes and loads current spikes from the device if they are invalid on the host.
-  */
-  void
-  getPastSpikeEvents
+  getConnections
   (
     cl::CommandQueue&,
     cl_bool
@@ -275,7 +198,7 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Stores spike data on device.
+    Stores connectome to the device.
   */
   void
   storeBuffers
