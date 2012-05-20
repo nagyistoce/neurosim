@@ -5,14 +5,13 @@
   <common_config>
     <!--  -->
     <param id="LOG_REPORT">1</param>
-    <param id="TARGET_DEVICE_NAME">'\\"Tahiti;Cayman\\"'</param>
     <param id="PREINITIALIZE_NETWORK_TIME_SLOT_DELTA">50</param>
     <param id="PREINITIALIZE_NETWORK_TIME_SLOT_DELTA_DEVIATION">25.0</param>
     <param id="PREINITIALIZE_NETWORK_PERCENT_INHIBITORY">10.0</param>
     <param id="PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT">0.0</param>
     <param id="PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT">5.0</param>
     <param id="PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE">'\\"neuron_variables_sample.csv\\"'</param>
-    <param id="OVERWRITE_SPIKES_UNTILL_STEP">(2*16)</param>
+    <param id="OVERWRITE_SPIKES_UNTILL_STEP">(17)</param>
     <param id="INJECT_CURRENT_UNTILL_STEP">0</param>
     <!--  -->
   </common_config>
@@ -24,11 +23,21 @@
     <!--  -->
     
     
-    <exe name="0" tag="noskip">
+    <exe name="0" tag="skip">
       <id>Debug1</id>
       <!-- Configuration -->
       <config>
-        <!-- ENABLE_MASK: oct("0b1111111110000000"), oct("0b0000000000000000") -->
+        <param id="TARGET_DEVICE_NAME">'\\"Tahiti;Cayman\\"'</param>
+        <!-- 
+          ENABLE_MASK: 
+          oct("0b1111111110000000"), oct("0b0000000000000000"), oct("0b1000000000000000"),
+          oct("0b0100000000000000"), oct("0b0010000000000000"), oct("0b0001000000000000"),
+          oct("0b0000100000000000"), oct("0b0000010000000000"), oct("0b0000001000000000"),
+          oct("0b0000000100000000"), oct("0b0000000010000000"), oct("0b1000000000000000"),
+          oct("0b1100000000000000"), oct("0b1110000000000000"), oct("0b1111000000000000"),
+          oct("0b1111100000000000"), oct("0b1111110000000000"), oct("0b1111111000000000"),
+          oct("0b1111111100000000"), oct("0b1111111110000000")
+        -->
         <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
         
         <!-- REFERENCE_EVENT_QUEUE_SIZE: 10000 -->
@@ -146,7 +155,7 @@
         </node>
         <node name="VerifyAll">
           <param id="SIMULATION_MODE">0</param>
-          <param id="SIMULATION_TIME_STEPS">100</param>
+          <param id="SIMULATION_TIME_STEPS">20</param>
           <param id="SIMULATION_SNAPSHOT">1</param>
           <result id="PASS">Exit</result>
           <result id="FAIL">Exit</result>
@@ -161,8 +170,8 @@
         </node>
         <node name="Profile">
           <param id="SIMULATION_MODE">2</param>
-          <param id="SIMULATION_TIME_STEPS">120</param>
-          <param id="START_PROFILING_AT_STEP">20</param>
+          <param id="SIMULATION_TIME_STEPS">101</param>
+          <param id="START_PROFILING_AT_STEP">100</param>
           <result id="PASS">Exit</result>
           <result id="FAIL">Exit</result>
         </node>
@@ -177,6 +186,7 @@
       <id>Debug2</id>
       <!-- Configuration -->
       <config>
+        <param id="TARGET_DEVICE_NAME">'\\"Tahiti;Cayman\\"'</param>
         <param id="ENABLE_MASK">oct("0b1100000010000000")</param>
         <param id="SIMULATION_MODE">0</param>
         <param id="SIMULATION_TIME_STEPS">(16*2+1)</param>
@@ -206,7 +216,7 @@
       </flow>
     </exe>
     
-    
+
     <!--  -->
     
     

@@ -7,7 +7,13 @@
 
 
 
+/***************************************************************************************************
+  Includes
+***************************************************************************************************/
+
 #include "Connectome.hpp"
+
+/**************************************************************************************************/
 
 
 
@@ -40,6 +46,8 @@ Connectome::initialize
 (
   cl::Context                         &context,
   cl::Device                          &device,
+  cl::CommandQueue                    &queue,
+  cl_bool                             block,
   cl_uint                             neuronCount,
   cl_uint                             maxConnectionsPerNeuron,
   double                              connectionDeviationRatio,
@@ -55,7 +63,7 @@ Connectome::initialize
   }
   
   this->resetObject = false;
-  this->dataValid = true;
+  this->dataValid = false;
   this->neuronCount = neuronCount;
   this->dataToSimulationLogFile = dataToSimulationLogFile;
   this->dataToReportLogFile = dataToReportLogFile;
@@ -74,7 +82,7 @@ Connectome::initialize
   }
 
   /* allocate memory for synaptic data */
-  cl_uint size = this->dataSynapsePointer[this->neuronCount];
+  size_t size = this->dataSynapsePointer[this->neuronCount];
     
   CALLOC_O(dataSynapseTargets, cl_uint, size);
   REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataSynapseTargets, kernelStats);
@@ -94,6 +102,8 @@ Connectome::initialize
     this->dataSynapseWeightsSizeBytes);
   CREATE_BUFFER_O(context, CL_MEM_READ_ONLY, this->dataSynapsePointerBuffer, 
     this->dataSynapsePointerSizeBytes);
+    
+  this->storeBuffers(queue, block);
 }
 /**************************************************************************************************/
 
@@ -104,9 +114,9 @@ Connectome::setConnections
 (
   cl::CommandQueue    &queue,
   cl_bool             block,
-  double              gabaPercent, //SYNAPSE_GABA_PERCENT
-  double              minDelay, //EXPAND_EVENTS_MIN_DELAY
-  double              maxDelay //EXPAND_EVENTS_MAX_DELAY
+  double              gabaPercent,
+  double              minDelay,
+  double              maxDelay
 )
 /**************************************************************************************************/
 {
@@ -237,7 +247,7 @@ Connectome::getSynapseCount
   }
 #endif
   // Disable temporarely since device doesn't change connectome w/o STDP
-  //getConnections(queue, CL_TRUE);
+  //this->getConnections(queue, CL_TRUE);
 
   cl_uint ptrStart = this->dataSynapsePointer[neuronID];
   cl_uint ptrEnd = this->dataSynapsePointer[neuronID+1];
@@ -279,7 +289,7 @@ Connectome::getSynapse
   }
 #endif
   // Disable temporarely since device doesn't change connectome w/o STDP
-  //getConnections(queue, CL_TRUE);
+  //this->getConnections(queue, CL_TRUE);
   
   cl_uint ptrStart = this->dataSynapsePointer[neuronID];
   cl_uint ptrEnd = this->dataSynapsePointer[neuronID+1];
@@ -308,6 +318,24 @@ Connectome::getSynapse
   targetNeuron = this->dataSynapseTargets[ptr];
   delay = this->dataSynapseDelays[ptr];
   weight = this->dataSynapseWeights[ptr];
+}
+/**************************************************************************************************/
+
+
+
+void 
+Connectome::refresh
+(
+  cl::CommandQueue    &queue
+)
+/**************************************************************************************************/
+{
+#if CONNECTOME_VALIDATION_ENABLE
+  this->isInitialized();
+#endif
+
+  // Disable temporarely since device doesn't change connectome w/o STDP
+  //this->getConnections(queue, CL_TRUE);
 }
 /**************************************************************************************************/
 
@@ -349,6 +377,8 @@ void
 Connectome::reset(bool checkForNull)
 /**************************************************************************************************/
 {
+  try
+  {
   this->resetObject = true;
   this->dataValid = false;
   this->srandSeed = 0;
@@ -399,6 +429,8 @@ Connectome::reset(bool checkForNull)
     this->dataSynapseDelays = NULL;
     this->dataSynapseWeights = NULL;
   }
+  }
+  CATCH(std::cerr, Connectome::reset, throw SimException("Connectome::reset: failed.");)
 }
 /**************************************************************************************************/
 

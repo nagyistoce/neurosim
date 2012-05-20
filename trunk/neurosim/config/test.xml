@@ -60,6 +60,13 @@
     
     <test name="8" tag="general">
       <id>skip</id>
+      <path>config/test_QA.xml</path>
+    </test>
+    
+    <!--  -->
+    
+    <test name="9" tag="general">
+      <id>skip</id>
       <path>config/test_Debug.xml</path>
     </test>
     
