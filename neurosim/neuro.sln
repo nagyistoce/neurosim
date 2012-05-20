@@ -109,6 +109,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "config", "config", "{8963A9
 		config\test_Kernel_Make.xml = config\test_Kernel_Make.xml
 		config\test_Kernel_Scan.xml = config\test_Kernel_Scan.xml
 		config\test_Kernel_Update.xml = config\test_Kernel_Update.xml
+		config\test_QA.xml = config\test_QA.xml
 		config\test_SNN.xml = config\test_SNN.xml
 	EndProjectSection
 EndProject

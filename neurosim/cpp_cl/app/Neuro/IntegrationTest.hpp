@@ -1,30 +1,45 @@
-/* ===============================================================================================
+
+#ifndef NEUROSIM_H_
+#define NEUROSIM_H_
 
 
 
-  =============================================================================================== */
+/***************************************************************************************************
+  Includes
+***************************************************************************************************/
 
-#ifndef INTEGRATION_TEST_H_
-#define INTEGRATION_TEST_H_
+#include "Common.hpp"
+
+/**************************************************************************************************/
 
 
 
-#include "Definitions.hpp"
+/***************************************************************************************************
+  Forward declarations for cyclic dependency
+***************************************************************************************************/
+
+class Connectome;
+class SynapticEvents;
+class SpikeEvents;
+
+/**************************************************************************************************/
 
 
 
 /**
-* IntegrationTest 
-* Class implements OpenCL Gaussian Noise sample
-* Derived from SDKSample base class
-*/
+  @class Neurosim
 
+  Implements SNN simulation.
+
+  @author Dmitri Yudanov, dxy7370@gmail.com
+
+  @date 2011/09/17
+ */
 class IntegrationTest : public SDKSample
 {
     cl::Context context;                    /**< Context */
-    vector<cl::Device> devices;        /**< vector of devices */
-    vector<cl::Device> device;         /**< device to be used */
-    vector<cl::Platform> platforms;    /**< vector of platforms */
+    vector<cl::Device> devices;             /**< vector of devices */
+    vector<cl::Platform> platforms;         /**< vector of platforms */
 
     cl::CommandQueue commandQueue;          /**< command queue */
     
@@ -84,6 +99,10 @@ class IntegrationTest : public SDKSample
 #endif
 
 /**************************************************************************************************/
+    SpikeEvents         spikeEvents;
+    Connectome          connectome;
+    SynapticEvents      synapticEvents;
+/**************************************************************************************************/
 #if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) || SCAN_ENABLE_V01 ||\
      (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
@@ -96,41 +115,6 @@ class IntegrationTest : public SDKSample
     cl_uint dataHistogramGroupEventsVerifySizeBytes;
     cl_uint* dataHistogramGroupEventsVerify;
     cl_uint lmGroupEventsHistogramOutSizeBytes;
-#endif
-/**************************************************************************************************/
-#if EXPAND_EVENTS_ENABLE || GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V02 || \
-    GROUP_EVENTS_ENABLE_V03
-    cl_uint dataUnsortedEventTargetsSize;
-    cl_uint dataUnsortedEventTargetsSizeBytes;
-    cl_uint* dataUnsortedEventTargets;
-    cl::Buffer dataUnsortedEventTargetsBuffer;
-    
-    cl_uint dataUnsortedEventDelaysSize;
-    cl_uint dataUnsortedEventDelaysSizeBytes;
-    cl_uint* dataUnsortedEventDelays;
-    cl::Buffer dataUnsortedEventDelaysBuffer;
-    
-    cl_uint dataUnsortedEventWeightsSize;
-    cl_uint dataUnsortedEventWeightsSizeBytes;
-    cl_uint* dataUnsortedEventWeights;
-    cl::Buffer dataUnsortedEventWeightsBuffer;
-    
-    cl_uint dataUnsortedEventCountsSize;
-    cl_uint dataUnsortedEventCountsSizeBytes;
-    cl_uint* dataUnsortedEventCounts;
-    cl::Buffer dataUnsortedEventCountsBuffer;
-#endif
-/**************************************************************************************************/
-#if ((EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM) || SCAN_ENABLE_V00\
-     || GROUP_EVENTS_ENABLE_V00)
-    cl_uint dataHistogramSize;
-    cl_uint dataHistogramSizeBytes;
-    cl_uint* dataHistogram;
-    cl::Buffer dataHistogramBuffer;
-    
-    cl_uint dataHistogramVerifySize;
-    cl_uint dataHistogramVerifySizeBytes;
-    cl_uint* dataHistogramVerify;
 #endif
 /**************************************************************************************************/
 #if SORT_VERIFY_ENABLE
@@ -173,53 +157,6 @@ class IntegrationTest : public SDKSample
     cl_uint dataErrorGroupEventsSizeBytes;
     cl_uint* dataErrorGroupEvents;
     cl::Buffer dataErrorGroupEventsBuffer;
-#endif
-#endif
-/**************************************************************************************************/
-#if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-    SpikeEvents spikeEvents;
-    Connectome  connectome;
-#endif
-/**************************************************************************************************/
-#if EXPAND_EVENTS_ENABLE
-    cl_uint lmExpandEventsSizeBytes;
-
-    cl_uint dataUnsortedEventsTargetsVerifySize;
-    cl_uint dataUnsortedEventsTargetsVerifySizeBytes;
-    cl_uint* dataUnsortedEventsTargetsVerify;
-    
-    cl_uint dataUnsortedEventsDelaysVerifySize;
-    cl_uint dataUnsortedEventsDelaysVerifySizeBytes;
-    cl_uint* dataUnsortedEventsDelaysVerify;
-    
-    cl_uint dataUnsortedEventsWeightsVerifySize;
-    cl_uint dataUnsortedEventsWeightsVerifySizeBytes;
-    cl_uint* dataUnsortedEventsWeightsVerify;
-
-    cl_uint dataUnsortedEventCountsVerifySize;
-    cl_uint dataUnsortedEventCountsVerifySizeBytes;
-    cl_uint* dataUnsortedEventCountsVerify;
-
-    size_t blockSizeX_KernelExpandEvents;
-    size_t blockSizeY_KernelExpandEvents;
-    cl::Kernel kernelExpandEvents;
-
-#if (EXPAND_EVENTS_DEBUG_ENABLE)
-    cl_uint dataExpandEventsDebugHostSize;
-    cl_uint dataExpandEventsDebugHostSizeBytes;
-    cl_uint* dataExpandEventsDebugHost;
-    cl::Buffer dataExpandEventsDebugHostBuffer;
-    cl_uint dataExpandEventsDebugDeviceSize;
-    cl_uint dataExpandEventsDebugDeviceSizeBytes;
-    cl_uint* dataExpandEventsDebugDevice;
-    cl::Buffer dataExpandEventsDebugDeviceBuffer;
-#endif
-
-#if (EXPAND_EVENTS_ERROR_TRACK_ENABLE)
-    cl_uint dataExpandEventsErrorSize;
-    cl_uint dataExpandEventsErrorSizeBytes;
-    cl_uint* dataExpandEventsError;
-    cl::Buffer dataExpandEventsErrorBuffer;
 #endif
 #endif
 /**************************************************************************************************/
@@ -391,13 +328,16 @@ class IntegrationTest : public SDKSample
 
 public:
 
-    /**
-    * Read bitmap image and allocate host memory
-    * @param inputImageName name of the input file
-    * @return 1 on success and 0 on failure
-    */
-    int allocateHostData();
-    int registerLocalMemory();
+    int 
+    allocateHostData
+    (
+      cl::Device&
+    );
+    
+    int registerLocalMemory
+    (
+      cl::Device&
+    );
 
     /** 
     * Constructor 
@@ -411,34 +351,6 @@ public:
      (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
         dataHistogramGroupEventsTik(NULL),
         dataHistogramGroupEventsVerify(NULL),
-#endif
-/* *** */
-#if EXPAND_EVENTS_ENABLE || GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V02 || \
-    GROUP_EVENTS_ENABLE_V03
-        dataUnsortedEventTargets(NULL),
-        dataUnsortedEventDelays(NULL),
-        dataUnsortedEventWeights(NULL),
-        dataUnsortedEventCounts(NULL),
-#endif
-/* *** */
-#if ((EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM) || SCAN_ENABLE_V00\
-     || GROUP_EVENTS_ENABLE_V00)
-        dataHistogram(NULL),
-        dataHistogramVerify(NULL),
-#endif
-/* *** */
-#if EXPAND_EVENTS_ENABLE
-        dataUnsortedEventsTargetsVerify(NULL),
-        dataUnsortedEventsDelaysVerify(NULL),
-        dataUnsortedEventsWeightsVerify(NULL),
-        dataUnsortedEventCountsVerify(NULL),
-#if (EXPAND_EVENTS_DEBUG_ENABLE)
-        dataExpandEventsDebugHost(NULL),
-        dataExpandEventsDebugDevice(NULL),
-#endif
-#if (EXPAND_EVENTS_ERROR_TRACK_ENABLE)
-        dataExpandEventsError(NULL),
-#endif
 #endif
 /* *** */
 #if SCAN_ENABLE_V00 || SCAN_ENABLE_V01
@@ -514,10 +426,6 @@ public:
 /* *** */
         dummyPointer(NULL)
     {
-#if EXPAND_EVENTS_ENABLE
-      blockSizeX_KernelExpandEvents = EXPAND_EVENTS_WG_SIZE_WI;
-      blockSizeY_KernelExpandEvents = 1;
-#endif
 #if SCAN_ENABLE_V00
       blockSizeX_kernelScanHistogramV00 = SCAN_WG_SIZE_WI;
       blockSizeY_kernelScanHistogramV00 = 1;
@@ -574,34 +482,6 @@ public:
         dataHistogramGroupEventsVerify(NULL),
 #endif
 /* *** */
-#if EXPAND_EVENTS_ENABLE || GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V02 || \
-    GROUP_EVENTS_ENABLE_V03
-        dataUnsortedEventTargets(NULL),
-        dataUnsortedEventDelays(NULL),
-        dataUnsortedEventWeights(NULL),
-        dataUnsortedEventCounts(NULL),
-#endif
-/* *** */
-#if ((EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM) || SCAN_ENABLE_V00\
-     || GROUP_EVENTS_ENABLE_V00)
-        dataHistogram(NULL),
-        dataHistogramVerify(NULL),
-#endif
-/* *** */
-#if EXPAND_EVENTS_ENABLE
-        dataUnsortedEventsTargetsVerify(NULL),
-        dataUnsortedEventsDelaysVerify(NULL),
-        dataUnsortedEventsWeightsVerify(NULL),
-        dataUnsortedEventCountsVerify(NULL),
-#if (EXPAND_EVENTS_DEBUG_ENABLE)
-        dataExpandEventsDebugHost(NULL),
-        dataExpandEventsDebugDevice(NULL),
-#endif
-#if (EXPAND_EVENTS_ERROR_TRACK_ENABLE)
-        dataExpandEventsError(NULL),
-#endif
-#endif
-/* *** */
 #if SCAN_ENABLE_V00 || SCAN_ENABLE_V01
 #if (SCAN_DEBUG_ENABLE)
         dataScanDebugHost(NULL),
@@ -673,12 +553,8 @@ public:
 #endif
 #endif
 /* *** */
-        dummyPointer(NULL)
+    dummyPointer(NULL)
     {
-#if EXPAND_EVENTS_ENABLE
-      blockSizeX_KernelExpandEvents = EXPAND_EVENTS_WG_SIZE_WI;
-      blockSizeY_KernelExpandEvents = 1;
-#endif
 #if SCAN_ENABLE_V00
       blockSizeX_kernelScanHistogramV00 = SCAN_WG_SIZE_WI;
       blockSizeY_kernelScanHistogramV00 = 1;
@@ -738,19 +614,7 @@ public:
     * @return 1 on success and 0 on failure
     */
     int setupCL();
-    
-    int
-    createKernel
-    (
-      cl::Kernel    &kernel,
-      std::string   kernelFileName,
-      const char    *kernelName,
-      std::string   flagsStr,
-      size_t        blockSizeX,
-      size_t        blockSizeY
-    );
-    
-    
+
     bool 
     findTargetDevice
     (
@@ -901,63 +765,12 @@ public:
     );
     
     int initializeExpandEventsData();
-    
-    int verifyKernelExpandEvents
-    (
-      cl_uint,
-      bool,
-      SpikeEvents&,
-      Connectome&,
-      cl::CommandQueue&
-    );
-    
-    int initializeDataForKernelScanHistogramV00(cl_uint timeSlot, cl_uint mode);
-    int verifyKernelScanHistogramV00(cl_uint timeSlot);
+
+    int verifyKernelScanHistogramV00(cl_uint, cl::CommandQueue&);
     
     int initializeDataForKernelScanHistogramV01();
     int verifyKernelScanHistogramV01();
-    
-    int 
-    initializeDataForKernelGroupEventsV00
-    (
-      cl_uint   unsortedEventTimeSlotDelta,
-      double  percentTimeSlotDeltaDeviation,
-      double  percentInh
-    );
-    
-    int 
-    initializeEventBuffers
-    (
-      cl_uint   timeSlots,
-      cl_uint   buffers,
-      cl_uint   bufferSize,
-      cl_uint   neurons,
-      cl_uint   unsortedEventTimeSlotDelta,
-      cl_uint   histogramBitShift,
-      cl_uint   histogramBinMask,
-      cl_uint   histogramTotalBins,
-      cl_uint   histogramBinSize,
-      double    minDelay,
-      double    percentDelayBoarder,
-      double    percentTimeSlotDeltaDeviation,
-      double    percentInh,
-      cl_uint   *dataUnsortedEventCounts,
-      cl_uint   *dataUnsortedEventTargets,
-      cl_uint   *dataUnsortedEventDelays,
-      cl_uint   *dataUnsortedEventWeights,
-      cl_uint   *dataHistogram
-    );
-    
-    int 
-    initializeHistogram
-    (
-      cl_uint   timeSlots,
-      cl_uint   histogramTotalBins,
-      cl_uint   histogramBinSize,
-      cl_uint   eventDestinationBufferSize,
-      cl_uint   *dataHistogram
-    );
-    
+
     int verifyKernelGroupEventsV00(cl_uint keyOffset);
     
     int 
@@ -1160,13 +973,12 @@ public:
       cl_uint,
       cl_uint*,
       cl_uint*,
-      cl_uint*,
-      cl_uint*,
       cl_float*,
       SpikeEvents&,
+      SynapticEvents&,
       cl::CommandQueue&
     );
 #endif
 };
 
-#endif // INTEGRATION_TEST_H_
+#endif // NEUROSIM_H_

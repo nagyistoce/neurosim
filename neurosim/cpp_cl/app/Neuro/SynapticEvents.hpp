@@ -1,6 +1,6 @@
 
-#ifndef SPIKE_EVENTS_H_
-#define SPIKE_EVENTS_H_
+#ifndef SYNAPTIC_EVENTS_H_
+#define SYNAPTIC_EVENTS_H_
 
 
 
@@ -18,44 +18,63 @@
   Class Definitions
 ***************************************************************************************************/
 
-#define SPIKE_EVENTS_VALID_SPIKES         0x1
-#define SPIKE_EVENTS_VALID_EXPAND_DEBUG   0x2
-#define SPIKE_EVENTS_VALID_EXPAND_ERROR   0x4
-
-/**************************************************************************************************/
-
-
-
-/***************************************************************************************************
-  Forward declarations for cyclic dependency
-***************************************************************************************************/
-
-class Connectome;
-class SynapticEvents;
+#define SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS 0x1
+#define SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS       0x2
+#define SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM        0x4
+#define SYNAPTIC_EVENTS_VALID_ALL                   (SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS |\
+                                                     SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS |\
+                                                     SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM)
+#define SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS          1
 
 /**************************************************************************************************/
 
 
 
 /**
-  @class SpikeEvents
+  @class SynapticEvents
 
-  Models spike events.
+  Models synaptic events.
 
   @author Dmitri Yudanov, dxy7370@gmail.com
 
-  @date 2012/04/17
+  @date 2012/05/17
  */
-class SpikeEvents 
+class SynapticEvents 
 {
 /**************************************************************************************************/
   public:  /*public variables*/
 /**************************************************************************************************/
+  
+  
+/*TODO: eventually they have to move to private*/
+  static const int RECENT   = 0;
+  static const int PREVIOUS = 1;
+  
+  cl::Buffer dataUnsortedEventTargetsBuffer;
+  cl::Buffer dataUnsortedEventDelaysBuffer;
+  cl::Buffer dataUnsortedEventWeightsBuffer;
+  cl::Buffer dataUnsortedEventCountsBuffer;
+  cl::Buffer dataHistogramBuffer;
 
-
-
-  cl::Buffer dataSpikePacketsBuffer;
-  cl::Buffer dataSpikePacketCountsBuffer;
+  size_t dataUnsortedEventTargetsSize;
+  size_t dataUnsortedEventTargetsSizeBytes;
+  cl_uint* dataUnsortedEventTargets;
+  
+  size_t dataUnsortedEventDelaysSize;
+  size_t dataUnsortedEventDelaysSizeBytes;
+  cl_uint* dataUnsortedEventDelays;
+  
+  size_t dataUnsortedEventWeightsSize;
+  size_t dataUnsortedEventWeightsSizeBytes;
+  cl_uint* dataUnsortedEventWeights;
+  
+  size_t dataUnsortedEventCountsSize;
+  size_t dataUnsortedEventCountsSizeBytes;
+  cl_uint* dataUnsortedEventCounts;
+  
+  size_t dataHistogramSize;
+  size_t dataHistogramSizeBytes;
+  cl_uint* dataHistogram;
   
 
   
@@ -71,59 +90,25 @@ class SpikeEvents
   unsigned int srandSeed;
   unsigned int srandCounter;
   
-  cl_uint neuronCount;
-  cl_uint spikePacketSize;
-  cl_uint spikePacketSizeWords;
-  cl_uint spikePackets;
-  cl_uint simulationStepSize;
-  cl_uint spikeDatumSize;
+  cl_uint eventBufferCount;
+  cl_uint eventBufferSize;
+  cl_uint timeSlots;
+  cl_uint histogramBinCount;
+  cl_uint histogramBinSize;
   
   std::stringstream *dataToSimulationLogFile;
   std::stringstream *dataToReportLogFile;
-  
-  size_t dataSpikePacketsSize;
-  size_t dataSpikePacketsSizeBytes;
-  cl_uint *dataSpikePackets;
-  
-  size_t dataSpikePacketCountsSize;
-  size_t dataSpikePacketCountsSizeBytes;
-  cl_uint *dataSpikePacketCounts;
 
-  cl_uint *dataPastSpikePackets;
-  cl_uint *dataPastSpikePacketCounts;
-  
-#if EXPAND_EVENTS_ENABLE
-  bool setKernelArguments;
-  cl_uint lmExpandEventsSizeBytes;
-  size_t blockSizeX_KernelExpandEvents;
-  size_t blockSizeY_KernelExpandEvents;
-  cl_uint argNumExpandEvents;
-  cl::Kernel kernelExpandEvents;
-  cl::NDRange *globalThreadsExpandEvents;
-  cl::NDRange *localThreadsExpandEvents;
-  
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_DEBUG_ENABLE)
-  cl_uint dataExpandEventsDebugHostSize;
-  cl_uint dataExpandEventsDebugHostSizeBytes;
-  cl_uint* dataExpandEventsDebugHost;
-  cl::Buffer dataExpandEventsDebugHostBuffer;
-  
-  cl_uint dataExpandEventsDebugDeviceSize;
-  cl_uint dataExpandEventsDebugDeviceSizeBytes;
-  cl_uint* dataExpandEventsDebugDevice;
-  cl::Buffer dataExpandEventsDebugDeviceBuffer;
-#endif
-
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ERROR_TRACK_ENABLE)
-  size_t dataExpandEventsErrorSize;
-  size_t dataExpandEventsErrorSizeBytes;
-  cl_uint* dataExpandEventsError;
-  cl::Buffer dataExpandEventsErrorBuffer;
-#endif
+#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
+  cl_uint* dataPastUnsortedEventCounts;
+  cl_uint* dataPastUnsortedEventTargets;
+  cl_uint* dataPastUnsortedEventDelays;
+  cl_uint* dataPastUnsortedEventWeights;
+  cl_uint* dataPastHistogram;
 #endif
 
 
-
+  
 /**************************************************************************************************/
   public: /*public methods*/
 /**************************************************************************************************/
@@ -134,7 +119,7 @@ class SpikeEvents
   /**
     Constructor.
   */
-  SpikeEvents
+  SynapticEvents
   ();
 /**************************************************************************************************/
 
@@ -144,7 +129,7 @@ class SpikeEvents
   /**
     Destructor.
   */
-  ~SpikeEvents
+  ~SynapticEvents
   ();
 /**************************************************************************************************/
 
@@ -164,7 +149,6 @@ class SpikeEvents
     cl_uint, 
     cl_uint,
     cl_uint, 
-    cl_uint,
     cl_uint, 
     cl_uint,
     struct kernelStatistics*,
@@ -177,13 +161,14 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Clears all spike events.
+    Clears all unsorted synaptic events.
   */
   void
-  clearEvents
+  clearUnsortedEvents
   (
     cl::CommandQueue&,
-    cl_bool
+    cl_bool,
+    cl_uint
   );
 /**************************************************************************************************/
 
@@ -191,13 +176,20 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Sets all spike events according to parameters
+    Initializes values for all unsorted synaptic events according to passed parameters
   */
   void 
-  setEvents
+  setUnsortedEvents
   (
     cl::CommandQueue&,
     cl_bool,
+    cl_bool,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    double,
     double,
     double,
     double
@@ -208,13 +200,15 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Returns current spike count.
+    Returns unsorted event count at specified buffer ID and time slot
   */
   cl_uint
-  getSpikeCount
+  getEventCount
   (
     cl::CommandQueue&,
-    cl_uint
+    cl_uint,
+    cl_uint,
+    const int
   );
 /**************************************************************************************************/
 
@@ -222,13 +216,36 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Returns the past spike count.
+    Returns event data by reference
+  */
+  void
+  getEvent
+  (
+    cl::CommandQueue&,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    const int,
+    cl_uint&,
+    cl_uint&,
+    cl_uint&
+  );
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Returns histogram item
   */
   cl_uint
-  getPastSpikeCount
+  getHistogramItem
   (
     cl::CommandQueue&,
-    cl_uint
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    const int
   );
 /**************************************************************************************************/
 
@@ -236,41 +253,7 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Returns spike datum (spiked neuron and time) by reference for given spike and packet number.
-  */
-  void
-  getSpike
-  (
-    cl::CommandQueue&,
-    cl_uint,
-    cl_uint,
-    cl_uint&,
-    CL_DATA_TYPE&
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Returns by reference the past spike datum for given spike and packet number.
-  */
-  void
-  getPastSpike
-  (
-    cl::CommandQueue&,
-    cl_uint,
-    cl_uint,
-    cl_uint&,
-    CL_DATA_TYPE&
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Invalidates current spike events (they become past spikes).
+    Invalidates current synaptic events.
   */
   void 
   invalidateEvents
@@ -279,123 +262,87 @@ class SpikeEvents
 
 
 
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_DEBUG_ENABLE)
 /**************************************************************************************************/
   /**
-    Invalidates current spike events (they become past spikes).
+    Invalidates current histogram.
   */
   void 
-  invalidateDebug
+  invalidateHistogram
   ();
 /**************************************************************************************************/
-#endif
-
-
-
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ERROR_TRACK_ENABLE)
-/**************************************************************************************************/
-  /**
-    Invalidates current spike events (they become past spikes).
-  */
-  void 
-  invalidateError
-  ();
-/**************************************************************************************************/
-#endif
 
 
 
 /**************************************************************************************************/
   /**
-    Invalidates current spike events (they become past spikes).
+    Assures that the date is up to date.
   */
   void 
   refresh
   (
-    cl::CommandQueue&
+    cl::CommandQueue&,
+    cl_bool
   );
 /**************************************************************************************************/
 
 
 
-#if EXPAND_EVENTS_ENABLE
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Initializes histogram with random values
   */
   void 
-  expand
+  randomizeHistogram
   (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    struct kernelStatistics*,
-#endif
-    cl_uint,
-    cl_uint,
-    SynapticEvents&,
-    Connectome&,
     cl::CommandQueue&,
-    cl::Event&
+    cl_bool,
+    cl_uint
   );
 /**************************************************************************************************/
-#endif
 
 
 
-#if EXPAND_EVENTS_ENABLE
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Returns number of event buffers in this object
   */
-  void 
-  expand
-  (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    struct kernelStatistics*,
-#endif
-    cl_uint,
-    cl_uint,
-    cl_uint,
-    cl_int,
-    double,
-    double,
-    double,
-    double,
-    double,
-    double,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&,
-    cl::Event&
-  );
+  cl_uint 
+  getEventBufferCount
+  ();
 /**************************************************************************************************/
-#endif
 
 
 
-#if EXPAND_EVENTS_ENABLE
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Returns number of event time slots in this object
   */
-  void 
-  expand
-  (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    struct kernelStatistics*,
-#endif
-    cl_uint,
-    cl_uint,
-    cl_uint,
-    double,
-    double,
-    double,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&,
-    cl::Event&
-  );
+  cl_uint 
+  getEventTimeSlots
+  ();
 /**************************************************************************************************/
-#endif
+
+
+
+/**************************************************************************************************/
+  /**
+    Returns number of event buffer size in this object
+  */
+  cl_uint 
+  getEventBufferSize
+  ();
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Returns number of histogram bins in this object
+  */
+  cl_uint 
+  getEventHistogramBinCount
+  ();
+/**************************************************************************************************/
 
 
 
@@ -405,31 +352,45 @@ class SpikeEvents
 
 
 
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_VERIFY_ENABLE)
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Initializes event buffers
   */
   void 
-  verifyExpand
+  initializeEventBuffers
   (
     cl_uint,
-    bool,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    double,
+    double,
+    double,
+    double
   );
 /**************************************************************************************************/
-#endif
 
 
 
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Initializes histogram
+  */
+  void 
+  initializeHistogram
+  (
+    cl_uint
+  );
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Saves past events and loads current events from the device if they are invalid on the host.
   */
   void
-  getData
+  getEventBuffers
   (
     cl::CommandQueue&,
     cl_bool,
@@ -454,7 +415,7 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Stores spike data on device.
+    Stores event data on device.
   */
   void
   storeBuffers

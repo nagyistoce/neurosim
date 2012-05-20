@@ -1,12 +1,20 @@
 
-/*
+#ifndef INC_DEFINITIONS_H
+#define INC_DEFINITIONS_H
+
+
+
+/**
+  @file Definitions.h
 
   Definitions and macros visible in all source files including kernels
 
+  @author Dmitri Yudanov, dxy7370@gmail.com
+
+  @date 2011/09/17
 */
 
-#ifndef INC_DEFINITIONS_H
-#define INC_DEFINITIONS_H
+
 
 /** ############################################################################################# **
 
@@ -34,80 +42,6 @@
 /** ############################################################################################# **
 
   Configuration space. Use this space to overwrite default definitions.
-
-EXPAND_EVENTS:
-#define 	ENABLE_MASK	 	BIN_16(1000,0000,0000,0000)
-#define 	TOTAL_NEURON_BITS	 	17
-#define 	MAX_SYNAPSES_PER_NEURON	 	(24*64)
-#define   SYNAPSE_DEVIATION_RATIO 0.5
-#define 	SPIKE_PACKET_SIZE	 	128
-#define 	EVENT_DATA_BUFFER_SIZE	 	(32*1024)
-#define 	SPIKE_PACKETS	 	512
-#define 	EXPAND_EVENTS_WG_SIZE_WF	 	2
-#define 	EXPAND_EVENTS_TEST_MODE	 	5
-#define 	EXPAND_EVENTS_SPIKE_BUFFER_SIZE	 	128
-#define 	TOLERANCE_MODE	 	0
-#define 	SYNAPTIC_EVENT_BUFFERS	 	64
-#define 	PREINITIALIZE_NETWORK_STATE	 	0
-#define 	EXPAND_EVENTS_INTER_WF_COOPERATION	 	0
-
-#define 	SIMULATION_MODE	 	0
-#define 	EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT	 	(16*2+2)
-#define 	SIMULATION_TIME_STEPS	 	(16*2+1)
-
-//#define 	SIMULATION_MODE	 	4
-//#define 	EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT	 	117
-//#define 	SIMULATION_TIME_STEPS	 	116
-//#define 	START_PROFILING_AT_STEP	 	16
-
-#define 	SIMULATION_MODE	 	5
-#define 	EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT	 	33
-#define 	SIMULATION_TIME_STEPS	 	32
-
-SCAN_V00:
-#define 	ENABLE_MASK	 	BIN_16(0100,0000,0000,0000)
-#define 	SCAN_WG_SIZE_WF   4
-#define 	SYNAPTIC_EVENT_BUFFERS    (2*64)
-#define   SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET 17
-#define   SCAN_OPTIMIZATION_2LEVEL_REDUCE 1
-#define   SCAN_OPTIMIZATION_INTER_WF_CACHE_OFFSET  0
-
-#define 	SIMULATION_MODE   0
-#define 	SIMULATION_TIME_STEPS   (16*2+1)
-
-#define 	SIMULATION_MODE   4
-#define 	SIMULATION_TIME_STEPS   1016
-#define 	START_PROFILING_AT_STEP   16
-
-SCAN_V01:
-#define 	ENABLE_MASK	 	BIN_16(0001,0000,0000,0000)
-#define 	SCAN_WG_SIZE_WF   4
-#define 	SYNAPTIC_EVENT_BUFFERS    (2*64)
-#define 	SIMULATION_MODE   0
-#define 	SIMULATION_TIME_STEPS   (16*2+1)
-//#define 	START_PROFILING_AT_STEP   16
-
-GROUP_EVENTS_V00:
-#define 	ENABLE_MASK   BIN_16(0010,0000,0000,0000)
-#define 	TOTAL_NEURON_BITS   17
-#define 	PREINITIALIZE_NETWORK_STATE   0
-#define 	EVENT_DATA_BUFFER_SIZE   (32*1024)
-#define 	SYNAPTIC_EVENT_BUFFERS   128
-#define 	GROUP_EVENTS_WG_SIZE_WF   4
-#define 	GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG   1
-#define   GROUP_EVENTS_ELEMENTS_PER_WI 4
-#define   GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER 16
-#define   GROUP_EVENTS_OPTIMIZATION_REDUCE_LOOPS 1
-#define   GROUP_EVENTS_OPTIMIZATION_2LEVEL_REDUCE 1
-#define   GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT 1
-#define 	GROUP_EVENTS_TEST_MODE   0
-
-#define 	SIMULATION_MODE   0
-#define 	SIMULATION_TIME_STEPS   (16*2-1)
-
-#define 	SIMULATION_MODE   4
-#define 	SIMULATION_TIME_STEPS   20
-#define 	START_PROFILING_AT_STEP   0
 
 ** ############################################################################################# **/
 
@@ -245,27 +179,60 @@ GROUP_EVENTS_V00:
 /*Memory size and name registration for statistics*/
 #define REGISTER_MEMORY(kernel_name, mem_type, mem_name)\
   {\
+    cl_uint minDataTypeAlignSize = (device).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>();\
+    cl_ulong memMaxAllocactionSize = (device).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();\
+    size_t size = ((mem_name ##SizeBytes)/minDataTypeAlignSize + 1)*minDataTypeAlignSize;\
     switch (mem_type)\
     {\
       case MEM_CONSTANT:\
       {\
-        map<std::string, cl_uint> memSizes = kernelStats.cmSizes[kernel_name];\
-        memSizes[#mem_name] = mem_name ##SizeBytes;\
+        cl_ulong maxConstantMemSize = (device).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();\
+        map<std::string, size_t> memSizes = kernelStats.cmSizes[kernel_name];\
+        memSizes[#mem_name] = size;\
+        memSizes["TOTAL"] += size;\
         kernelStats.cmSizes[kernel_name] = memSizes;\
+        if(memSizes["TOTAL"] > maxConstantMemSize)\
+        {\
+          std::cerr << "Total allocation for constant memory in kernel " << kernel_name\
+          << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
+          << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, "\
+          << ((float)maxConstantMemSize)/(1024.0) << " KB\n";\
+          return SDK_FAILURE;\
+        }\
       }\
         break;\
       case MEM_GLOBAL:\
       {\
-        map<std::string, cl_uint> memSizes = kernelStats.gmSizes[kernel_name];\
-        memSizes[#mem_name] = mem_name ##SizeBytes;\
+        cl_ulong maxGlobalMemSize = (device).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();\
+        map<std::string, size_t> memSizes = kernelStats.gmSizes[kernel_name];\
+        memSizes[#mem_name] = size;\
+        memSizes["TOTAL"] += size;\
         kernelStats.gmSizes[kernel_name] = memSizes;\
+        if(memSizes["TOTAL"] > maxGlobalMemSize)\
+        {\
+          std::cerr << "Total allocation for global memory in kernel " << kernel_name\
+          << ", " << ((float)memSizes["TOTAL"])/(1024.0*1024.0)\
+          << " MB, exceeds CL_DEVICE_GLOBAL_MEM_SIZE, "\
+          << ((float)maxGlobalMemSize)/(1024.0*1024.0) << "\n";\
+          return SDK_FAILURE;\
+        }\
       }\
         break;\
       case MEM_LOCAL:\
       {\
-        map<std::string, cl_uint> memSizes = kernelStats.lmSizes[kernel_name];\
-        memSizes[#mem_name] = mem_name ##SizeBytes;\
+        cl_ulong maxLocalMemSize = (device).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();\
+        map<std::string, size_t> memSizes = kernelStats.lmSizes[kernel_name];\
+        memSizes[#mem_name] = size;\
+        memSizes["TOTAL"] += size;\
         kernelStats.lmSizes[kernel_name] = memSizes;\
+        if(memSizes["TOTAL"] > maxLocalMemSize)\
+        {\
+          std::cout << "Total allocation for local memory in kernel " << kernel_name\
+          << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
+          << " KB, exceeds CL_DEVICE_LOCAL_MEM_SIZE, "\
+          << ((float)maxLocalMemSize)/(1024.0) << " KB\n";\
+          return SDK_FAILURE;\
+        }\
       }\
         break;\
       default:\
@@ -275,31 +242,74 @@ GROUP_EVENTS_V00:
     set<std::string> kernels = kernelStats.kernelNames;\
     kernels.insert(kernel_name);\
     kernelStats.kernelNames = kernels;\
+    \
+    if(size > memMaxAllocactionSize)\
+    {\
+      std::cerr << "REGISTER_MEMORY: Memory object in kernel " << kernel_name\
+      << " with size identifier " << #mem_name << " and size "\
+      << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, "\
+      << ((float)memMaxAllocactionSize)/(1024.0*1024.0);\
+      return SDK_FAILURE;\
+    }\
   }
   
 #define REGISTER_MEMORY_O(device, kernel_name, mem_type, mem_name, kernelStats)\
   {\
+    cl_uint minDataTypeAlignSize = (device).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>();\
+    cl_ulong memMaxAllocactionSize = (device).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();\
+    size_t size = ((mem_name ##SizeBytes)/minDataTypeAlignSize + 1)*minDataTypeAlignSize;\
+    std::stringstream ss;\
     switch (mem_type)\
     {\
       case MEM_CONSTANT:\
       {\
-        map<std::string, cl_uint> memSizes = kernelStats->cmSizes[kernel_name];\
-        memSizes[#mem_name] = mem_name ##SizeBytes;\
+        cl_ulong maxConstantMemSize = (device).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();\
+        map<std::string, size_t> memSizes = kernelStats->cmSizes[kernel_name];\
+        memSizes[#mem_name] = size;\
+        memSizes["TOTAL"] += size;\
         kernelStats->cmSizes[kernel_name] = memSizes;\
+        if(memSizes["TOTAL"] > maxConstantMemSize)\
+        {\
+          ss << "Total allocation for constant memory in kernel " << kernel_name\
+          << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
+          << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, "\
+          << ((float)maxConstantMemSize)/(1024.0) << " KB\n";\
+         throw SimException(ss.str());\
+        }\
       }\
         break;\
       case MEM_GLOBAL:\
       {\
-        map<std::string, cl_uint> memSizes = kernelStats->gmSizes[kernel_name];\
-        memSizes[#mem_name] = mem_name ##SizeBytes;\
+        cl_ulong maxGlobalMemSize = (device).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();\
+        map<std::string, size_t> memSizes = kernelStats->gmSizes[kernel_name];\
+        memSizes[#mem_name] = size;\
+        memSizes["TOTAL"] += size;\
         kernelStats->gmSizes[kernel_name] = memSizes;\
+        if(memSizes["TOTAL"] > maxGlobalMemSize)\
+        {\
+          ss << "Total allocation for global memory in kernel " << kernel_name\
+          << ", " << ((float)memSizes["TOTAL"])/(1024.0*1024.0)\
+          << " MB, exceeds CL_DEVICE_GLOBAL_MEM_SIZE, "\
+          << ((float)maxGlobalMemSize)/(1024.0*1024.0) << "\n";\
+          throw SimException(ss.str());\
+        }\
       }\
         break;\
       case MEM_LOCAL:\
       {\
-        map<std::string, cl_uint> memSizes = kernelStats->lmSizes[kernel_name];\
-        memSizes[#mem_name] = mem_name ##SizeBytes;\
+        cl_ulong maxLocalMemSize = (device).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();\
+        map<std::string, size_t> memSizes = kernelStats->lmSizes[kernel_name];\
+        memSizes[#mem_name] = size;\
+        memSizes["TOTAL"] += size;\
         kernelStats->lmSizes[kernel_name] = memSizes;\
+        if(memSizes["TOTAL"] > maxLocalMemSize)\
+        {\
+          ss << "Total allocation for local memory in kernel " << kernel_name\
+          << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
+          << " KB, exceeds CL_DEVICE_LOCAL_MEM_SIZE, "\
+          << ((float)maxLocalMemSize)/(1024.0) << " KB\n";\
+          throw SimException(ss.str());\
+        }\
       }\
         break;\
       default:\
@@ -310,13 +320,8 @@ GROUP_EVENTS_V00:
     kernels.insert(kernel_name);\
     kernelStats->kernelNames = kernels;\
     \
-    cl_uint minDataTypeAlignSize = (device).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>();\
-    cl_ulong memMaxAllocactionSize = (device).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();\
-    cl_uint size = ((mem_name ##SizeBytes)/minDataTypeAlignSize + 1)*minDataTypeAlignSize;\
-    \
     if(size > memMaxAllocactionSize)\
     {\
-      std::stringstream ss;\
       ss << "REGISTER_MEMORY_O: Memory object in kernel " << kernel_name\
       << " with size identifier " << #mem_name << " and size "\
       << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, "\
@@ -581,6 +586,33 @@ GROUP_EVENTS_V00:
     }\
   }
   
+#define SET_KERNEL_ARG_O(kernel, arg, argNum)\
+  {\
+    cl_int status;\
+    status = kernel.setArg(argNum, arg);\
+    if(status != CL_SUCCESS)\
+    {\
+      std::stringstream ss;\
+      ss << "SET_KERNEL_ARG_O: Failed to set kernel argument #" << argNum << ", "\
+      << #arg << " for kernel " << #kernel << " due to error code " << status << "\n";\
+      throw SimException(ss.str());\
+    }\
+  }
+  
+#define ENQUEUE_KERNEL(kernel, gThreads, lThreads, events, ndrEvt)\
+  {\
+    cl_int status;\
+    status = queue.enqueueNDRangeKernel\
+    (kernel, cl::NullRange, gThreads, lThreads, events, &ndrEvt);\
+    if(status != CL_SUCCESS)\
+    {\
+      std::stringstream ss;\
+      ss << "ENQUEUE_KERNEL: Failed to enqueue kernel " << #kernel << " due to error code " \
+      << status << "\n";\
+      throw SimException(ss.str());\
+    }\
+  }
+  
 /*Define OpenCL 1.2 consants*/
 #if !defined (CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT)
   #define CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT                 (1 << 7)
@@ -593,10 +625,20 @@ GROUP_EVENTS_V00:
   Exceptions
 ***************************************************************************************************/
 
-#define CATCH(message, action)\
+#define CATCH(stream, message, action)\
   catch(SimException& e)\
   {\
-    std::cerr << #message << ": " << e.what() << std::endl;\
+    stream << #message << ": " << e.what() << "\n";\
+    action;\
+  }\
+  catch(exception& e)\
+  {\
+    stream << #message << ": Standard Exception: " << e.what() << "\n";\
+    action;\
+  }\
+  catch (...)\
+  {\
+    stream << #message << ": unknown exception occured" << "\n";\
     action;\
   }
 /**************************************************************************************************/
@@ -701,7 +743,9 @@ GROUP_EVENTS_V00:
   #endif
 #endif
 /*Spike buffer occupancy bounds during overwriting spike packet data*/
-#define OVERWRITE_SPIKES_MIN_MAX_PERCENT                      10.0, 90.0, NULL
+#if !(defined(INITIALIZE_SPIKES_MIN_MAX_PERCENT))
+  #define INITIALIZE_SPIKES_MIN_MAX_PERCENT                    10.0, 20.0, NULL
+#endif
 /*Enable injecting current until defined simulation step. Disabled if -1.
   (useful for initiating abruptly increasin spiking activity during initial steps) */
 #if PREINITIALIZE_NETWORK_STATE
@@ -975,6 +1019,7 @@ GROUP_EVENTS_V00:
 ***************************************************************************************************/
 #define CONNECTOME_VALIDATION_ENABLE                          CLASS_VALIDATION_ENABLE
 #define SPIKE_EVENTS_VALIDATION_ENABLE                        CLASS_VALIDATION_ENABLE
+#define SYNAPTIC_EVENTS_VALIDATION_ENABLE                     CLASS_VALIDATION_ENABLE
 /**************************************************************************************************/
 
 
@@ -997,6 +1042,17 @@ GROUP_EVENTS_V00:
 /*String used to tag statistics relevant to all kernels*/
 #define KERNEL_ALL                                            "All Kernels"
 #define OCL_COMPILER_OPTIONS_FILE_NAME                        "oclCompilerOptions.txt"
+
+#if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
+  #define _aligned_malloc __mingw_aligned_malloc 
+  #define _aligned_free  __mingw_aligned_free 
+#endif
+
+#ifndef _WIN32
+#if defined(__INTEL_COMPILER)
+  #pragma warning(disable : 1125)
+#endif
+#endif
 /**************************************************************************************************/
 
 
@@ -1164,7 +1220,6 @@ GROUP_EVENTS_V00:
                                                               (EXPAND_EVENTS_GRID_SIZE_WG*\
                                                               EXPAND_EVENTS_WG_SIZE_WF))
   /*Spike data structure parameters (data in)*/
-  #define EXPAND_EVENTS_MIN_MAX_SPIKE_PERCENT                 0.0, 10.0, NULL
   #define EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE                SPIKE_PACKET_SIZE
   #define EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS            2
   #define EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS              (EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE *\
@@ -1187,7 +1242,9 @@ GROUP_EVENTS_V00:
   #define EXPAND_EVENTS_TOTAL_NEURONS                         (1<<EXPAND_EVENTS_TOTAL_NEURON_BITS)
   #define EXPAND_EVENTS_MAX_DELAY                             (EXPAND_EVENTS_TIME_SLOTS-\
                                                               SIMULATION_STEP_SIZE)
-
+  /*CONTROL: Minimum event delay latency*/
+  #define EXPAND_EVENTS_MIN_DELAY                             (MINIMUM_PROPAGATION_DELAY)
+  
   /*Histogram of target neurons*/
   #define EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM               1
   #define EXPAND_EVENTS_HISTOGRAM_BIT_SHIFT                   0
@@ -1195,8 +1252,6 @@ GROUP_EVENTS_V00:
   #define EXPAND_EVENTS_HISTOGRAM_BIN_MASK                    0xF /*Must be aligned with EXPAND_EVENTS_HISTOGRAM_BIN_BITS*/
   #define EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS                  (1<<EXPAND_EVENTS_HISTOGRAM_BIN_BITS)
   
-  /*CONTROL: Minimum event delay latency*/
-  #define EXPAND_EVENTS_MIN_DELAY                             (MINIMUM_PROPAGATION_DELAY)
 /*
                                               Local memory layout
 */
@@ -1229,7 +1284,8 @@ GROUP_EVENTS_V00:
   #define HISTOGRAM(i)                                        cache[i]
   #define TIME_SLOT_COUNTERS(i)                               cache[EXPAND_EVENTS_CACHE_OFFSET_1 + i]
   #define SPIKE_DATA(i)                                       cache[EXPAND_EVENTS_CACHE_OFFSET_2 + i]
-  #else
+  
+  #else /*EXPAND_EVENTS_INTER_WF_COOPERATION > 0*/
 
   /*Local memory offsets*/
   #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
@@ -1323,6 +1379,12 @@ GROUP_EVENTS_V00:
   /*Histogram of target neurons*/
   /*CONTROL: Max number of time slots (define the longest delay)*/
   #define SCAN_HISTOGRAM_TIME_SLOTS                           EVENT_TIME_SLOTS
+  
+  /*Synaptic event buffer parameters*/
+  /*CONTROL: number of synaptic event buffers, which store synaptic events*/
+  #define SCAN_SYNAPTIC_EVENT_BUFFERS                         SYNAPTIC_EVENT_BUFFERS
+  /*CONTROL: size of event data buffer*/
+  #define SCAN_EVENT_DATA_MAX_SRC_BUFFER_SIZE                 EVENT_DATA_BUFFER_SIZE
 /*
                                               Optimizations
 */
@@ -2080,6 +2142,47 @@ GROUP_EVENTS_V00:
 #endif
 #if EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS != UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS
   #error (EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS != UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS)
+#endif
+#endif
+/*If both EXPAND_EVENTS_ENABLE and GROUP_EVENTS_ENABLE_VXX are enabled*/
+#if (EXPAND_EVENTS_ENABLE && (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 ||\
+    GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03))
+#if (GROUP_EVENTS_TIME_SLOTS != EXPAND_EVENTS_TIME_SLOTS)
+  #error (GROUP_EVENTS_TIME_SLOTS != EXPAND_EVENTS_TIME_SLOTS)
+#endif
+#if (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
+  #error (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
+#endif
+#if (GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
+  #error (GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
+#endif
+#if (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS != EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS)
+  #error (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS != EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS)
+#endif
+#if (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
+  #error (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
+#endif
+#if (GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS != EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
+  #error (GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS != EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
+#endif
+#endif
+/*If both SCAN_ENABLE_V00 and GROUP_EVENTS_ENABLE_VXX are enabled*/
+#if (SCAN_ENABLE_V00 && (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 ||\
+    GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03))
+#if (GROUP_EVENTS_TIME_SLOTS != SCAN_HISTOGRAM_TIME_SLOTS)
+  #error (GROUP_EVENTS_TIME_SLOTS != SCAN_HISTOGRAM_TIME_SLOTS)
+#endif
+#if (SCAN_SYNAPTIC_EVENT_BUFFERS != GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS)
+  #error (SCAN_SYNAPTIC_EVENT_BUFFERS != GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS)
+#endif
+#if (SCAN_EVENT_DATA_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE)
+  #error (SCAN_EVENT_DATA_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE)
+#endif
+#if (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
+  #error (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
+#endif
+#if (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V00)
+  #error (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V00)
 #endif
 #endif
 

@@ -113,9 +113,9 @@ our $APP_BIN_DIR = "$APP_SRC_DIR/bin/$TARGET_ARCHITECTURE";
 our @APP_INCL_DIR = ("include", "include/$UTIL_NAME", "include/GL");
 our $APP_INCL_DIR = "";
 our @APP_SRC_C = ("iz_util.c", "integ_util.c", "IntegrationTest.cpp", "SpikeEvents.cpp", 
-  "Connectome.cpp");
+  "Connectome.cpp", "SynapticEvents.cpp", "Common.cpp");
 our @APP_SRC_H = ("iz_util.h", "integ_util.h", "IntegrationTest.hpp", "SpikeEvents.hpp",
-  "Connectome.hpp", "Definitions.h", "Definitions.hpp");
+  "Connectome.hpp", "SynapticEvents.hpp", "Definitions.h", "Common.hpp");
 our @APP_KERNEL_FILE_NAMES = ("Kernel_ExpandEvents.cl", "Kernel_GroupEvents.cl", 
   "Kernel_MakeEventPointers.cl", "Kernel_ScanHistogram.cl", "Kernel_UpdateNeurons.cl",
   "Kernel_Primitives.cl", "Kernel_Primitives.h");
@@ -518,10 +518,13 @@ sub executeFlow
   
   foreach my $k (@APP_CURRENT_CONFIG_KEYS)
   {
+    if(!defined($APP_CURRENT_CONFIG{$k}))
+    {
+      die "\nDetected undefined value for configuration parameter: ".$k."\n";
+    }
+    
     $config .= (" ".$D." ".$k."=".$APP_CURRENT_CONFIG{$k});
   }
-
-  print "Executing test config: ".$config."\n"; 
 
   # reset report
   @APP_REPORT{(keys %APP_REPORT)} = ("") x (keys %APP_REPORT);
@@ -537,7 +540,8 @@ sub executeFlow
     }
 
     # Execute node
-    print "Executing node: ".$node."\n";
+    print "Executing test configuration: ".$node.":\n".$config.$flow_config."\n";
+    
     my $result = &compileAndRunApp($config.$flow_config, $node, $ts);
     
     # Get next node based on results

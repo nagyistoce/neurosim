@@ -4,7 +4,13 @@
 
 
 
-#include "Definitions.hpp"
+/***************************************************************************************************
+  Includes
+***************************************************************************************************/
+
+#include "Common.hpp"
+
+/**************************************************************************************************/
 
 
 
@@ -49,20 +55,20 @@ class Connectome
   std::stringstream *dataToSimulationLogFile;
   std::stringstream *dataToReportLogFile;
   
-  cl_uint dataSynapsePointerSize;
-  cl_uint dataSynapsePointerSizeBytes;
+  size_t dataSynapsePointerSize;
+  size_t dataSynapsePointerSizeBytes;
   cl_uint* dataSynapsePointer;
   
-  cl_uint dataSynapseTargetsSize;
-  cl_uint dataSynapseTargetsSizeBytes;
+  size_t dataSynapseTargetsSize;
+  size_t dataSynapseTargetsSizeBytes;
   cl_uint* dataSynapseTargets;
   
-  cl_uint dataSynapseDelaysSize;
-  cl_uint dataSynapseDelaysSizeBytes;
+  size_t dataSynapseDelaysSize;
+  size_t dataSynapseDelaysSizeBytes;
   cl_float* dataSynapseDelays;
   
-  cl_uint dataSynapseWeightsSize;
-  cl_uint dataSynapseWeightsSizeBytes;
+  size_t dataSynapseWeightsSize;
+  size_t dataSynapseWeightsSizeBytes;
   cl_float* dataSynapseWeights;
   
   
@@ -102,6 +108,8 @@ class Connectome
   (
     cl::Context&,
     cl::Device&,
+    cl::CommandQueue&,
+    cl_bool,
     cl_uint, 
     cl_uint,
     double, 
@@ -158,6 +166,19 @@ class Connectome
     cl_uint&,
     CL_DATA_TYPE&,
     CL_DATA_TYPE&
+  );
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Invalidates current spike events (they become past spikes).
+  */
+  void 
+  refresh
+  (
+    cl::CommandQueue&
   );
 /**************************************************************************************************/
 
