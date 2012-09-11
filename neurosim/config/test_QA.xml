@@ -29,7 +29,7 @@
       <config>
         <param id="TARGET_DEVICE_NAME">'\\"Tahiti\\"'</param>
         
-        <!-- ENABLE_MASK: oct("0b1111111110000000") -->
+        <!-- ENABLE_MASK: oct("0b1000000000000000"),oct("0b0100000000000000"),oct("0b0010000000000000"),oct("0b0001000000000000"),oct("0b0000100000000000"),oct("0b0000010000000000"),oct("0b0000001000000000"),oct("0b0000000100000000"),oct("0b0000000010000000"),oct("0b1111111100000000"),oct("0b1011111110000000") -->
         <param id="ENABLE_MASK">oct("0b1000000000000000"),oct("0b0100000000000000"),oct("0b0010000000000000"),oct("0b0001000000000000"),oct("0b0000100000000000"),oct("0b0000010000000000"),oct("0b0000001000000000"),oct("0b0000000100000000"),oct("0b0000000010000000"),oct("0b1111111100000000"),oct("0b1011111110000000")</param>
 
         <!-- PREINITIALIZE_NETWORK_STATE: 1 -->
@@ -482,6 +482,7 @@
       <param id="Average Events/Iteration"></param>
       <param id="Average Spikes/Iteration"></param>
       <param id="Total Time"></param>
+      <param id="Result"></param>
       <param id="Kernel kernelExpandEvents Total Time"></param>
       <param id="Kernel kernelExpandEvents Average Time"></param>
       <param id="Kernel kernelExpandEvents Execution Count"></param>

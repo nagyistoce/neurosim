@@ -18,6 +18,7 @@
   Forward declarations for cyclic dependency
 ***************************************************************************************************/
 
+class OperatorScan;
 class Connectome;
 class SynapticEvents;
 class SpikeEvents;
@@ -37,6 +38,16 @@ class SpikeEvents;
  */
 class IntegrationTest : public SDKSample
 {
+/**************************************************************************************************/
+  public:  /*public variables*/
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  private:  /*private variables*/
+/**************************************************************************************************/
+
     cl::Context context;                    /**< Context */
     vector<cl::Device> devices;             /**< vector of devices */
     vector<cl::Platform> platforms;         /**< vector of platforms */
@@ -46,8 +57,6 @@ class IntegrationTest : public SDKSample
     kernelStatistics kernelStats;                 /**<Storage for memory stats*/
     cl_double setupTime;                    /**< time taken to setup OpenCL resources and building kernel */
     cl_double kernelTime;                   /**< time taken to run kernel and read result back */
-    int iterations;                         /**< Number of iterations for kernel execution */
-    int warmupcount;
     cl_uint currentTimeStep;
     cl_uint currentTimeSlot;
     
@@ -74,7 +83,7 @@ class IntegrationTest : public SDKSample
 #ifdef WIN32
   __int64 current, performanceFrequency;
 #endif
-    
+
 #if (LOG_MODEL_VARIABLES)
     std::ofstream     *traceFile;
     std::stringstream *dataToTraceFile;
@@ -99,11 +108,12 @@ class IntegrationTest : public SDKSample
 #endif
 
 /**************************************************************************************************/
+    OperatorScan        operatorScan;
     SpikeEvents         spikeEvents;
     Connectome          connectome;
     SynapticEvents      synapticEvents;
 /**************************************************************************************************/
-#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) || SCAN_ENABLE_V01 ||\
+#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
@@ -160,42 +170,10 @@ class IntegrationTest : public SDKSample
 #endif
 #endif
 /**************************************************************************************************/
-#if SCAN_ENABLE_V00 || SCAN_ENABLE_V01
-    cl_uint lmScanDataSizeBytes;
-#if (SCAN_DEBUG_ENABLE)
-    cl_uint dataScanDebugHostSize;
-    cl_uint dataScanDebugHostSizeBytes;
-    cl_uint* dataScanDebugHost;
-    cl::Buffer dataScanDebugHostBuffer;
-    cl_uint dataScanDebugDeviceSize;
-    cl_uint dataScanDebugDeviceSizeBytes;
-    cl_uint* dataScanDebugDevice;
-    cl::Buffer dataScanDebugDeviceBuffer;
-#endif
-#if (SCAN_ERROR_TRACK_ENABLE)
-    cl_uint dataScanErrorSize;
-    cl_uint dataScanErrorSizeBytes;
-    cl_uint* dataScanError;
-    cl::Buffer dataScanErrorBuffer;
-#endif
-#endif
-/**************************************************************************************************/
-#if SCAN_ENABLE_V00
-    cl::Kernel kernelScanHistogramV00;
-    size_t blockSizeX_kernelScanHistogramV00;
-    size_t blockSizeY_kernelScanHistogramV00;
-#endif
-/**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V00
     cl::Kernel kernelGroupEventsV00;
     size_t blockSizeX_kernelGroupEventsV00;
     size_t blockSizeY_kernelGroupEventsV00;
-#endif
-/**************************************************************************************************/
-#if SCAN_ENABLE_V01
-    cl::Kernel kernelScanHistogramV01;
-    size_t blockSizeX_kernelScanHistogramV01;
-    size_t blockSizeY_kernelScanHistogramV01;
 #endif
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
@@ -326,7 +304,11 @@ class IntegrationTest : public SDKSample
 #endif
 /**************************************************************************************************/
 
-public:
+
+
+/**************************************************************************************************/
+  public: /*public methods*/
+/**************************************************************************************************/
 
     int 
     allocateHostData
@@ -345,22 +327,12 @@ public:
     * @param name name of sample (string)
     */
     IntegrationTest(std::string name) : SDKSample(name),
-#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) || SCAN_ENABLE_V01 ||\
+#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
         dataHistogramGroupEventsTik(NULL),
         dataHistogramGroupEventsVerify(NULL),
-#endif
-/* *** */
-#if SCAN_ENABLE_V00 || SCAN_ENABLE_V01
-#if (SCAN_DEBUG_ENABLE)
-        dataScanDebugHost(NULL),
-        dataScanDebugDevice(NULL),
-#endif
-#if (SCAN_ERROR_TRACK_ENABLE)
-        dataScanError(NULL),
-#endif
 #endif
 /* *** */
 #if SORT_VERIFY_ENABLE
@@ -426,17 +398,9 @@ public:
 /* *** */
         dummyPointer(NULL)
     {
-#if SCAN_ENABLE_V00
-      blockSizeX_kernelScanHistogramV00 = SCAN_WG_SIZE_WI;
-      blockSizeY_kernelScanHistogramV00 = 1;
-#endif
 #if GROUP_EVENTS_ENABLE_V00
       blockSizeX_kernelGroupEventsV00 = GROUP_EVENTS_WG_SIZE_WI;
       blockSizeY_kernelGroupEventsV00 = 1;
-#endif
-#if SCAN_ENABLE_V01
-      blockSizeX_kernelScanHistogramV01 = SCAN_WG_SIZE_WI;
-      blockSizeY_kernelScanHistogramV01 = 1;
 #endif
 #if GROUP_EVENTS_ENABLE_V01
       blockSizeX_kernelGroupEventsV01 = GROUP_EVENTS_WG_SIZE_WI;
@@ -462,8 +426,6 @@ public:
       blockSizeX_kernelUpdateNeuronsV00 = UPDATE_NEURONS_WG_SIZE_WI_V00;
       blockSizeY_kernelUpdateNeuronsV00 = 1;
 #endif
-      iterations = 1;
-      warmupcount = 0;
       currentTimeStep = 0;
       currentTimeSlot = 0;
     }
@@ -474,22 +436,12 @@ public:
     * @param name name of sample (const char*)
     */
     IntegrationTest(const char* name) : SDKSample(name),
-#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) || SCAN_ENABLE_V01 ||\
+#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
      (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
         dataHistogramGroupEventsTik(NULL),
         dataHistogramGroupEventsVerify(NULL),
-#endif
-/* *** */
-#if SCAN_ENABLE_V00 || SCAN_ENABLE_V01
-#if (SCAN_DEBUG_ENABLE)
-        dataScanDebugHost(NULL),
-        dataScanDebugDevice(NULL),
-#endif
-#if (SCAN_ERROR_TRACK_ENABLE)
-        dataScanError(NULL),
-#endif
 #endif
 /* *** */
 #if SORT_VERIFY_ENABLE
@@ -555,17 +507,9 @@ public:
 /* *** */
     dummyPointer(NULL)
     {
-#if SCAN_ENABLE_V00
-      blockSizeX_kernelScanHistogramV00 = SCAN_WG_SIZE_WI;
-      blockSizeY_kernelScanHistogramV00 = 1;
-#endif
 #if GROUP_EVENTS_ENABLE_V00
       blockSizeX_kernelGroupEventsV00 = GROUP_EVENTS_WG_SIZE_WI;
       blockSizeY_kernelGroupEventsV00 = 1;
-#endif
-#if SCAN_ENABLE_V01
-      blockSizeX_kernelScanHistogramV01 = SCAN_WG_SIZE_WI;
-      blockSizeY_kernelScanHistogramV01 = 1;
 #endif
 #if GROUP_EVENTS_ENABLE_V01
       blockSizeX_kernelGroupEventsV01 = GROUP_EVENTS_WG_SIZE_WI;
@@ -591,8 +535,6 @@ public:
       blockSizeX_kernelUpdateNeuronsV00 = UPDATE_NEURONS_WG_SIZE_WI_V00;
       blockSizeY_kernelUpdateNeuronsV00 = 1;
 #endif
-      iterations = 1;
-      warmupcount = 0;
       currentTimeStep = 0;
       currentTimeSlot = 0;
     }
@@ -622,14 +564,6 @@ public:
       const char                          *targetDevices,
       std::vector<cl::Device>::iterator   *d
     );
-
-    /**
-    * Set values for kernels' arguments, enqueue calls to the kernels
-    * on to the command queue, wait till end of kernel execution.
-    * Get kernel start and end time if timing is enabled
-    * @return 1 on success and 0 on failure
-    */
-    int runCLKernels();
 
     /**
     * Override from SDKSample. Print sample stats.
@@ -670,6 +604,11 @@ public:
     * TODO: Add description
     */
     int getPlatformStats();
+    
+    /**
+    * TODO: Add description
+    */
+    int execute();
     
     /**
     * Verification/initialization methods for some kernel tests
@@ -764,13 +703,6 @@ public:
       cl_uint level
     );
     
-    int initializeExpandEventsData();
-
-    int verifyKernelScanHistogramV00(cl_uint, cl::CommandQueue&);
-    
-    int initializeDataForKernelScanHistogramV01();
-    int verifyKernelScanHistogramV01();
-
     int verifyKernelGroupEventsV00(cl_uint keyOffset);
     
     int 

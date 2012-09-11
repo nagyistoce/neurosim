@@ -1,6 +1,6 @@
 
-#ifndef SPIKE_EVENTS_H_
-#define SPIKE_EVENTS_H_
+#ifndef OPERATOR_SCAN_H_
+#define OPERATOR_SCAN_H_
 
 
 
@@ -15,111 +15,116 @@
 
 
 /***************************************************************************************************
-  Class Preprocessor Definitions
+  Class-scope Preprocessor Definitions
 ***************************************************************************************************/
 
-#define SPIKE_EVENTS_VALID_SPIKES         0x1
-#define SPIKE_EVENTS_VALID_EXPAND_DEBUG   0x2
-#define SPIKE_EVENTS_VALID_EXPAND_ERROR   0x4
-
-/**************************************************************************************************/
-
-
-
-/***************************************************************************************************
-  Forward declarations for cyclic dependency
-***************************************************************************************************/
-
-class Connectome;
-class SynapticEvents;
+#define OPERATOR_SCAN_VALID_DEBUG             0x1
+#define OPERATOR_SCAN_VALID_ERROR             0x2
+#define OPERATOR_SCAN_VALID_UT_V00_HISTOGRAM  0x4
+#define OPERATOR_SCAN_VALID_UT_V01_HISTOGRAM  0x8
+#define OPERATOR_SCAN_VALID_ALL               (OPERATOR_SCAN_VALID_DEBUG |\
+                                              OPERATOR_SCAN_VALID_ERROR |\
+                                              OPERATOR_SCAN_VALID_UT_V00_HISTOGRAM |\
+                                              OPERATOR_SCAN_VALID_UT_V01_HISTOGRAM)
 
 /**************************************************************************************************/
 
 
 
 /**
-  @class SpikeEvents
+  @class OperatorScan
 
-  Models spike events.
+  Prefix sum operation.
 
   @author Dmitri Yudanov, dxy7370@gmail.com
 
-  @date 2012/04/17
+  @date 2012/09/01
  */
-class SpikeEvents 
+class OperatorScan 
 {
 /**************************************************************************************************/
   public:  /*public variables*/
 /**************************************************************************************************/
 
-
-
-  cl::Buffer dataSpikePacketsBuffer;
-  cl::Buffer dataSpikePacketCountsBuffer;
+#if (SCAN_ENABLE_V00 || SCAN_ENABLE_V01)
+  size_t lmScanDataSizeBytes;
   
+#if (SCAN_DEBUG_ENABLE)
+  size_t dataScanDebugHostSize;
+  size_t dataScanDebugHostSizeBytes;
+  cl_uint* dataScanDebugHost;
+  cl::Buffer dataScanDebugHostBuffer;
+  
+  size_t dataScanDebugDeviceSize;
+  size_t dataScanDebugDeviceSizeBytes;
+  cl_uint* dataScanDebugDevice;
+  cl::Buffer dataScanDebugDeviceBuffer;
+#endif
 
+#if (SCAN_ERROR_TRACK_ENABLE)
+  size_t dataScanErrorSize;
+  size_t dataScanErrorSizeBytes;
+  cl_uint* dataScanError;
+  cl::Buffer dataScanErrorBuffer;
+#endif
+#endif
   
 /**************************************************************************************************/
   private:  /*private variables*/
 /**************************************************************************************************/
 
-
-
   bool resetObject;
   cl_uint dataValid;
-  
-  unsigned int srandSeed;
-  unsigned int srandCounter;
-  
-  cl_uint neuronCount;
-  cl_uint spikePacketSize;
-  cl_uint spikePacketSizeWords;
-  cl_uint spikePackets;
-  cl_uint simulationStepSize;
-  cl_uint spikeDatumSize;
-  
   std::stringstream *dataToSimulationLogFile;
   std::stringstream *dataToReportLogFile;
   
-  size_t dataSpikePacketsSize;
-  size_t dataSpikePacketsSizeBytes;
-  cl_uint *dataSpikePackets;
+#if (SCAN_ENABLE_UNIT_TEST_V00 || SCAN_ENABLE_UNIT_TEST_V01)
+  unsigned int srandSeed;
+  unsigned int srandCounter;
+#endif
   
-  size_t dataSpikePacketCountsSize;
-  size_t dataSpikePacketCountsSizeBytes;
-  cl_uint *dataSpikePacketCounts;
-
-  cl_uint *dataPastSpikePackets;
-  cl_uint *dataPastSpikePacketCounts;
-  
-#if EXPAND_EVENTS_ENABLE
-  bool setKernelArguments;
-  cl_uint lmExpandEventsSizeBytes;
-  size_t blockSizeX_KernelExpandEvents;
-  size_t blockSizeY_KernelExpandEvents;
-  cl_uint argNumExpandEvents;
-  cl::Kernel kernelExpandEvents;
-  cl::NDRange *globalThreadsExpandEvents;
-  cl::NDRange *localThreadsExpandEvents;
-  
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_DEBUG_ENABLE)
-  size_t dataExpandEventsDebugHostSize;
-  size_t dataExpandEventsDebugHostSizeBytes;
-  cl_uint* dataExpandEventsDebugHost;
-  cl::Buffer dataExpandEventsDebugHostBuffer;
-  
-  size_t dataExpandEventsDebugDeviceSize;
-  size_t dataExpandEventsDebugDeviceSizeBytes;
-  cl_uint* dataExpandEventsDebugDevice;
-  cl::Buffer dataExpandEventsDebugDeviceBuffer;
+#if SCAN_ENABLE_V00
+  bool setKernelArguments_v00;
+  size_t blockSizeX_kernelScanHistogramV00;
+  size_t blockSizeY_kernelScanHistogramV00;
+  cl_uint argNumScan00;
+  cl::Kernel kernelScanHistogramV00;
+  cl::NDRange *globalThreadsScanV00;
+  cl::NDRange *localThreadsScanV00;
 #endif
 
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ERROR_TRACK_ENABLE)
-  size_t dataExpandEventsErrorSize;
-  size_t dataExpandEventsErrorSizeBytes;
-  cl_uint* dataExpandEventsError;
-  cl::Buffer dataExpandEventsErrorBuffer;
+#if (SCAN_ENABLE_UNIT_TEST_V00)
+  bool initDataUnitTest_v00;
+  cl_uint timeSlots;
+  cl_uint histogramBinCount_v00;
+  cl_uint histogramBinSize_v00;
+  size_t dataHistogramV00Size;
+  size_t dataHistogramV00SizeBytes;
+  cl_uint* dataHistogramV00;
+  cl_uint* dataPastHistogramV00;
+  cl::Buffer dataHistogramV00Buffer;
 #endif
+
+#if SCAN_ENABLE_V01
+  bool setKernelArguments_v01;
+  size_t blockSizeX_kernelScanHistogramV01;
+  size_t blockSizeY_kernelScanHistogramV01;
+  cl_uint argNumScan01;
+  cl::Kernel kernelScanHistogramV01;
+  cl::NDRange *globalThreadsScanV01;
+  cl::NDRange *localThreadsScanV01;
+#endif
+
+#if (SCAN_ENABLE_UNIT_TEST_V01)
+  bool initDataUnitTest_v01;
+  cl_uint histogramBinBackets;
+  cl_uint histogramBinCount_v01;
+  cl_uint histogramBinSize_v01;
+  size_t dataHistogramV01Size;
+  size_t dataHistogramV01SizeBytes;
+  cl_uint* dataHistogramV01;
+  cl_uint* dataPastHistogramV01;
+  cl::Buffer dataHistogramV01Buffer;
 #endif
 
 
@@ -134,7 +139,7 @@ class SpikeEvents
   /**
     Constructor.
   */
-  SpikeEvents
+  OperatorScan
   ();
 /**************************************************************************************************/
 
@@ -144,7 +149,7 @@ class SpikeEvents
   /**
     Destructor.
   */
-  ~SpikeEvents
+  ~OperatorScan
   ();
 /**************************************************************************************************/
 
@@ -161,12 +166,6 @@ class SpikeEvents
     cl::Device&,
     cl::CommandQueue&,
     cl_bool,
-    cl_uint, 
-    cl_uint,
-    cl_uint, 
-    cl_uint,
-    cl_uint, 
-    cl_uint,
     struct kernelStatistics*,
     std::stringstream*,
     std::stringstream*
@@ -177,225 +176,227 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Clears all spike events.
+    Invalidates debug data on the host.
   */
-  void
-  clearEvents
-  (
-    cl::CommandQueue&,
-    cl_bool
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Sets all spike events according to parameters
-  */
-  void 
-  setEvents
-  (
-    cl::CommandQueue&,
-    cl_bool,
-    double,
-    double,
-    double
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Returns current spike count.
-  */
-  cl_uint
-  getSpikeCount
-  (
-    cl::CommandQueue&,
-    cl_uint
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Returns the past spike count.
-  */
-  cl_uint
-  getPastSpikeCount
-  (
-    cl::CommandQueue&,
-    cl_uint
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Returns spike datum (spiked neuron and time) by reference for given spike and packet number.
-  */
-  void
-  getSpike
-  (
-    cl::CommandQueue&,
-    cl_uint,
-    cl_uint,
-    cl_uint&,
-    CL_DATA_TYPE&
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Returns by reference the past spike datum for given spike and packet number.
-  */
-  void
-  getPastSpike
-  (
-    cl::CommandQueue&,
-    cl_uint,
-    cl_uint,
-    cl_uint&,
-    CL_DATA_TYPE&
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Invalidates current spike events (they become past spikes).
-  */
-  void 
-  invalidateEvents
-  ();
-/**************************************************************************************************/
-
-
-
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_DEBUG_ENABLE)
-/**************************************************************************************************/
-  /**
-    Invalidates current spike events (they become past spikes).
-  */
+#if ((SCAN_ENABLE_V00 || SCAN_ENABLE_V01) && SCAN_DEBUG_ENABLE)
   void 
   invalidateDebug
   ();
-/**************************************************************************************************/
 #endif
+/**************************************************************************************************/
 
 
 
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ERROR_TRACK_ENABLE)
 /**************************************************************************************************/
   /**
-    Invalidates current spike events (they become past spikes).
+    Invalidates error data on the host.
   */
+#if ((SCAN_ENABLE_V00 || SCAN_ENABLE_V01) && SCAN_ERROR_TRACK_ENABLE)
   void 
   invalidateError
   ();
-/**************************************************************************************************/
 #endif
+/**************************************************************************************************/
 
 
 
 /**************************************************************************************************/
   /**
-    Invalidates current spike events (they become past spikes).
+    Invalidates histogram data on the host.
   */
+#if (SCAN_ENABLE_UNIT_TEST_V00)
   void 
-  refresh
+  invalidateUnitTestData_v00
+  ();
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Invalidates histogram data on the host.
+  */
+#if (SCAN_ENABLE_UNIT_TEST_V01)
+  void 
+  invalidateUnitTestData_v01
+  ();
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Performs scan operation.
+  */
+#if SCAN_ENABLE_V00
+  void 
+  scan_v00
   (
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+    struct kernelStatistics*,
+#endif
+    cl_uint,
+    cl_uint,
+    cl::Buffer&,
+    cl::CommandQueue&,
+    cl::Event&
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Performs scan operation.
+  */
+#if SCAN_ENABLE_V01
+  void 
+  scan_v01
+  (
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+    struct kernelStatistics*,
+#endif
+    cl_uint,
+    cl::Buffer&,
+    cl::CommandQueue&,
+    cl::Event&
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Performs scan operation as a unit test
+  */
+#if (SCAN_ENABLE_UNIT_TEST_V00)
+  void 
+  scanUnitTest_v00
+  (
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+    struct kernelStatistics*,
+#endif
+    cl_uint,
+    cl::CommandQueue&,
+    cl::Event&
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Performs scan operation as a unit test
+  */
+#if (SCAN_ENABLE_UNIT_TEST_V01)
+  void 
+  scanUnitTest_v01
+  (
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+    struct kernelStatistics*,
+#endif
+    cl_uint,
+    cl_uint,
+    cl::CommandQueue&,
+    cl::Event&
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Performs scan operation.
+  */
+#if (SCAN_ENABLE_UNIT_TEST_V00)
+  void
+  setupUnitTest_v00
+  (
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    cl::Context&,
+    cl::Device&,
+    cl::CommandQueue&,
+    cl_bool,
+    struct kernelStatistics*
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Performs scan operation.
+  */
+#if (SCAN_ENABLE_UNIT_TEST_V01)
+  void
+  setupUnitTest_v01
+  (
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    cl::Context&,
+    cl::Device&,
+    cl::CommandQueue&,
+    cl_bool,
+    struct kernelStatistics*
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Verifies scan operation.
+  */
+#if (SCAN_ENABLE_V00 && SCAN_VERIFY_ENABLE)
+  void 
+  verifyScan_v00
+  (
+#if !(SCAN_ENABLE_UNIT_TEST_V00)
+  void*,
+  cl_uint(*)(cl::CommandQueue &, cl_uint, cl_uint, cl_uint, void*),
+  cl_uint(*)(cl::CommandQueue &, cl_uint, cl_uint, cl_uint, void*),
+#endif
+  cl_uint,
+  cl_uint,
+  cl_uint,
+  cl::CommandQueue&,
+  cl_uint
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Verifies scan operation.
+  */
+#if (SCAN_ENABLE_V01 && SCAN_VERIFY_ENABLE)
+  void 
+  verifyScan_v01
+  (
+#if !(SCAN_ENABLE_UNIT_TEST_V01)
+    cl_uint*,
+    cl_uint*,
+#endif
+    cl_uint,
+    cl_uint,
+    cl_uint,
     cl::CommandQueue&
   );
-/**************************************************************************************************/
-
-
-
-#if EXPAND_EVENTS_ENABLE
-/**************************************************************************************************/
-  /**
-    Loads current spike events from the device if they are invalid on the host.
-  */
-  void 
-  expand
-  (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    struct kernelStatistics*,
 #endif
-    cl_uint,
-    cl_uint,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&,
-    cl::Event&
-  );
 /**************************************************************************************************/
-#endif
-
-
-
-#if EXPAND_EVENTS_ENABLE
-/**************************************************************************************************/
-  /**
-    Loads current spike events from the device if they are invalid on the host.
-  */
-  void 
-  expand
-  (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    struct kernelStatistics*,
-#endif
-    cl_uint,
-    cl_uint,
-    cl_uint,
-    cl_int,
-    double,
-    double,
-    double,
-    double,
-    double,
-    double,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&,
-    cl::Event&
-  );
-/**************************************************************************************************/
-#endif
-
-
-
-#if EXPAND_EVENTS_ENABLE
-/**************************************************************************************************/
-  /**
-    Loads current spike events from the device if they are invalid on the host.
-  */
-  void 
-  expand
-  (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    struct kernelStatistics*,
-#endif
-    cl_uint,
-    cl_uint,
-    cl_uint,
-    double,
-    double,
-    double,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&,
-    cl::Event&
-  );
-/**************************************************************************************************/
-#endif
 
 
 
@@ -405,28 +406,58 @@ class SpikeEvents
 
 
 
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_VERIFY_ENABLE)
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Initializes histogram with random values.
   */
-  void 
-  verifyExpand
+#if (SCAN_ENABLE_UNIT_TEST_V00)
+  void
+  setUnitTestData_v00
   (
-    cl_uint,
-    bool,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&
+    cl::CommandQueue&,
+    cl_bool,
+    cl_uint
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Initializes histogram with random values.
+  */
+#if (SCAN_ENABLE_UNIT_TEST_V01)
+  void
+  setUnitTestData_v01
+  (
+    cl::CommandQueue&,
+    cl_bool,
+    cl_uint
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Stores event data on device.
+  */
+  void
+  storeData
+  (
+    cl::CommandQueue&,
+    cl_bool,
+    cl_uint
   );
 /**************************************************************************************************/
-#endif
 
 
 
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Saves past events and loads current events from the device if they are invalid on the host.
   */
   void
   getData
@@ -447,21 +478,6 @@ class SpikeEvents
   reset
   (
     bool
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Stores spike data on device.
-  */
-  void
-  storeBuffers
-  (
-    cl::CommandQueue&,
-    cl_bool,
-    cl_uint
   );
 /**************************************************************************************************/
 

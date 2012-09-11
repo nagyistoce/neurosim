@@ -31,7 +31,7 @@
         <!-- ENABLE_MASK: oct("0b0100000000000000") -->
         <param id="ENABLE_MASK">oct("0b0100000000000000")</param>                     
         <!-- SYNAPTIC_EVENT_BUFFERS: 32,64,128,256,512. Tahiti: 32 -->
-        <param id="SYNAPTIC_EVENT_BUFFERS">32,64,128,256,512</param>
+        <param id="SYNAPTIC_EVENT_BUFFERS">32</param>
         <!-- SCAN_WG_SIZE_WF: 1,2,4. Tahiti: 4 
           1)  SYNAPTIC_EVENT_BUFFERS: 32,64
               1,2
@@ -40,7 +40,7 @@
           3)  SYNAPTIC_EVENT_BUFFERS: 256 -
               4
         -->
-        <param id="SCAN_WG_SIZE_WF">4</param>   
+        <param id="SCAN_WG_SIZE_WF">2</param>   
         <!-- SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 0 -->
         <param id="SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">0</param>
         <!-- SCAN_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1-->
@@ -75,14 +75,14 @@
     <!--  -->
     
     
-    <exe name="2" tag="skip">
+    <exe name="2" tag="noskip">
       <id>SCAN_V01</id>
       <!-- Configuration -->
       <config>
         <!-- ENABLE_MASK: oct("0b0001000000000000") -->
         <param id="ENABLE_MASK">oct("0b0001000000000000")</param>                      
         <!-- SYNAPTIC_EVENT_BUFFERS: 32,64,128,256,512. Tahiti: 32-->
-        <param id="SYNAPTIC_EVENT_BUFFERS">32,64,128,256,512</param>
+        <param id="SYNAPTIC_EVENT_BUFFERS">32</param>
         <!-- SCAN_WG_SIZE_WF: 1,2,4. Tahiti: 4 
           1)  SYNAPTIC_EVENT_BUFFERS: 32,64
               1,2
@@ -91,7 +91,7 @@
           3)  SYNAPTIC_EVENT_BUFFERS: 256 -
               2-4
         -->
-        <param id="SCAN_WG_SIZE_WF">4</param>   
+        <param id="SCAN_WG_SIZE_WF">2</param>   
         <!-- SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET: 0-17. Tahiti: 0 -->
         <param id="SCAN_OPTIMIZATION_CACHE_PREFIX_SUM_OFFSET">0</param>
         <!-- SCAN_OPTIMIZATION_2LEVEL_REDUCE: 0,1. Tahiti: 1-->
@@ -142,6 +142,7 @@
       <param id="Average Events/Iteration"></param>
       <param id="Average Spikes/Iteration"></param>
       <param id="Total Time"></param>
+      <param id="Result"></param>
       <param id="Kernel kernelExpandEvents Total Time"></param>
       <param id="Kernel kernelExpandEvents Average Time"></param>
       <param id="Kernel kernelExpandEvents Execution Count"></param>

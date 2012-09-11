@@ -198,7 +198,7 @@
         <param id="EVENT_DATA_BUFFER_SIZE">(64*1024)</param>
 		
         <!-- SPIKE_PACKET_SIZE (affects problem partitioning): 4-512 -->
-        <param id="SPIKE_PACKET_SIZE">16</param>
+        <param id="SPIKE_PACKET_SIZE">32</param>
 		
         <!-- SPIKE_PACKETS (affects problem partitioning): 64-2048 -->
         <param id="SPIKE_PACKETS">512</param>
@@ -295,7 +295,7 @@
         <node name="VerifyAll">
           <param id="SIMULATION_MODE">0</param>
           <param id="SIMULATION_TIME_STEPS">100</param>
-          <result id="PASS">Profile</result>
+          <result id="PASS">VerifyQuick</result>
           <result id="FAIL">Exit</result>
         </node>
         <node name="VerifyQuick">
@@ -484,6 +484,7 @@
       <param id="Average Events/Iteration"></param>
       <param id="Average Spikes/Iteration"></param>
       <param id="Total Time"></param>
+      <param id="Result"></param>
       <param id="Kernel kernelExpandEvents Total Time"></param>
       <param id="Kernel kernelExpandEvents Average Time"></param>
       <param id="Kernel kernelExpandEvents Execution Count"></param>

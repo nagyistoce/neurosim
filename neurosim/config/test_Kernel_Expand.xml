@@ -399,6 +399,7 @@
       <param id="Average Events/Iteration"></param>
       <param id="Average Spikes/Iteration"></param>
       <param id="Total Time"></param>
+      <param id="Result"></param>
       <param id="Kernel kernelExpandEvents Total Time"></param>
       <param id="Kernel kernelExpandEvents Average Time"></param>
       <param id="Kernel kernelExpandEvents Execution Count"></param>
