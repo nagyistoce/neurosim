@@ -246,8 +246,8 @@ Connectome::getSynapseCount
     throw SimException("Connectome::getSynapseCount: neuron ID exceeds neuron count");
   }
 #endif
-  // Disable temporarely since device doesn't change connectome w/o STDP
-  //this->getConnections(queue, CL_TRUE);
+  /* Disable temporarely since device doesn't change connectome w/o STDP
+  this->getConnections(queue, CL_TRUE);*/
 
   cl_uint ptrStart = this->dataSynapsePointer[neuronID];
   cl_uint ptrEnd = this->dataSynapsePointer[neuronID+1];
@@ -288,8 +288,8 @@ Connectome::getSynapse
     throw SimException("Connectome::getSynapse: neuron ID exceeds neuron count");
   }
 #endif
-  // Disable temporarely since device doesn't change connectome w/o STDP
-  //this->getConnections(queue, CL_TRUE);
+  /* Disable temporarely since device doesn't change connectome w/o STDP
+  this->getConnections(queue, CL_TRUE);*/
   
   cl_uint ptrStart = this->dataSynapsePointer[neuronID];
   cl_uint ptrEnd = this->dataSynapsePointer[neuronID+1];
@@ -334,8 +334,8 @@ Connectome::refresh
   this->isInitialized();
 #endif
 
-  // Disable temporarely since device doesn't change connectome w/o STDP
-  //this->getConnections(queue, CL_TRUE);
+  /* Disable temporarely since device doesn't change connectome w/o STDP
+  this->getConnections(queue, CL_TRUE);*/
 }
 /**************************************************************************************************/
 

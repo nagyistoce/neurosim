@@ -104,14 +104,6 @@
     checksum += ((1705662821u + data) % 2147483659u);\
   }
   
-#define SET_RANDOM_SEED(seed, counter)\
-  {\
-    time_t t = time(NULL);\
-    seed = *((unsigned int *)(&t)) + counter;\
-    counter++;\
-    srand(seed);\
-  }
-  
 #define GET_RANDOM_INT(setValue, max, minPercent, maxPercent)\
   {\
     if(minPercent > maxPercent){setValue = -1;}\
@@ -127,6 +119,27 @@
       }\
     }\
   }
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Random number generators
+***************************************************************************************************/
+#define SET_RANDOM_SEED_WITH_TIME(seed, counter)\
+  {\
+    time_t t = time(NULL);\
+    seed = *((unsigned int *)(&t)) + counter;\
+    counter++;\
+    srand(seed);\
+  }
+  
+#define SET_RANDOM_SEED_DIRECT(seed)\
+  {\
+    srand(seed);\
+  }
+  
+#define SET_RANDOM_SEED_NONE(seed)
 /**************************************************************************************************/
 
 
@@ -414,18 +427,13 @@
 #define CREATE_BUFFER(flags, buffer, size)\
   {\
     cl_int err = CL_SUCCESS;\
-    if(isAmdPlatform())\
+    buffer = cl::Buffer(context, flags, size, NULL, &err);\
+    if(err != CL_SUCCESS)\
     {\
-      buffer = cl::Buffer(context, flags, size, NULL, &err);\
-      if(!sampleCommon->checkVal(err, CL_SUCCESS, "Buffer::Buffer() failed. (" #buffer ")"))\
-      {\
-        return SDK_FAILURE;\
-      }\
-    }\
-    else\
-    {\
-      std::cout << "Unable to allocate buffer " << #buffer << " on non-AMD platform\n";\
-      return SDK_FAILURE;\
+      std::stringstream ss;\
+      ss << "CREATE_BUFFER_O: Failed to allocate " << #buffer << " due to error code " \
+        << err << "\n";\
+      throw SimException(ss.str());\
     }\
   }
   
@@ -625,12 +633,7 @@
   Exceptions
 ***************************************************************************************************/
 
-#define CATCH(stream, message, action)\
-  catch(SimException& e)\
-  {\
-    stream << #message << ": " << e.what() << "\n";\
-    action;\
-  }\
+#define CATCH_GENERIC(stream, message, action)\
   catch(exception& e)\
   {\
     stream << #message << ": Standard Exception: " << e.what() << "\n";\
@@ -641,6 +644,14 @@
     stream << #message << ": unknown exception occured" << "\n";\
     action;\
   }
+  
+#define CATCH(stream, message, action)\
+  catch(SimException& e)\
+  {\
+    stream << #message << ": " << e.what() << "\n";\
+    action;\
+  }\
+  CATCH_GENERIC(stream, message, action)
 /**************************************************************************************************/
 
 
@@ -826,6 +837,13 @@
   #endif
   /*Debug mask, enables each kernel to have debug buffer r/w*/
   #define DEBUG_MASK                                          1
+  /*Mode for generating random sequences
+    0 - srand(1) is called once at the beginning of program execution. The seed is never changed.
+    1 - srand(seed) is called with time() -based seed before data is generated with rand().
+  */
+  #if !(defined(RANDOM_GEN_MODE))
+  #define RANDOM_GEN_MODE                                     1
+  #endif
   /*Enable compiler flags that allow device to produce same result as host by disabling math 
     optimizations*/
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
@@ -841,9 +859,13 @@
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          1
   #endif
-  
   /*Enable validation of parameters, data ranges, etc in classes*/
   #define CLASS_VALIDATION_ENABLE                             1
+  /*Unit tests are enabled either automatically when not all data producers are enabled or 
+    when FORCE_UNIT_TEST is set to 1*/
+  #if !(defined(FORCE_UNIT_TEST))
+  #define FORCE_UNIT_TEST                                     0
+  #endif
 
 #elif SIMULATION_MODE == 1
   /*Has to be a full mask for this mode*/
@@ -854,6 +876,11 @@
   #define LOG_MODEL_VARIABLES                                 0
   #define LOG_SIMULATION                                      1
   #define DEBUG_MASK                                          0
+  /**/
+  #if !(defined(RANDOM_GEN_MODE))
+  #define RANDOM_GEN_MODE                                     1
+  #endif
+  /**/
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      0
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
@@ -871,7 +898,12 @@
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          1
   #endif
+  /**/
   #define CLASS_VALIDATION_ENABLE                             1
+  /**/
+  #if !(defined(FORCE_UNIT_TEST))
+  #define FORCE_UNIT_TEST                                     0
+  #endif
   
 #elif SIMULATION_MODE == 2
   #if !(defined(ENABLE_MASK))
@@ -883,6 +915,11 @@
   #define LOG_MODEL_VARIABLES                                 0
   #define LOG_SIMULATION                                      0
   #define DEBUG_MASK                                          0
+  /**/
+  #if !(defined(RANDOM_GEN_MODE))
+  #define RANDOM_GEN_MODE                                     1
+  #endif
+  /**/
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      1
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
@@ -900,7 +937,12 @@
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          2
   #endif
+  /**/
   #define CLASS_VALIDATION_ENABLE                             0
+  /**/
+  #if !(defined(FORCE_UNIT_TEST))
+  #define FORCE_UNIT_TEST                                     0
+  #endif
   
 #elif SIMULATION_MODE == 3
   #if !(defined(ENABLE_MASK))
@@ -912,6 +954,11 @@
   #define LOG_MODEL_VARIABLES                                 0
   #define LOG_SIMULATION                                      0
   #define DEBUG_MASK                                          0
+  /**/
+  #if !(defined(RANDOM_GEN_MODE))
+  #define RANDOM_GEN_MODE                                     1
+  #endif
+  /**/
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      1
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      1
@@ -929,7 +976,12 @@
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          0
   #endif
+  /**/
   #define CLASS_VALIDATION_ENABLE                             0
+  /**/
+  #if !(defined(FORCE_UNIT_TEST))
+  #define FORCE_UNIT_TEST                                     0
+  #endif
   
 #elif SIMULATION_MODE == 4
   #if !(defined(ENABLE_MASK))
@@ -941,6 +993,11 @@
   #define LOG_MODEL_VARIABLES                                 0
   #define LOG_SIMULATION                                      0
   #define DEBUG_MASK                                          0
+  /**/
+  #if !(defined(RANDOM_GEN_MODE))
+  #define RANDOM_GEN_MODE                                     1
+  #endif
+  /**/
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      2
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      1
@@ -958,7 +1015,12 @@
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          0
   #endif
+  /**/
   #define CLASS_VALIDATION_ENABLE                             0
+  /**/
+  #if !(defined(FORCE_UNIT_TEST))
+  #define FORCE_UNIT_TEST                                     0
+  #endif
   
 #elif SIMULATION_MODE == 5
   #if !(defined(ENABLE_MASK))
@@ -970,6 +1032,11 @@
   #define LOG_MODEL_VARIABLES                                 0
   #define LOG_SIMULATION                                      0
   #define DEBUG_MASK                                          0
+  /**/
+  #if !(defined(RANDOM_GEN_MODE))
+  #define RANDOM_GEN_MODE                                     1
+  #endif
+  /**/
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      0
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
@@ -987,7 +1054,12 @@
   #if !(defined(DEVICE_HOST_DATA_COHERENCE))
   #define DEVICE_HOST_DATA_COHERENCE                          0
   #endif
+  /**/
   #define CLASS_VALIDATION_ENABLE                             0
+  /**/
+  #if !(defined(FORCE_UNIT_TEST))
+  #define FORCE_UNIT_TEST                                     0
+  #endif
   
 #else
   #error Unknown simulation mode
@@ -1020,6 +1092,7 @@
 #define CONNECTOME_VALIDATION_ENABLE                          CLASS_VALIDATION_ENABLE
 #define SPIKE_EVENTS_VALIDATION_ENABLE                        CLASS_VALIDATION_ENABLE
 #define SYNAPTIC_EVENTS_VALIDATION_ENABLE                     CLASS_VALIDATION_ENABLE
+#define OPERATOR_SCAN_VALIDATION_ENABLE                       CLASS_VALIDATION_ENABLE
 /**************************************************************************************************/
 
 
@@ -1048,10 +1121,27 @@
   #define _aligned_free  __mingw_aligned_free 
 #endif
 
+/**/
 #ifndef _WIN32
 #if defined(__INTEL_COMPILER)
   #pragma warning(disable : 1125)
 #endif
+#endif
+
+/*Data accessor*/
+#if SIMULATION_MODE > 1
+  #define SAFE_GET(variable) variable
+#else
+  #define SAFE_GET(variable) (1 ? variable : 0)
+#endif
+
+/*Random number generation*/
+#if RANDOM_GEN_MODE == 0
+  #define SET_RANDOM_SEED(seed, counter)      
+#elif RANDOM_GEN_MODE == 1
+  #define SET_RANDOM_SEED(seed, counter)      SET_RANDOM_SEED_WITH_TIME(seed, counter)
+#else
+  
 #endif
 /**************************************************************************************************/
 
@@ -1180,7 +1270,7 @@
   /*CONTROL: enable debugging*/
   #define EXPAND_EVENTS_DEBUG_ENABLE                          (0)&DEBUG_MASK
   /*CONTROL: debug buffer size*/
-  #define EXPAND_EVENTS_DEBUG_BUFFER_SIZE_WORDS               (1024*1024)
+  #define EXPAND_EVENTS_DEBUG_BUFFER_SIZE_WORDS               (1024)
   
   /*Error tracking and codes*/
   /*CONTROL: enable error tracking*/
@@ -1357,7 +1447,7 @@
   /*CONTROL: enable debugging*/
   #define SCAN_DEBUG_ENABLE                                   (0)&DEBUG_MASK
   /*CONTROL: debug buffer size*/
-  #define SCAN_DEBUG_BUFFER_SIZE_WORDS                        (1024*1024)
+  #define SCAN_DEBUG_BUFFER_SIZE_WORDS                        (1024)
   
   /*Error tracking and codes*/
   /*CONTROL: enable error tracking*/
@@ -1485,7 +1575,7 @@
   /*CONTROL: enable debugging*/
   #define GROUP_EVENTS_DEBUG_ENABLE                             (0)&DEBUG_MASK
   /*CONTROL: debug buffer size*/
-  #define GROUP_EVENTS_DEBUG_BUFFER_SIZE_WORDS                  (1024*1024*10)
+  #define GROUP_EVENTS_DEBUG_BUFFER_SIZE_WORDS                  (1024)
   
   /*Error tracking and codes*/
   /*CONTROL: enable error tracking*/
@@ -1811,7 +1901,7 @@
   /*Debugging*/
   /*CONTROL: enable debug buffers*/
   #define MAKE_EVENT_PTRS_DEBUG_ENABLE                             (0)&DEBUG_MASK
-  #define MAKE_EVENT_PTRS_DEBUG_BUFFER_SIZE_WORDS                  (1024*1024)
+  #define MAKE_EVENT_PTRS_DEBUG_BUFFER_SIZE_WORDS                  (1024)
   
   /*Error tracking*/
   /*CONTROL: enable error logging at kernel level*/
@@ -2009,7 +2099,7 @@
   /*CONTROL: enable debugging*/
   #define UPDATE_NEURONS_DEBUG_ENABLE                             (0)&DEBUG_MASK
   /*CONTROL: debug buffer size*/
-  #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (UPDATE_NEURONS_TOTAL_NEURONS*1024)
+  #define UPDATE_NEURONS_DEBUG_BUFFER_SIZE_WORDS                  (1024)
   
   /*CONTROL: Source data size for unit test*/
   #if !(defined(UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE))
@@ -2144,6 +2234,7 @@
   #error (EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS != UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS)
 #endif
 #endif
+
 /*If both EXPAND_EVENTS_ENABLE and GROUP_EVENTS_ENABLE_VXX are enabled*/
 #if (EXPAND_EVENTS_ENABLE && (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 ||\
     GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03))
@@ -2166,6 +2257,7 @@
   #error (GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS != EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
 #endif
 #endif
+
 /*If both SCAN_ENABLE_V00 and GROUP_EVENTS_ENABLE_VXX are enabled*/
 #if (SCAN_ENABLE_V00 && (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 ||\
     GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03))
@@ -2184,6 +2276,77 @@
 #if (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V00)
   #error (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V00)
 #endif
+#endif
+
+/*If both SCAN_ENABLE_V00 and EXPAND_EVENTS_ENABLE are enabled*/
+#if (SCAN_ENABLE_V00 && EXPAND_EVENTS_ENABLE)
+#if (EXPAND_EVENTS_TIME_SLOTS != SCAN_HISTOGRAM_TIME_SLOTS)
+  #error (EXPAND_EVENTS_TIME_SLOTS != SCAN_HISTOGRAM_TIME_SLOTS)
+#endif
+#if (SCAN_SYNAPTIC_EVENT_BUFFERS != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
+  #error (SCAN_SYNAPTIC_EVENT_BUFFERS != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
+#endif
+#if (SCAN_EVENT_DATA_MAX_SRC_BUFFER_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
+  #error (SCAN_EVENT_DATA_MAX_SRC_BUFFER_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
+#endif
+#if (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
+  #error (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
+#endif
+#if (EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS != SCAN_HISTOGRAM_BIN_SIZE_V00)
+  #error (EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS != SCAN_HISTOGRAM_BIN_SIZE_V00)
+#endif
+#endif
+
+/*If both SCAN_ENABLE_V01 and GROUP_EVENTS_ENABLE_VXX are enabled*/
+#if (((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) && SCAN_ENABLE_V01) ||\
+     ((GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) && SCAN_ENABLE_V01) ||\
+     ((GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) && SCAN_ENABLE_V01) ||\
+     ((GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) && SCAN_ENABLE_V01))
+#if (GROUP_EVENTS_GRID_SIZE_WG != SCAN_HISTOGRAM_BIN_BACKETS)
+  #error (GROUP_EVENTS_GRID_SIZE_WG != SCAN_HISTOGRAM_BIN_BACKETS)
+#endif
+#if (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V01)
+  #error (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V01)
+#endif
+#if (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT != SCAN_HISTOGRAM_TOTAL_BINS_V01)
+  #error (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT != SCAN_HISTOGRAM_TOTAL_BINS_V01)
+#endif
+#endif
+
+
+
+/** ############################################################################################# **
+
+  III. Unit tests
+  
+** ############################################################################################# **/
+
+
+
+/*Enable unit test for Scan V00*/
+#if (FORCE_UNIT_TEST)
+  #define SCAN_ENABLE_UNIT_TEST_V00                         (SCAN_ENABLE_V00)
+#else
+  #define SCAN_ENABLE_UNIT_TEST_V00                         (SCAN_ENABLE_V00 && !(EXPAND_EVENTS_ENABLE))
+#endif
+#if SCAN_ENABLE_UNIT_TEST_V00
+  #undef SCAN_VERIFY_ENABLE
+  #define SCAN_VERIFY_ENABLE                                1
+#endif
+
+/*Enable unit test for Scan V01*/
+#if (FORCE_UNIT_TEST)
+  #define SCAN_ENABLE_UNIT_TEST_V01                         (SCAN_ENABLE_V01)
+#else
+  #define SCAN_ENABLE_UNIT_TEST_V01                         (SCAN_ENABLE_V01 && \
+                                                            !(GROUP_EVENTS_ENABLE_V00 && \
+                                                            GROUP_EVENTS_ENABLE_V01 && \
+                                                            GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT \
+                                                            && GROUP_EVENTS_ENABLE_V02))
+#endif
+#if SCAN_ENABLE_UNIT_TEST_V01
+  #undef SCAN_VERIFY_ENABLE
+  #define SCAN_VERIFY_ENABLE                                1
 #endif
 
 #endif /*INC_DEFINITIONS_H*/

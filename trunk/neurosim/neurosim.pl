@@ -112,10 +112,10 @@ our $APP_SRC_DIR = "cpp_cl/app/$APP_NAME";
 our $APP_BIN_DIR = "$APP_SRC_DIR/bin/$TARGET_ARCHITECTURE";
 our @APP_INCL_DIR = ("include", "include/$UTIL_NAME", "include/GL");
 our $APP_INCL_DIR = "";
-our @APP_SRC_C = ("iz_util.c", "integ_util.c", "IntegrationTest.cpp", "SpikeEvents.cpp", 
-  "Connectome.cpp", "SynapticEvents.cpp", "Common.cpp");
-our @APP_SRC_H = ("iz_util.h", "integ_util.h", "IntegrationTest.hpp", "SpikeEvents.hpp",
-  "Connectome.hpp", "SynapticEvents.hpp", "Definitions.h", "Common.hpp");
+our @APP_SRC_C = ("iz_util.c", "integ_util.c", "IntegrationTest.cpp", "OperatorScan.cpp", 
+  "SpikeEvents.cpp", "Connectome.cpp", "SynapticEvents.cpp", "Common.cpp");
+our @APP_SRC_H = ("iz_util.h", "integ_util.h", "IntegrationTest.hpp", "OperatorScan.hpp", 
+  "SpikeEvents.hpp", "Connectome.hpp", "SynapticEvents.hpp", "Definitions.h", "Common.hpp");
 our @APP_KERNEL_FILE_NAMES = ("Kernel_ExpandEvents.cl", "Kernel_GroupEvents.cl", 
   "Kernel_MakeEventPointers.cl", "Kernel_ScanHistogram.cl", "Kernel_UpdateNeurons.cl",
   "Kernel_Primitives.cl", "Kernel_Primitives.h");
@@ -594,7 +594,7 @@ sub compileAndRunApp
   my $node = $_[1];
   my $ts = $_[2];
   
-  # Make a run in verification mode
+  # Attempt to compile
   if(!&compileApp($config." ".$APP_COMMON_CONFIG_OPTS))
   {
     # mark as failed to compile
@@ -607,15 +607,30 @@ sub compileAndRunApp
     $APP_REPORT{NODE_COMPILE.' '.$node} = "PASS";
     &runApp;
     
-    if(&parseResults)
+    my $runResult = &parseResults;
+    
+    if($runResult == 1)
     {
       # mark as passed to execute
       $APP_REPORT{NODE_EXECUTE.' '.$node} = "PASS";
     }
-    else
+    elsif($runResult == 0)
     {
-      # mark as failed to execute
-      $APP_REPORT{NODE_EXECUTE.' '.$node} = "FAIL";
+      # mark as failed to execute with unknown failure cause
+      $APP_REPORT{NODE_EXECUTE.' '.$node} = "FAIL: Unknown";
+      return 0;
+    }
+    elsif($runResult == -1)
+    {
+      # mark as failed to execute with known failure cause
+      if(exists($APP_REPORT{"Result"}))
+      {
+        $APP_REPORT{NODE_EXECUTE.' '.$node} = $APP_REPORT{"Result"};
+      }
+      else
+      {
+        $APP_REPORT{NODE_EXECUTE.' '.$node} = "FAIL: Cannot identify cause";
+      }
       return 0;
     }
   }
@@ -829,20 +844,29 @@ sub parseResults
   foreach my $line (@lines)
   {
     chomp $line;
-    ($key, $value) = split(/:/, $line);
+    #print("Line: $line\n");
+    ($key, $value) = split(/:/, $line, 2);
 
-    # detect result
-    if($key =~ /^Result/)
+    if(defined($key))
     {
-      if($value =~ /^PASS/)
+      # detect result
+      if($key =~ /^Result/)
       {
-        $result = 1;
+        if($value =~ /^PASS/)
+        {
+          $result = 1;
+        }
+        if($value =~ /^FAIL/)
+        {
+          $result = -1;
+        }
       }
+      
+      #allow only predefined keys
+      next unless (exists($APP_REPORT{$key}));
+      replaceSubStr($value, ",", ";");
+      $APP_REPORT{$key} = $value;
     }
-    
-    #allow only predefined keys
-    next unless (exists($APP_REPORT{$key}));
-    $APP_REPORT{$key} = $value;
   }
   
   return $result;

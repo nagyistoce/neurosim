@@ -57,6 +57,7 @@
 #include <SDKApplication.hpp>
 #include <SDKFile.hpp>
 #include <SDKBitMap.hpp>
+#include "OperatorScan.hpp"
 #include "SpikeEvents.hpp"
 #include "Connectome.hpp"
 #include "SynapticEvents.hpp"

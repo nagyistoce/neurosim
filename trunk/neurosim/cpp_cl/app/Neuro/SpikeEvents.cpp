@@ -513,7 +513,7 @@ SpikeEvents::expand
 #endif
 
   bool expandEventsReset = false;
-  cl_uint expandEventsTimeStep = currentTimeStep % timeSlotCount;
+  cl_uint relativeTimeStep = currentTimeStep % timeSlotCount;
 
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
   this->storeBuffers(queue, CL_TRUE, SPIKE_EVENTS_VALID_EXPAND_DEBUG);
@@ -562,7 +562,7 @@ SpikeEvents::expand
       this->argNumExpandEvents++);
   }
   
-  SET_KERNEL_ARG_O(this->kernelExpandEvents, expandEventsTimeStep, this->argNumExpandEvents);
+  SET_KERNEL_ARG_O(this->kernelExpandEvents, relativeTimeStep, this->argNumExpandEvents);
   
 #if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
   double startAppTime = 0, endAppTime = 0;
@@ -620,7 +620,7 @@ SpikeEvents::expand
 #if EXPAND_EVENTS_VERIFY_ENABLE
   this->verifyExpand
   (
-    expandEventsTimeStep, 
+    relativeTimeStep, 
     expandEventsReset,
     synapticEvents,
     connectome,
@@ -662,9 +662,9 @@ SpikeEvents::expand
 #endif
 
   /*Reset the data with new values every resetAtSlot steps for unit test for better represenation*/
-  cl_uint expandEventsTimeStep = currentTimeStep % timeSlotCount;
-  expandEventsTimeStep = expandEventsTimeStep % resetTimeSlot;
-  bool expandEventsReset = (!expandEventsTimeStep);
+  cl_uint relativeTimeStep = currentTimeStep % timeSlotCount;
+  relativeTimeStep = relativeTimeStep % resetTimeSlot;
+  bool expandEventsReset = (!relativeTimeStep);
   
   if(expandEventsReset)
   {
@@ -697,7 +697,7 @@ SpikeEvents::expand
   {
     if(testMode < 0)
     {
-      if(expandEventsTimeStep == 1)
+      if(relativeTimeStep == 1)
       {
         this->setEvents
         (
@@ -706,7 +706,7 @@ SpikeEvents::expand
           0.0, 0.0, NULL
         );
       }
-      else if(expandEventsTimeStep == resetTimeSlot - 1)
+      else if(relativeTimeStep == resetTimeSlot - 1)
       {
         this->setEvents
         (
@@ -722,7 +722,7 @@ SpikeEvents::expand
           queue,
           CL_TRUE,
           0.0, 
-          (double)(100*expandEventsTimeStep/resetTimeSlot), 
+          (double)(100*relativeTimeStep/resetTimeSlot), 
           NULL
         );
       }
@@ -785,9 +785,6 @@ SpikeEvents::expand
 #if SPIKE_EVENTS_VALIDATION_ENABLE
   this->isInitialized();
 #endif
-
-  bool expandEventsReset = false;
-  cl_uint expandEventsTimeStep = currentTimeStep % timeSlotCount;
 
   if(currentTimeStep < overWriteSpikesUntilStep)
   {
@@ -1261,7 +1258,12 @@ SpikeEvents::getData
     !((this->dataValid) & SPIKE_EVENTS_VALID_EXPAND_DEBUG)
   )
   {
-
+    ENQUEUE_READ_BUFFER_O(block, queue, this->dataExpandEventsDebugHostBuffer, 
+      this->dataExpandEventsDebugHostSizeBytes, this->dataExpandEventsDebugHost);
+      
+    ENQUEUE_READ_BUFFER_O(block, queue, this->dataExpandEventsDebugDeviceBuffer, 
+      this->dataExpandEventsDebugDeviceSizeBytes, this->dataExpandEventsDebugDevice);
+      
     this->dataValid |= SPIKE_EVENTS_VALID_EXPAND_DEBUG;
   }
 #endif
@@ -1273,7 +1275,9 @@ SpikeEvents::getData
     !((this->dataValid) & SPIKE_EVENTS_VALID_EXPAND_ERROR)
   )
   {
-
+    ENQUEUE_READ_BUFFER_O(block, queue, this->dataExpandEventsErrorBuffer, 
+      this->dataExpandEventsErrorSizeBytes, this->dataExpandEventsError);
+      
     this->dataValid |= SPIKE_EVENTS_VALID_EXPAND_ERROR;
   }
 #endif
@@ -1308,7 +1312,7 @@ SpikeEvents::reset(bool checkForNull)
   this->dataSpikePacketCountsSizeBytes = 0;
   
 #if EXPAND_EVENTS_ENABLE
-  setKernelArguments = true;
+  this->setKernelArguments = true;
 #endif
 
   if(checkForNull)

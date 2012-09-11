@@ -15,7 +15,7 @@
 
 
 /***************************************************************************************************
-  Class Definitions
+  Class Preprocessor Definitions
 ***************************************************************************************************/
 
 #define SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS 0x1
@@ -29,6 +29,14 @@
 /**************************************************************************************************/
 
 
+
+/***************************************************************************************************
+  Forward declarations for cyclic dependency
+***************************************************************************************************/
+
+
+
+/**************************************************************************************************/
 
 /**
   @class SynapticEvents
@@ -45,6 +53,9 @@ class SynapticEvents
   public:  /*public variables*/
 /**************************************************************************************************/
   
+  cl_uint timeSlots;
+  cl_uint histogramBinCount;
+  cl_uint histogramBinSize;
   
 /*TODO: eventually they have to move to private*/
   static const int RECENT   = 0;
@@ -82,8 +93,6 @@ class SynapticEvents
   private:  /*private variables*/
 /**************************************************************************************************/
 
-
-
   bool resetObject;
   cl_uint dataValid;
   
@@ -92,9 +101,6 @@ class SynapticEvents
   
   cl_uint eventBufferCount;
   cl_uint eventBufferSize;
-  cl_uint timeSlots;
-  cl_uint histogramBinCount;
-  cl_uint histogramBinSize;
   
   std::stringstream *dataToSimulationLogFile;
   std::stringstream *dataToReportLogFile;
@@ -253,6 +259,40 @@ class SynapticEvents
 
 /**************************************************************************************************/
   /**
+    Returns histogram item
+  */
+  static cl_uint
+  getPreviousHistogramItem
+  (
+    cl::CommandQueue&,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    void*
+  );
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Returns histogram item
+  */
+  static cl_uint
+  getRecentHistogramItem
+  (
+    cl::CommandQueue&,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    void*
+  );
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
     Invalidates current synaptic events.
   */
   void 
@@ -282,21 +322,6 @@ class SynapticEvents
   (
     cl::CommandQueue&,
     cl_bool
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Initializes histogram with random values
-  */
-  void 
-  randomizeHistogram
-  (
-    cl::CommandQueue&,
-    cl_bool,
-    cl_uint
   );
 /**************************************************************************************************/
 

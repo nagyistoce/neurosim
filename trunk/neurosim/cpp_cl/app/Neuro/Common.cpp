@@ -71,14 +71,14 @@ getSource
   size_t      size;
   char*       str;
 
-  // Open file stream
+  /* Open file stream*/
   std::fstream f(fileName, (std::fstream::in | std::fstream::binary));
 
-  // Check if we have opened file stream
+  /* Check if we have opened file stream*/
   if (f.is_open()) 
   {
     size_t  sizeFile;
-    // Find the stream size
+    /* Find the stream size*/
     f.seekg(0, std::fstream::end);
     size = sizeFile = (size_t)f.tellg();
     f.seekg(0, std::fstream::beg);
@@ -90,7 +90,7 @@ getSource
         return  false;
     }
 
-    // Read file
+    /* Read file*/
     f.read(str, sizeFile);
     f.close();
     str[size] = '\0';

@@ -18,6 +18,7 @@
     <ClInclude Include="integ_util.h" />
     <ClInclude Include="iz_util.h" />
     <ClInclude Include="Kernel_Primitives.h" />
+    <ClInclude Include="OperatorScan.hpp" />
     <ClInclude Include="SpikeEvents.hpp" />
     <ClInclude Include="SynapticEvents.hpp" />
   </ItemGroup>
@@ -27,6 +28,7 @@
     <ClCompile Include="IntegrationTest.cpp" />
     <ClCompile Include="integ_util.c" />
     <ClCompile Include="iz_util.c" />
+    <ClCompile Include="OperatorScan.cpp" />
     <ClCompile Include="SpikeEvents.cpp" />
     <ClCompile Include="SynapticEvents.cpp" />
   </ItemGroup>
