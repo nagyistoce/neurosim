@@ -14,8 +14,38 @@
 
 
 
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Class Preprocessor Definitions
+***************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Forward declarations for cyclic dependency
+***************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+
+
+
 /**
-  @class Connectome
+  @class Data_Connectome
 
   Models connectome (synaptic connections).
 
@@ -23,7 +53,7 @@
 
   @date 2012/04/23
  */
-class Connectome 
+class Data_Connectome 
 {
 /**************************************************************************************************/
   public:  /*public variables*/
@@ -44,7 +74,6 @@ class Connectome
 
 
 
-  bool resetObject;
   bool dataValid;
   
   unsigned int srandSeed;
@@ -83,8 +112,67 @@ class Connectome
   /**
     Constructor.
   */
-  Connectome
-  ();
+  Data_Connectome
+  (
+    cl::Context                         &context,
+    cl::Device                          &device,
+    cl::CommandQueue                    &queue,
+    cl_bool                             block,
+    struct kernelStatistics             &kernelStats,
+    std::stringstream                   *dataToSimulationLogFile,
+    std::stringstream                   *dataToReportLogFile,
+    cl_uint                             neuronCount,
+    cl_uint                             maxConnectionsPerNeuron,
+    double                              connectionDeviationRatio,
+    double                              gabaPercent,
+    double                              minDelay,
+    double                              maxDelay
+  ) : 
+    dataSynapsePointerBuffer(),
+    dataSynapseTargetsBuffer(),
+    dataSynapseDelaysBuffer(),
+    dataSynapseWeightsBuffer(),
+    dataValid(0),
+    srandSeed(1),
+    srandCounter(0),
+    neuronCount(neuronCount),
+    dataToSimulationLogFile(dataToSimulationLogFile),
+    dataToReportLogFile(dataToReportLogFile),
+    dataSynapsePointerSize(0),
+    dataSynapsePointerSizeBytes(0),
+    dataSynapsePointer(NULL),
+    dataSynapseTargetsSize(0),
+    dataSynapseTargetsSizeBytes(0),
+    dataSynapseTargets(NULL),
+    dataSynapseDelaysSize(0),
+    dataSynapseDelaysSizeBytes(0),
+    dataSynapseDelays(NULL),
+    dataSynapseWeightsSize(0),
+    dataSynapseWeightsSizeBytes(0),
+    dataSynapseWeights(NULL)
+/**************************************************************************************************/
+  {
+    /* Must be called only from the constructor and only once*/
+    this->initialize
+    (
+      context,
+      device,
+      queue,
+      block,
+      kernelStats,
+      maxConnectionsPerNeuron,
+      connectionDeviationRatio
+    );
+    
+    this->resetConnections
+    (
+      queue,
+      block,
+      gabaPercent,
+      minDelay,
+      maxDelay
+    );
+  };
 /**************************************************************************************************/
 
 
@@ -93,30 +181,31 @@ class Connectome
   /**
     Destructor.
   */
-  ~Connectome
-  ();
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Initializes this object.
-  */
-  void
-  initialize
-  (
-    cl::Context&,
-    cl::Device&,
-    cl::CommandQueue&,
-    cl_bool,
-    cl_uint, 
-    cl_uint,
-    double, 
-    struct kernelStatistics*,
-    std::stringstream*,
-    std::stringstream*
-  );
+  ~Data_Connectome()
+  {
+    if(this->dataSynapsePointer)
+    {
+      free(this->dataSynapsePointer);
+      this->dataSynapsePointer = NULL;
+    }
+    if(this->dataSynapseTargets)
+    {
+      free(this->dataSynapseTargets);
+      this->dataSynapseTargets = NULL;
+    }
+    if(this->dataSynapseDelays)
+    {
+      free(this->dataSynapseDelays);
+      this->dataSynapseDelays = NULL;
+    }
+    if(this->dataSynapseWeights)
+    {
+      free(this->dataSynapseWeights);
+      this->dataSynapseWeights = NULL;
+    }
+    this->dataToSimulationLogFile = NULL;
+    this->dataToReportLogFile = NULL;
+  };
 /**************************************************************************************************/
 
 
@@ -126,7 +215,7 @@ class Connectome
     Sets all connections according to parameters
   */
   void 
-  setConnections
+  resetConnections
   (
     cl::CommandQueue&,
     cl_bool,
@@ -145,7 +234,6 @@ class Connectome
   cl_uint
   getSynapseCount
   (
-    cl::CommandQueue&,
     cl_uint
   );
 /**************************************************************************************************/
@@ -160,25 +248,11 @@ class Connectome
   void
   getSynapse
   (
-    cl::CommandQueue&,
     cl_uint,
     cl_uint,
     cl_uint&,
     CL_DATA_TYPE&,
     CL_DATA_TYPE&
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Invalidates current spike events (they become past spikes).
-  */
-  void 
-  refresh
-  (
-    cl::CommandQueue&
   );
 /**************************************************************************************************/
 
@@ -192,10 +266,29 @@ class Connectome
 
 /**************************************************************************************************/
   /**
-    Loads connectome from the device if it is invalid on the host.
+    Initializes this object. Must be called only from the constructor and only once.
   */
   void
-  getConnections
+  initialize
+  (
+    cl::Context&,
+    cl::Device&,
+    cl::CommandQueue&,
+    cl_bool,
+    struct kernelStatistics&,
+    cl_uint,
+    double
+  );
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Loads data from the device if it is invalid on the host.
+  */
+  void
+  getData
   (
     cl::CommandQueue&,
     cl_bool
@@ -206,39 +299,27 @@ class Connectome
 
 /**************************************************************************************************/
   /**
-    Resets all variables to the default state.
+    Stores data on device.
   */
   void
-  reset
-  (
-    bool
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Stores connectome to the device.
-  */
-  void
-  storeBuffers
+  storeData
   (
     cl::CommandQueue&,
     cl_bool
   );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Verifies if this object was initialized.
-  */
-  void
-  isInitialized
-  ();
 /**************************************************************************************************/
 };
 
-#endif
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/
+
+
+
+#endif /*CONNECTOME_H_*/

@@ -15,6 +15,16 @@
 
 
 /***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
   Class Preprocessor Definitions
 ***************************************************************************************************/
 
@@ -38,8 +48,10 @@
 
 /**************************************************************************************************/
 
+
+
 /**
-  @class SynapticEvents
+  @class Data_SynapticEvents
 
   Models synaptic events.
 
@@ -47,18 +59,19 @@
 
   @date 2012/05/17
  */
-class SynapticEvents 
+class Data_SynapticEvents 
 {
 /**************************************************************************************************/
   public:  /*public variables*/
 /**************************************************************************************************/
   
+  
+  /*TODO: eventually all of them have to move to private*/
   cl_uint timeSlots;
   cl_uint histogramBinCount;
   cl_uint histogramBinSize;
   
-/*TODO: eventually they have to move to private*/
-  static const int RECENT   = 0;
+  static const int RECENT = 0;
   static const int PREVIOUS = 1;
   
   cl::Buffer dataUnsortedEventTargetsBuffer;
@@ -93,7 +106,8 @@ class SynapticEvents
   private:  /*private variables*/
 /**************************************************************************************************/
 
-  bool resetObject;
+
+
   cl_uint dataValid;
   
   unsigned int srandSeed;
@@ -102,9 +116,6 @@ class SynapticEvents
   cl_uint eventBufferCount;
   cl_uint eventBufferSize;
   
-  std::stringstream *dataToSimulationLogFile;
-  std::stringstream *dataToReportLogFile;
-
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
   cl_uint* dataPastUnsortedEventCounts;
   cl_uint* dataPastUnsortedEventTargets;
@@ -112,9 +123,12 @@ class SynapticEvents
   cl_uint* dataPastUnsortedEventWeights;
   cl_uint* dataPastHistogram;
 #endif
-
-
   
+  std::stringstream *dataToSimulationLogFile;
+  std::stringstream *dataToReportLogFile;
+
+
+ 
 /**************************************************************************************************/
   public: /*public methods*/
 /**************************************************************************************************/
@@ -125,8 +139,72 @@ class SynapticEvents
   /**
     Constructor.
   */
-  SynapticEvents
-  ();
+  Data_SynapticEvents
+  (
+    cl::Context                         &context,
+    cl::Device                          &device,
+    cl::CommandQueue                    &queue,
+    cl_bool                             block,
+    struct kernelStatistics             &kernelStats,
+    std::stringstream                   *dataToSimulationLogFile,
+    std::stringstream                   *dataToReportLogFile,
+    cl_uint                             timeSlots,
+    cl_uint                             eventBufferCount,
+    cl_uint                             eventBufferSize,
+    cl_uint                             histogramBinCount,
+    cl_uint                             histogramBinSize
+  ) :
+    timeSlots(timeSlots),
+    histogramBinCount(histogramBinCount),
+    histogramBinSize(histogramBinSize),
+    dataUnsortedEventTargetsBuffer(),
+    dataUnsortedEventDelaysBuffer(),
+    dataUnsortedEventWeightsBuffer(),
+    dataUnsortedEventCountsBuffer(),
+    dataHistogramBuffer(),
+    dataUnsortedEventTargetsSize(0),
+    dataUnsortedEventTargetsSizeBytes(0),
+    dataUnsortedEventTargets(NULL),
+    dataUnsortedEventDelaysSize(0),
+    dataUnsortedEventDelaysSizeBytes(0),
+    dataUnsortedEventDelays(NULL),
+    dataUnsortedEventWeightsSize(0),
+    dataUnsortedEventWeightsSizeBytes(0),
+    dataUnsortedEventWeights(NULL),
+    dataUnsortedEventCountsSize(0),
+    dataUnsortedEventCountsSizeBytes(0),
+    dataUnsortedEventCounts(NULL),
+    dataHistogramSize(0),
+    dataHistogramSizeBytes(0),
+    dataHistogram(NULL),
+    dataValid(0),
+    srandSeed(1),
+    srandCounter(0),
+    eventBufferCount(eventBufferCount),
+    eventBufferSize(eventBufferSize),
+    /* *** */
+#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
+    dataPastUnsortedEventCounts(NULL),
+    dataPastUnsortedEventTargets(NULL),
+    dataPastUnsortedEventDelays(NULL),
+    dataPastUnsortedEventWeights(NULL),
+    dataPastHistogram(NULL),
+#endif
+    /* *** */
+    dataToSimulationLogFile(dataToSimulationLogFile),
+    dataToReportLogFile(dataToReportLogFile)
+/**************************************************************************************************/
+  {
+    /* Must be called only from the constructor and only once*/
+    this->initialize
+    (
+      context,
+      device,
+      queue,
+      block,
+      kernelStats
+    );
+  };
 /**************************************************************************************************/
 
 
@@ -135,32 +213,65 @@ class SynapticEvents
   /**
     Destructor.
   */
-  ~SynapticEvents
-  ();
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Initializes this object.
-  */
-  void
-  initialize
-  (
-    cl::Context&,
-    cl::Device&,
-    cl::CommandQueue&,
-    cl_bool,
-    cl_uint, 
-    cl_uint,
-    cl_uint, 
-    cl_uint, 
-    cl_uint,
-    struct kernelStatistics*,
-    std::stringstream*,
-    std::stringstream*
-  );
+  ~Data_SynapticEvents()
+  {
+    if(this->dataUnsortedEventCounts)
+    {
+      free(this->dataUnsortedEventCounts);
+      this->dataUnsortedEventCounts = NULL;
+    }
+    if(this->dataUnsortedEventWeights)
+    {
+      free(this->dataUnsortedEventWeights);
+      this->dataUnsortedEventWeights = NULL;
+    }
+    if(this->dataUnsortedEventDelays)
+    {
+      free(this->dataUnsortedEventDelays);
+      this->dataUnsortedEventDelays = NULL;
+    }
+    if(this->dataUnsortedEventTargets)
+    {
+      free(this->dataUnsortedEventTargets);
+      this->dataUnsortedEventTargets = NULL;
+    }
+    if(this->dataHistogram)
+    {
+      free(this->dataHistogram);
+      this->dataHistogram = NULL;
+    }
+    /* *** */
+#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
+    if(this->dataPastUnsortedEventCounts)
+    {
+      free(this->dataPastUnsortedEventCounts);
+      this->dataPastUnsortedEventCounts = NULL;
+    }
+    if(this->dataPastUnsortedEventWeights)
+    {
+      free(this->dataPastUnsortedEventWeights);
+      this->dataPastUnsortedEventWeights = NULL;
+    }
+    if(this->dataPastUnsortedEventDelays)
+    {
+      free(this->dataPastUnsortedEventDelays);
+      this->dataPastUnsortedEventDelays = NULL;
+    }
+    if(this->dataPastUnsortedEventTargets)
+    {
+      free(this->dataPastUnsortedEventTargets);
+      this->dataPastUnsortedEventTargets = NULL;
+    }
+    if(this->dataPastHistogram)
+    {
+      free(this->dataPastHistogram);
+      this->dataPastHistogram = NULL;
+    }
+#endif
+    /* *** */
+    this->dataToSimulationLogFile = NULL;
+    this->dataToReportLogFile = NULL;
+  };
 /**************************************************************************************************/
 
 
@@ -187,10 +298,12 @@ class SynapticEvents
   void 
   setUnsortedEvents
   (
+#if CLASS_VALIDATION_ENABLE
+    cl_uint,
+#endif
     cl::CommandQueue&,
     cl_bool,
     cl_bool,
-    cl_uint,
     cl_uint,
     cl_uint,
     cl_uint,
@@ -279,7 +392,7 @@ class SynapticEvents
     Returns histogram item
   */
   static cl_uint
-  getRecentHistogramItem
+  getCurrentHistogramItem
   (
     cl::CommandQueue&,
     cl_uint,
@@ -315,7 +428,7 @@ class SynapticEvents
 
 /**************************************************************************************************/
   /**
-    Assures that the date is up to date.
+    Refreshes host data with data from device
   */
   void 
   refresh
@@ -379,6 +492,23 @@ class SynapticEvents
 
 /**************************************************************************************************/
   /**
+    Initializes this object. Must be called only from the constructor and only once.
+  */
+  void
+  initialize
+  (
+    cl::Context&,
+    cl::Device&,
+    cl::CommandQueue&,
+    cl_bool,
+    struct kernelStatistics&
+  );
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
     Initializes event buffers
   */
   void 
@@ -404,7 +534,9 @@ class SynapticEvents
   void 
   initializeHistogram
   (
+#if CLASS_VALIDATION_ENABLE
     cl_uint
+#endif
   );
 /**************************************************************************************************/
 
@@ -412,10 +544,10 @@ class SynapticEvents
 
 /**************************************************************************************************/
   /**
-    Saves past events and loads current events from the device if they are invalid on the host.
+    Loads data from the device if it is invalid on the host.
   */
   void
-  getEventBuffers
+  getData
   (
     cl::CommandQueue&,
     cl_bool,
@@ -427,40 +559,28 @@ class SynapticEvents
 
 /**************************************************************************************************/
   /**
-    Resets all variables to the default state.
+    Stores data on device.
   */
   void
-  reset
-  (
-    bool
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Stores event data on device.
-  */
-  void
-  storeBuffers
+  storeData
   (
     cl::CommandQueue&,
     cl_bool,
     cl_uint
   );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Verifies if this object was initialized.
-  */
-  void
-  isInitialized
-  ();
 /**************************************************************************************************/
 };
 
-#endif
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/
+
+
+
+#endif  /*SYNAPTIC_EVENTS_H_*/

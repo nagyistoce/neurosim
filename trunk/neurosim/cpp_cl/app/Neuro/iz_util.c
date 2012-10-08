@@ -5,8 +5,19 @@
 
 
 
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
+
+
+
 /*Calculates the derivatives*/
-void iz_derivs(double *y, double *dydx, double *fp){
+void iz_derivs(double *y, double *dydx, double *fp)
+{
 	double v,u,g_ampa,g_gaba,I,k,l,E_ampa,E_gaba,E,a,b,co_g_ampa,co_g_gaba;
 	v = y[0]; u = y[1]; g_ampa = y[2]; g_gaba = y[3]; /*extract variables*/
 	I = fp[0]; k = fp[1]; l = fp[2]; E_ampa = fp[3]; E_gaba = fp[4];
@@ -18,7 +29,8 @@ void iz_derivs(double *y, double *dydx, double *fp){
 }
 
 /*PS - first term*/
-void iz_first(DATA_TYPE **y, DATA_TYPE **co, DATA_TYPE *fp){
+void iz_first(DATA_TYPE **y, DATA_TYPE *fp)
+{
 	DATA_TYPE v,u,g_ampa,g_gaba,I,k,E_ampa,E_gaba,E,a,b,co_g_ampa,co_g_gaba,chi;
 	v = y[0][0]; u = y[1][0]; g_ampa = y[2][0]; g_gaba = y[3][0]; chi = y[4][0];
 	I = fp[0]; k = fp[1]; E_ampa = fp[3]; E_gaba = fp[4];
@@ -31,7 +43,8 @@ void iz_first(DATA_TYPE **y, DATA_TYPE **co, DATA_TYPE *fp){
 }
 
 /*PS - iteration function for higher order terms*/
-void iz_iter(DATA_TYPE **y, DATA_TYPE **co, DATA_TYPE *fp, int p){
+void iz_iter(DATA_TYPE **y, DATA_TYPE **co, DATA_TYPE *fp, int p)
+{
 	DATA_TYPE k,E_ampa,E_gaba,b,vchi; int i;
 	k = fp[1]; E_ampa = fp[3]; E_gaba = fp[4]; b = fp[7];
 	vchi = y[0][0]*y[4][p] + y[4][0]*y[0][p];
@@ -42,3 +55,13 @@ void iz_iter(DATA_TYPE **y, DATA_TYPE **co, DATA_TYPE *fp, int p){
 	y[3][p+1] = co[3][p]*y[3][p];
 	y[4][p+1] = k*y[0][p+1] - y[2][p+1] - y[3][p+1];
 }
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/

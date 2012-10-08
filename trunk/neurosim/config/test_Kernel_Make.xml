@@ -28,6 +28,9 @@
       <id>MAKE_EVENT_PTRS</id>
       <!-- Configuration -->
       <config>
+        <!-- COMPILER: 0x10000, 0x10001 -->
+        <param id="COMPILER">0x10000</param>
+      
         <!-- ENABLE_MASK: oct("0b0000000100000000") -->
         <param id="ENABLE_MASK">oct("0b0000000100000000")</param>
         <!-- TOTAL_NEURON_BITS: 14,17,20 -->
@@ -90,6 +93,8 @@
       <param id="Average Events/Iteration"></param>
       <param id="Average Spikes/Iteration"></param>
       <param id="Total Time"></param>
+      <param id="Total Setup Time"></param>
+      <param id="Total Run Time"></param>
       <param id="Result"></param>
       <param id="Kernel kernelExpandEvents Total Time"></param>
       <param id="Kernel kernelExpandEvents Average Time"></param>

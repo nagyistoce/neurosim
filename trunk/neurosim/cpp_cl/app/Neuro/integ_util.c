@@ -4,6 +4,16 @@
 
 
 
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
+
+
+
 /*Parker-Sochacki stepper - Solve and update in one function*/
 int ps_step
 (
@@ -15,7 +25,7 @@ int ps_step
   DATA_TYPE *y1,
   DATA_TYPE *ynew,
   DATA_TYPE *fp,
-  void (*first)(DATA_TYPE **,DATA_TYPE **,DATA_TYPE *), 
+  void (*first)(DATA_TYPE **,DATA_TYPE *), 
   void (*iter)(DATA_TYPE **,DATA_TYPE **,DATA_TYPE *,int),
   int ps_limit, 
   int nv, 
@@ -25,7 +35,7 @@ int ps_step
   int i,p; DATA_TYPE dt=fp[99], dt_pow=0;
 
   /*Calculate first order terms*/
-	first(y,co,fp); 
+	first(y,fp); 
 	if(dt == 1)for(i=0;i<nv;i++)y1[i]=y[i][0]+y[i][1];
   else{for(i=0;i<nv;i++)y1[i]=y[i][0]+dt*y[i][1]; dt_pow=dt*dt;}
   
@@ -65,10 +75,10 @@ int ps_step
 
 /*Parker-Sochacki stepper - zero tolerance version*/
 int ps_step0(double **y,double **co,double *y1,double *ynew,double *fp,
-  void (*first)(double **,double **,double *), 
+  void (*first)(double **,double *), 
 	void (*iter)(double **,double **,double *,int),int stop,int ps_limit, int nv, int err_nv){
   int i,p; double dt=fp[99], dt_pow=0;
-  first(y,co,fp); /*Calculate first order terms*/
+  first(y,fp); /*Calculate first order terms*/
 	if(dt == 1)for(i=0;i<nv;i++)y1[i]=y[i][0]+y[i][1];
   else{for(i=0;i<nv;i++)y1[i]=y[i][0]+dt*y[i][1]; dt_pow=dt*dt;}
   for(p=1;p<(ps_limit-1);p++){/*Iterations*/
@@ -300,3 +310,13 @@ int bs_step(double *y,double *y0,double *dydt,int nv,double dt,
   for(i=0;i<nv;i++){free(d[i]);} free(d);free(yerr);free(yseq);free(y1);
   return k;
 }
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/

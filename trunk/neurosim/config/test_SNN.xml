@@ -28,6 +28,9 @@
       <id>SNN_SMALL</id>
       <!-- Configuration -->
       <config>
+        <!-- COMPILER: 0x10000, 0x10001 -->
+        <param id="COMPILER">0x10000</param>
+      
         <!-- ENABLE_MASK: oct("0b1111111110000000") -->
         <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
         
@@ -176,6 +179,9 @@
       <id>SNN_MEDIUM</id>
       <!-- Configuration -->
       <config>
+        <!-- COMPILER: 0x10000, 0x10001 -->
+        <param id="COMPILER">0x10000</param>
+        
         <!-- ENABLE_MASK: oct("0b1111111110000000") -->
         <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
         
@@ -289,27 +295,34 @@
       <flow>
         <!-- Start node is alwasy the first -->
         <node name="Start">
-          <result id="PASS">Profile</result>
+          <result id="PASS">ProfileApp</result>
           <result id="FAIL">Exit</result>
         </node>
         <node name="VerifyAll">
           <param id="SIMULATION_MODE">0</param>
-          <param id="SIMULATION_TIME_STEPS">100</param>
+          <param id="SIMULATION_TIME_STEPS">40</param>
           <result id="PASS">VerifyQuick</result>
           <result id="FAIL">Exit</result>
         </node>
         <node name="VerifyQuick">
           <param id="SIMULATION_MODE">1</param>
-          <param id="SIMULATION_TIME_STEPS">200</param>
-          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">50</param>
-          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">50</param>
-          <result id="PASS">Profile</result>
-          <result id="FAIL">Exit</result>
+          <param id="SIMULATION_TIME_STEPS">50</param>
+          <param id="ERROR_TRACK_ACCESS_EVERY_STEPS">25</param>
+          <param id="KERNEL_ENDSTEP_VERIFY_EVERY_STEPS">25</param>
+          <result id="PASS">ProfileKernels</result>
+          <result id="FAIL">ProfileKernels</result>
         </node>
-        <node name="Profile">
+        <node name="ProfileKernels">
+          <param id="SIMULATION_MODE">4</param>
+          <param id="SIMULATION_TIME_STEPS">50</param>
+          <param id="START_PROFILING_AT_STEP">25</param>
+          <result id="PASS">ProfileApp</result>
+          <result id="FAIL">ProfileApp</result>
+        </node>
+        <node name="ProfileApp">
           <param id="SIMULATION_MODE">2</param>
-          <param id="SIMULATION_TIME_STEPS">1200</param>
-          <param id="START_PROFILING_AT_STEP">200</param>
+          <param id="SIMULATION_TIME_STEPS">100</param>
+          <param id="START_PROFILING_AT_STEP">50</param>
           <result id="PASS">Exit</result>
           <result id="FAIL">Exit</result>
         </node>
@@ -324,6 +337,9 @@
       <id>SNN_LARGE</id>
       <!-- Configuration -->
       <config>
+        <!-- COMPILER: 0x10000, 0x10001 -->
+        <param id="COMPILER">0x10000</param>
+        
         <!-- ENABLE_MASK: oct("0b1111111110000000") -->
         <param id="ENABLE_MASK">oct("0b1111111110000000")</param>
         
@@ -484,6 +500,8 @@
       <param id="Average Events/Iteration"></param>
       <param id="Average Spikes/Iteration"></param>
       <param id="Total Time"></param>
+      <param id="Total Setup Time"></param>
+      <param id="Total Run Time"></param>
       <param id="Result"></param>
       <param id="Kernel kernelExpandEvents Total Time"></param>
       <param id="Kernel kernelExpandEvents Average Time"></param>

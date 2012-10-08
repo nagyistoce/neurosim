@@ -12,25 +12,29 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common.hpp" />
-    <ClInclude Include="Connectome.hpp" />
+    <ClInclude Include="Data_Connectome.hpp" />
+    <ClInclude Include="Data_SpikeEvents.hpp" />
+    <ClInclude Include="Data_SynapticEvents.hpp" />
     <ClInclude Include="Definitions.h" />
-    <ClInclude Include="IntegrationTest.hpp" />
     <ClInclude Include="integ_util.h" />
     <ClInclude Include="iz_util.h" />
     <ClInclude Include="Kernel_Primitives.h" />
-    <ClInclude Include="OperatorScan.hpp" />
-    <ClInclude Include="SpikeEvents.hpp" />
-    <ClInclude Include="SynapticEvents.hpp" />
+    <ClInclude Include="Neurosim.hpp" />
+    <ClInclude Include="Operator_Expand.hpp" />
+    <ClInclude Include="Operator_Scan.hpp" />
+    <ClInclude Include="Operator_Sort.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
-    <ClCompile Include="Connectome.cpp" />
-    <ClCompile Include="IntegrationTest.cpp" />
+    <ClCompile Include="Data_Connectome.cpp" />
+    <ClCompile Include="Data_SpikeEvents.cpp" />
+    <ClCompile Include="Data_SynapticEvents.cpp" />
     <ClCompile Include="integ_util.c" />
     <ClCompile Include="iz_util.c" />
-    <ClCompile Include="OperatorScan.cpp" />
-    <ClCompile Include="SpikeEvents.cpp" />
-    <ClCompile Include="SynapticEvents.cpp" />
+    <ClCompile Include="Neurosim.cpp" />
+    <ClCompile Include="Operator_Expand.cpp" />
+    <ClCompile Include="Operator_Scan.cpp" />
+    <ClCompile Include="Operator_Sort.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="IntegrationTest.vcxproj.user" />
@@ -45,7 +49,7 @@
     <ProjectGuid>{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>UnitTest_Sort</RootNamespace>
-    <ProjectName>IntegrationTest</ProjectName>
+    <ProjectName>Neurosim</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -113,8 +117,12 @@ copy "$(ProjectDir)"\neuron_variables_sample.csv "$(OUTDIR)"\neuron_variables_sa
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;COMPILER=0x10000;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(AMDAPPSDKROOT)\include;$(SolutionDir)\include\SDKUtil;$(SolutionDir)\include</AdditionalIncludeDirectories>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <DisableSpecificWarnings>4710;4711;4820;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

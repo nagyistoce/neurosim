@@ -4,15 +4,35 @@
 #ifndef INC_IZ_UTIL_H
 #define INC_IZ_UTIL_H
 
-#include "Definitions.h"
-/*Models: */
-#include "iz_util.h"
-#include "integ_util.h"
-#include <CL/cl.hpp>
+
+
+/***************************************************************************************************
+  Includes
+***************************************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <CL/cl.hpp>
+
+#include "Definitions.h"
+
+/*Models: */
+#include "iz_util.h"
+#include "integ_util.h"
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
 
 
 
@@ -57,7 +77,7 @@ typedef struct
 	DATA_TYPE E_gaba;									/*GABA reversal potential*/
 	DATA_TYPE v;											/*Membrane voltage*/
 	DATA_TYPE u;											/*Recovery variable*/
-	int n_in;												/*Number of synaptic events in input buffers*/
+	unsigned int n_in;								/*Number of synaptic events in input buffers*/
 	DATA_TYPE in_t[REFERENCE_EVENT_QUEUE_SIZE];						/*Time input buffer*/
 	float in_w[REFERENCE_EVENT_QUEUE_SIZE];							/*Weight input buffer*/
 } neuron_iz_ps;
@@ -93,7 +113,19 @@ typedef struct
 } synapse;
 
 void iz_derivs(double *, double *, double *);
-void iz_first(DATA_TYPE **, DATA_TYPE **, DATA_TYPE *);
+void iz_first(DATA_TYPE **, DATA_TYPE *);
 void iz_iter(DATA_TYPE **, DATA_TYPE **, DATA_TYPE *, int);
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/
+
+
 
 #endif /* INC_IZ_UTIL_H */
