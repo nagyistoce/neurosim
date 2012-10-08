@@ -47,20 +47,18 @@
 #include <string>
 #include <ctime>
 #include <exception>
+#include <CL/cl.hpp>
+#include <CL/opencl.h>
 
 #include "Definitions.h"
 #include "integ_util.h"
 #include "iz_util.h"
-#include <CL/cl.hpp>
-#include <CL/opencl.h>
-#include <SDKCommon.hpp>
-#include <SDKApplication.hpp>
-#include <SDKFile.hpp>
-#include <SDKBitMap.hpp>
-#include "OperatorScan.hpp"
-#include "SpikeEvents.hpp"
-#include "Connectome.hpp"
-#include "SynapticEvents.hpp"
+#include "Data_Connectome.hpp"
+#include "Data_SpikeEvents.hpp"
+#include "Data_SynapticEvents.hpp"
+#include "Operator_Expand.hpp"
+#include "Operator_Scan.hpp"
+#include "Operator_Sort.hpp"
 
 /**************************************************************************************************/
 
@@ -77,7 +75,49 @@ using namespace std;
 
 
 /***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
   Structs
+  
+  TODO: may need to redefine these with constructor/destructor. 
+  For example (from http://stackoverflow.com/questions/4203010/how-to-initialize-member-struct-
+  in-initializer-list-of-c-class):
+  
+  struct Foo {
+
+    Foo(int const a, std::initializer_list<char> const b, short* c)
+      : x(a), y(c) {
+      assert(b.size() >= 24, "err");
+      std::copy(b.begin(), b.begin() + 24, array);
+    }
+
+    ~Foo() { delete y; }
+
+    int x;
+    char array[24];
+    short* y;
+  };
+
+  // Class, which has Foo as its field:
+  class Bar {
+
+    Bar() : x(5), foo(5, {'a', 'b', ..., 'y', 'z'},
+      new short(5)) { }
+
+    private:
+
+    int x;
+    Foo foo;
+  };
+  
 ***************************************************************************************************/
 
 struct kernelStatistics 
@@ -99,6 +139,16 @@ struct SimException : public std::exception
   SimException(std::string ss) : s(ss) {}
   const char* what() const throw() { return s.c_str(); }
 };
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Variables
+***************************************************************************************************/
+
+
 
 /**************************************************************************************************/
 
@@ -169,6 +219,9 @@ void swap2(T& a, T& b)
   void
   createKernel
   (
+#if LOG_SIMULATION
+    std::stringstream*,
+#endif
     cl::Context&,
     cl::Device&,
     cl::Kernel&,
@@ -179,5 +232,32 @@ void swap2(T& a, T& b)
     size_t
   );
 /**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Find target device from the list of target devices.
+  */
+  bool 
+  findTargetDevice
+  (
+    vector<cl::Device>                  platformDevices,
+    const char                          *targetDevices,
+    std::vector<cl::Device>::iterator   *d
+  );
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/
+
+
 
 #endif // COMMON_HPP_

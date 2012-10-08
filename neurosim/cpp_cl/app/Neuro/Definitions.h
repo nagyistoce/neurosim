@@ -41,7 +41,93 @@
 
 /** ############################################################################################# **
 
-  Configuration space. Use this space to overwrite default definitions.
+  I. Compiler-dependent control
+
+** ############################################################################################# **/
+
+
+
+/***************************************************************************************************
+  Compiler encoding: COMPILER_OS_NAME = CON, where
+    C - control encoding (range 1 - F)
+      1 - compiler control is on
+      F - compiler control is off
+    O - OS encoding (range 0 - FF):
+      0 - Windows
+      1 - Linux
+    N - compiler name encoding (range 0 - FF):
+      0 - Microsoft Visual C++
+      1 - MinGW64
+***************************************************************************************************/
+
+#define COMPILER_WIN_VC         0x10000
+#define COMPILER_WIN_MINGW64    0x10001
+#define COMPILER_CONTROL_OFF    0xF0000
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Compiler identification and dependencies
+***************************************************************************************************/
+
+/*mingw compiler specific stuff
+#if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
+  #define _aligned_malloc __mingw_aligned_malloc 
+  #define _aligned_free  __mingw_aligned_free 
+#endif*/
+
+/*Intel compiler specific stuff
+#ifndef _WIN32
+#if defined(__INTEL_COMPILER)
+  #pragma warning(disable : 1125)
+#endif
+#endif*/
+
+#if !defined (COMPILER)
+  #error (COMPILER flag is not defined)
+#endif
+
+#if COMPILER == COMPILER_WIN_VC
+
+  #define WARNING_CONTROL_START \
+    __pragma(warning( push, 4 ))  /*\
+    __pragma(warning(default : 4710 4711 4820)) */
+    
+  #define WARNING_CONTROL_END \
+    __pragma(warning( pop ))  /*\
+    __pragma(warning(disable : 4710 4711 4820)) */
+    
+#elif COMPILER == COMPILER_WIN_MINGW64
+  #error (Unsupported COMPILER type)
+  /*TODO: 
+  see http://stackoverflow.com/questions/3030099/c-c-pragma-in-define-macro
+  #define WARN _Pragma("argument")*/
+#elif (COMPILER & COMPILER_CONTROL_OFF) == COMPILER_CONTROL_OFF
+  #define WARNING_CONTROL_START
+  #define WARNING_CONTROL_END
+#else
+  #error (Unsupported COMPILER type)
+#endif
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
+
+
+
+/** ############################################################################################# **
+
+  II. Configuration space. Use this space to overwrite default definitions.
 
 ** ############################################################################################# **/
 
@@ -53,9 +139,60 @@
 
 /** ############################################################################################# **
 
-  I. Generic Parameters, Macros and Definitions
+  III. Independent Parameters, Macros and Definitions
+  
+  (Note: some of them have dependencies within this section, which are resolved by in-order 
+  definitions)
   
 ** ############################################################################################# **/
+
+
+
+/***************************************************************************************************
+  String operations
+***************************************************************************************************/
+
+#define STRINGIFY(x)    #x
+#define TOSTRING(x)     STRINGIFY(x)
+    
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Exceptions
+***************************************************************************************************/
+
+#define CATCH_GENERIC(stream, message, action)\
+  catch(exception& e)\
+  {\
+    stream << #message << ": Standard Exception: " << e.what() << "\n";\
+    action;\
+  }\
+  catch (...)\
+  {\
+    stream << #message << ": unknown exception occured" << "\n";\
+    action;\
+  }
+  
+#define CATCH(stream, message, action)\
+  catch(SimException& e)\
+  {\
+    stream << #message << ": " << e.what() << "\n";\
+    action;\
+  }\
+  CATCH_GENERIC(stream, message, action)
+  
+#define THROW_SIMEX(msg)\
+  {\
+    std::stringstream ss;\
+    ss << msg << std::endl;\
+    throw SimException(ss.str());\
+  }
+    
+/**************************************************************************************************/
+
+
 
 /***************************************************************************************************
   Math macros
@@ -104,21 +241,6 @@
     checksum += ((1705662821u + data) % 2147483659u);\
   }
   
-#define GET_RANDOM_INT(setValue, max, minPercent, maxPercent)\
-  {\
-    if(minPercent > maxPercent){setValue = -1;}\
-    if((minPercent > 100.0) || (maxPercent > 100.0)){setValue = -1;}\
-    if((minPercent < 0.0) || (maxPercent < 0.0)){setValue = -1;}\
-    if(setValue != -1)\
-    {\
-      if(minPercent == maxPercent){setValue = cl_uint(((double)max)*(maxPercent/100.0));}\
-      else\
-      {\
-        setValue = cl_uint(((double)(max))*((minPercent/100.0) + \
-          abs(((maxPercent-minPercent)/100.0)*((double)rand()/((double)RAND_MAX)))));\
-      }\
-    }\
-  }
 /**************************************************************************************************/
 
 
@@ -147,8 +269,11 @@
 /***************************************************************************************************
   Print macros
 ***************************************************************************************************/
+
 #define PRINTF              printf
+
 #define PRINTERR(...)       fprintf(stderr,__VA_ARGS__)
+
 #define PRINT_HEX_TO_FILE(filePtr, byteSize, data)\
   {\
     unsigned int i;\
@@ -158,6 +283,7 @@
     }\
     fprintf (filePtr,"%02X",(unsigned char)(data >> i));\
   }
+  
 #define PRINT_HEX(byteSize, data)\
   {\
     long dataLong = *((long *)(&(data)));\
@@ -168,6 +294,80 @@
     }\
     PRINTF("%02X",(unsigned char)(dataLong >> i));\
   }
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Error checkers
+***************************************************************************************************/
+
+#define ASSERT_CL_SUCCESS(tested_variable, message)\
+  if(tested_variable != CL_SUCCESS)\
+  {\
+    throw SimException(message);\
+  }
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Profiling
+***************************************************************************************************/
+
+/*Time registration for statistics*/
+#define REGISTER_TIME(kernel_name, time, increment, stats_struct)\
+  {\
+    map<std::string, double> stats = stats_struct.execTime[kernel_name];\
+    if(stats.find("Time") ==  stats.end()){stats["Time"] = 0;}\
+    if(stats.find("Count") ==  stats.end()){stats["Count"] = 0;}\
+    stats["Time"] += time;\
+    stats["Count"] += increment;\
+    stats_struct.execTime[kernel_name] = stats;\
+    set<std::string> kernels = stats_struct.kernelNamesExecTime;\
+    kernels.insert(kernel_name);\
+    stats_struct.kernelNamesExecTime = kernels;\
+  }
+  
+/*Get time stamp in ns*/
+#ifdef WIN32
+#define GET_TIME_NS(time)\
+  {\
+    QueryPerformanceCounter((LARGE_INTEGER *)&(this->performanceCounter));\
+    time = ((double)(this->performanceCounter) / (double)(this->performanceFrequency));\
+  }
+#else
+#define GET_TIME_NS(time)\
+  {\
+    struct timespec tp;\
+    clock_gettime(CLOCK_MONOTONIC, &tp);\
+    time = (double) tp.tv_sec * (1000ULL * 1000ULL * 1000ULL) + (double) tp.tv_nsec;\
+  }
+#endif
+  
+/*Start timer*/
+#define START_TIMER(step, starting_step, startTime)\
+  {\
+    if(step >= starting_step){GET_TIME_NS(startTime);}\
+  }
+
+/*End timer*/
+#define END_TIMER(step, starting_step, event, tag, startTime, stats_struct)\
+  if(step >= starting_step)\
+  {\
+    cl_int status = event.wait();\
+    double endAppTime;\
+    GET_TIME_NS(endAppTime);\
+    if(status != CL_SUCCESS)\
+    {\
+      THROW_SIMEX("END_TIMER: Failed cl:Event.wait() for " << tag << " due to error code " \
+        << status);\
+    }\
+    REGISTER_TIME(tag, (endAppTime-startTime), 1.0, stats_struct)\
+  }
+  
 /**************************************************************************************************/
 
 
@@ -175,26 +375,19 @@
 /***************************************************************************************************
   Memory allocation and registration
 ***************************************************************************************************/
-/*Memory size and name registration for statistics*/
-#define REGISTER_TIME(kernel_name, time, increment)\
-  {\
-    map<std::string, double> stats = kernelStats.execTime[#kernel_name];\
-    if(stats.find("Time") ==  stats.end()){stats["Time"] = 0;}\
-    if(stats.find("Count") ==  stats.end()){stats["Count"] = 0;}\
-    stats["Time"] += time;\
-    stats["Count"] += increment;\
-    kernelStats.execTime[#kernel_name] = stats;\
-    set<std::string> kernels = kernelStats.kernelNamesExecTime;\
-    kernels.insert(#kernel_name);\
-    kernelStats.kernelNamesExecTime = kernels;\
-  }
-  
+
+/*Memory types*/
+#define MEM_CONSTANT                                          0
+#define MEM_GLOBAL                                            1
+#define MEM_LOCAL                                             2
+
 /*Memory size and name registration for statistics*/
 #define REGISTER_MEMORY(kernel_name, mem_type, mem_name)\
   {\
     cl_uint minDataTypeAlignSize = (device).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>();\
     cl_ulong memMaxAllocactionSize = (device).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();\
     size_t size = ((mem_name ##SizeBytes)/minDataTypeAlignSize + 1)*minDataTypeAlignSize;\
+    \
     switch (mem_type)\
     {\
       case MEM_CONSTANT:\
@@ -206,11 +399,10 @@
         kernelStats.cmSizes[kernel_name] = memSizes;\
         if(memSizes["TOTAL"] > maxConstantMemSize)\
         {\
-          std::cerr << "Total allocation for constant memory in kernel " << kernel_name\
-          << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
-          << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, "\
-          << ((float)maxConstantMemSize)/(1024.0) << " KB\n";\
-          return SDK_FAILURE;\
+          THROW_SIMEX("Total allocation for constant memory in kernel " << kernel_name\
+            << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
+            << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, "\
+            << ((float)maxConstantMemSize)/(1024.0) << " KB");\
         }\
       }\
         break;\
@@ -223,11 +415,10 @@
         kernelStats.gmSizes[kernel_name] = memSizes;\
         if(memSizes["TOTAL"] > maxGlobalMemSize)\
         {\
-          std::cerr << "Total allocation for global memory in kernel " << kernel_name\
-          << ", " << ((float)memSizes["TOTAL"])/(1024.0*1024.0)\
-          << " MB, exceeds CL_DEVICE_GLOBAL_MEM_SIZE, "\
-          << ((float)maxGlobalMemSize)/(1024.0*1024.0) << "\n";\
-          return SDK_FAILURE;\
+          THROW_SIMEX("Total allocation for global memory in kernel " << kernel_name\
+            << ", " << ((float)memSizes["TOTAL"])/(1024.0*1024.0)\
+            << " MB, exceeds CL_DEVICE_GLOBAL_MEM_SIZE, "\
+            << ((float)maxGlobalMemSize)/(1024.0*1024.0) << "\n");\
         }\
       }\
         break;\
@@ -240,17 +431,16 @@
         kernelStats.lmSizes[kernel_name] = memSizes;\
         if(memSizes["TOTAL"] > maxLocalMemSize)\
         {\
-          std::cout << "Total allocation for local memory in kernel " << kernel_name\
-          << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
-          << " KB, exceeds CL_DEVICE_LOCAL_MEM_SIZE, "\
-          << ((float)maxLocalMemSize)/(1024.0) << " KB\n";\
-          return SDK_FAILURE;\
+          THROW_SIMEX("Total allocation for local memory in kernel " << kernel_name\
+            << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
+            << " KB, exceeds CL_DEVICE_LOCAL_MEM_SIZE, "\
+            << ((float)maxLocalMemSize)/(1024.0) << " KB");\
         }\
       }\
         break;\
       default:\
         std::cout << "REGISTER_MEMORY: unsupported memory type\n" << std::endl;\
-        return SDK_FAILURE;\
+        throw SimException("REGISTER_MEMORY: unsupported memory type.");\
     }\
     set<std::string> kernels = kernelStats.kernelNames;\
     kernels.insert(kernel_name);\
@@ -258,11 +448,10 @@
     \
     if(size > memMaxAllocactionSize)\
     {\
-      std::cerr << "REGISTER_MEMORY: Memory object in kernel " << kernel_name\
-      << " with size identifier " << #mem_name << " and size "\
-      << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, "\
-      << ((float)memMaxAllocactionSize)/(1024.0*1024.0);\
-      return SDK_FAILURE;\
+      THROW_SIMEX("REGISTER_MEMORY: Memory object in kernel " << kernel_name\
+        << " with size identifier " << #mem_name << " and size "\
+        << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, "\
+        << ((float)memMaxAllocactionSize)/(1024.0*1024.0));\
     }\
   }
   
@@ -277,51 +466,48 @@
       case MEM_CONSTANT:\
       {\
         cl_ulong maxConstantMemSize = (device).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();\
-        map<std::string, size_t> memSizes = kernelStats->cmSizes[kernel_name];\
+        map<std::string, size_t> memSizes = kernelStats.cmSizes[kernel_name];\
         memSizes[#mem_name] = size;\
         memSizes["TOTAL"] += size;\
-        kernelStats->cmSizes[kernel_name] = memSizes;\
+        kernelStats.cmSizes[kernel_name] = memSizes;\
         if(memSizes["TOTAL"] > maxConstantMemSize)\
         {\
-          ss << "Total allocation for constant memory in kernel " << kernel_name\
-          << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
-          << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, "\
-          << ((float)maxConstantMemSize)/(1024.0) << " KB\n";\
-         throw SimException(ss.str());\
+         THROW_SIMEX("Total allocation for constant memory in kernel " << kernel_name\
+            << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
+            << " KB, exceeds CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, "\
+            << ((float)maxConstantMemSize)/(1024.0) << " KB");\
         }\
       }\
         break;\
       case MEM_GLOBAL:\
       {\
         cl_ulong maxGlobalMemSize = (device).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();\
-        map<std::string, size_t> memSizes = kernelStats->gmSizes[kernel_name];\
+        map<std::string, size_t> memSizes = kernelStats.gmSizes[kernel_name];\
         memSizes[#mem_name] = size;\
         memSizes["TOTAL"] += size;\
-        kernelStats->gmSizes[kernel_name] = memSizes;\
+        kernelStats.gmSizes[kernel_name] = memSizes;\
         if(memSizes["TOTAL"] > maxGlobalMemSize)\
         {\
-          ss << "Total allocation for global memory in kernel " << kernel_name\
-          << ", " << ((float)memSizes["TOTAL"])/(1024.0*1024.0)\
-          << " MB, exceeds CL_DEVICE_GLOBAL_MEM_SIZE, "\
-          << ((float)maxGlobalMemSize)/(1024.0*1024.0) << "\n";\
-          throw SimException(ss.str());\
+          THROW_SIMEX("Total allocation for global memory in kernel " << kernel_name\
+            << ", " << ((float)memSizes["TOTAL"])/(1024.0*1024.0)\
+            << " MB, exceeds CL_DEVICE_GLOBAL_MEM_SIZE, "\
+            << ((float)maxGlobalMemSize)/(1024.0*1024.0));\
         }\
       }\
         break;\
       case MEM_LOCAL:\
       {\
         cl_ulong maxLocalMemSize = (device).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();\
-        map<std::string, size_t> memSizes = kernelStats->lmSizes[kernel_name];\
+        map<std::string, size_t> memSizes = kernelStats.lmSizes[kernel_name];\
         memSizes[#mem_name] = size;\
         memSizes["TOTAL"] += size;\
-        kernelStats->lmSizes[kernel_name] = memSizes;\
+        kernelStats.lmSizes[kernel_name] = memSizes;\
         if(memSizes["TOTAL"] > maxLocalMemSize)\
         {\
-          ss << "Total allocation for local memory in kernel " << kernel_name\
-          << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
-          << " KB, exceeds CL_DEVICE_LOCAL_MEM_SIZE, "\
-          << ((float)maxLocalMemSize)/(1024.0) << " KB\n";\
-          throw SimException(ss.str());\
+          THROW_SIMEX("Total allocation for local memory in kernel " << kernel_name\
+            << ", " << ((float)memSizes["TOTAL"])/(1024.0)\
+            << " KB, exceeds CL_DEVICE_LOCAL_MEM_SIZE, "\
+            << ((float)maxLocalMemSize)/(1024.0) << " KB");\
         }\
       }\
         break;\
@@ -329,67 +515,42 @@
         throw SimException("REGISTER_MEMORY_O: unsupported memory type.");\
     }\
     \
-    set<std::string> kernels = kernelStats->kernelNames;\
+    set<std::string> kernels = kernelStats.kernelNames;\
     kernels.insert(kernel_name);\
-    kernelStats->kernelNames = kernels;\
+    kernelStats.kernelNames = kernels;\
     \
     if(size > memMaxAllocactionSize)\
     {\
-      ss << "REGISTER_MEMORY_O: Memory object in kernel " << kernel_name\
-      << " with size identifier " << #mem_name << " and size "\
-      << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, "\
-      << ((float)memMaxAllocactionSize)/(1024.0*1024.0);\
-      throw SimException(ss.str());\
+      THROW_SIMEX("REGISTER_MEMORY_O: Memory object in kernel " << kernel_name\
+        << " with size identifier " << #mem_name << " and size "\
+        << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, "\
+        << ((float)memMaxAllocactionSize)/(1024.0*1024.0));\
     }\
   }
   
-/*Memory types*/
-#define MEM_CONSTANT                                          0
-#define MEM_GLOBAL                                            1
-#define MEM_LOCAL                                             2
-
 /*Calloc host memory*/
 #define CALLOC(name, type, size)\
   {\
-    name ##Size = size;\
-    name ##SizeBytes = (name ##Size) * sizeof(type);\
-    name = (type *)calloc(name ##Size, sizeof(type));\
-    if(name == NULL)\
-    {\
-      sampleCommon->error("Failed to allocate memory for (" #name ")");\
-      return SDK_FAILURE;\
-    }\
-  }
-  
-#define CALLOC_O(name, type, size)\
-  {\
     if(this->name != NULL)\
     {\
-      throw SimException("CALLOC_O: Attempted to point not NULL pointer to memory space (" \
+      throw SimException("CALLOC: Attempted to point not NULL pointer to memory space (" \
         #name ")");\
     }\
     this->name ##Size = size;\
     this->name ##SizeBytes = (this->name ##Size) * sizeof(type);\
     this->name = (type *)calloc(this->name ##Size, sizeof(type));\
-    if(name == NULL)\
+    if(this->name == NULL)\
     {\
-      throw SimException("CALLOC_O: Failed to allocate memory for (" #name ")");\
+      throw SimException("CALLOC: Failed to allocate memory for (" #name ")");\
     }\
   }
 
-/*Reference host memory to another memory: name1 is referenced to name2 assuming that both have 
-  the same charackteristics*/
-#define REFERENCE(name1, name2)\
-  {\
-    name1 ##Size = name2 ##Size;\
-    name1 ##SizeBytes = name2 ##SizeBytes;\
-    name1 = name2;\
-    if(name1 == NULL)\
-    {\
-      sampleCommon->error("Failed to allocate memory for (" #name1 ")");\
-      return SDK_FAILURE;\
-    }\
-  }
+/*Swap 2 memory references*/
+#define SWAP_MEM(type, a, b)\
+{\
+  type tmp = a; a = b; b = tmp;\
+}
+
 /**************************************************************************************************/
 
 
@@ -430,10 +591,8 @@
     buffer = cl::Buffer(context, flags, size, NULL, &err);\
     if(err != CL_SUCCESS)\
     {\
-      std::stringstream ss;\
-      ss << "CREATE_BUFFER_O: Failed to allocate " << #buffer << " due to error code " \
-        << err << "\n";\
-      throw SimException(ss.str());\
+      THROW_SIMEX("CREATE_BUFFER_O: Failed to allocate " << #buffer << " due to error code " \
+        << err);\
     }\
   }
   
@@ -443,64 +602,28 @@
     buffer = cl::Buffer(context, flags, size, NULL, &err);\
     if(err != CL_SUCCESS)\
     {\
-      std::stringstream ss;\
-      ss << "CREATE_BUFFER_O: Failed to allocate " << #buffer << " due to error code " \
-        << err << "\n";\
-      throw SimException(ss.str());\
+      THROW_SIMEX("CREATE_BUFFER_O: Failed to allocate " << #buffer << " due to error code " \
+        << err);\
     }\
   }
   
 /*Enqueu write buffer*/
-#define ENQUEUE_WRITE_BUFFER(block, buffer, size, data)\
-  {\
-    cl_int status;\
-    cl::Event writeEvt = NULL;\
-    cl_int eventStatus = CL_QUEUED;\
-    status = commandQueue.enqueueWriteBuffer(buffer, block, 0, size, data, NULL, &writeEvt);\
-    if(!sampleCommon->checkVal(status, CL_SUCCESS,\
-      "CommandQueue::enqueueWriteBuffer() failed. (" #buffer ")"))\
-    {\
-      return SDK_FAILURE;\
-    }\
-    status = commandQueue.flush();\
-    if(!sampleCommon->checkVal(status, CL_SUCCESS,\
-      "cl::CommandQueue.flush failed. (" #buffer ")"))\
-    {\
-      return SDK_FAILURE;\
-    }\
-    eventStatus = CL_QUEUED;\
-    while(eventStatus != CL_COMPLETE)\
-    {\
-      status = writeEvt.getInfo<cl_int>(CL_EVENT_COMMAND_EXECUTION_STATUS,&eventStatus);\
-      if(!sampleCommon->checkVal(status, CL_SUCCESS,\
-        "enqueueWriteBuffer, \
-        cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS) failed. (" #buffer ")"))\
-      {\
-        return SDK_FAILURE;\
-      }\
-    }\
-  }
-  
-#define ENQUEUE_WRITE_BUFFER_O(block, queue, buffer, size, data)\
+#define ENQUEUE_WRITE_BUFFER(block, queue, buffer, size, data)\
   {\
     cl_int status;\
     cl::Event writeEvt = NULL;\
     status = queue.enqueueWriteBuffer(buffer, block, 0, size, data, NULL, &writeEvt);\
     if(status != CL_SUCCESS)\
     {\
-      std::stringstream ss;\
-      ss << "ENQUEUE_WRITE_BUFFER_O: Failed to enqueue buffer " << #buffer \
-        << " for write due to error code " << status << "\n";\
-      throw SimException(ss.str());\
+      THROW_SIMEX("ENQUEUE_WRITE_BUFFER: Failed to enqueue buffer " << #buffer \
+        << " for write due to error code " << status);\
     }\
     \
     status = queue.flush();\
     if(status != CL_SUCCESS)\
     {\
-      std::stringstream ss;\
-      ss << "ENQUEUE_WRITE_BUFFER_O: Failed to flush buffer" << #buffer \
-        << " for write due to error code " << status << "\n";\
-      throw SimException(ss.str());\
+      THROW_SIMEX("ENQUEUE_WRITE_BUFFER: Failed to flush buffer" << #buffer \
+        << " for write due to error code " << status);\
     }\
     \
     cl_int eventStatus = CL_QUEUED;\
@@ -509,44 +632,14 @@
       status = writeEvt.getInfo<cl_int>(CL_EVENT_COMMAND_EXECUTION_STATUS,&eventStatus);\
       if(status != CL_SUCCESS)\
       {\
-        std::stringstream ss;\
-        ss << "ENQUEUE_WRITE_BUFFER_O: Failed to get successefull write event status "\
-          << "for buffer " << #buffer << " due to error code " << status << "\n";\
-        throw SimException(ss.str());\
+        THROW_SIMEX("ENQUEUE_WRITE_BUFFER: Failed to get successefull write event status "\
+          << "for buffer " << #buffer << " due to error code " << status);\
       }\
     }\
   }
   
 /*Enqueue read buffer*/
-#define ENQUEUE_READ_BUFFER(block, buffer, size, data)\
-  {\
-    cl_int status;\
-    cl_int eventStatus = CL_QUEUED;\
-    cl::Event readEvt;\
-    status = commandQueue.enqueueReadBuffer(buffer, block, 0, size, data, NULL, &readEvt);\
-    if(!sampleCommon->checkVal(status, CL_SUCCESS,\
-      "CommandQueue::enqueueReadBuffer failed. (" #buffer ")"))\
-    {\
-      return SDK_FAILURE;\
-    }\
-    status = commandQueue.flush();\
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "cl::CommandQueue.flush failed."))\
-    {\
-      return SDK_FAILURE;\
-    }\
-    eventStatus = CL_QUEUED;\
-    while(eventStatus != CL_COMPLETE)\
-    {\
-      status = readEvt.getInfo<cl_int>(CL_EVENT_COMMAND_EXECUTION_STATUS, &eventStatus);\
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, \
-        "enqueueReadBuffer, \
-        cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS) failed. (" #buffer ")"))\
-      {\
-        return SDK_FAILURE;\
-      }\
-    }\
-  }
-#define ENQUEUE_READ_BUFFER_O(block, queue, buffer, size, data)\
+#define ENQUEUE_READ_BUFFER(block, queue, buffer, size, data)\
   {\
     cl_int status;\
     cl_int eventStatus = CL_QUEUED;\
@@ -554,19 +647,15 @@
     status = queue.enqueueReadBuffer(buffer, block, 0, size, data, NULL, &readEvt);\
     if(status != CL_SUCCESS)\
     {\
-      std::stringstream ss;\
-      ss << "ENQUEUE_READ_BUFFER_O: Failed to enqueue buffer " << #buffer \
-        << " for read due to error code " << status << "\n";\
-      throw SimException(ss.str());\
+      THROW_SIMEX("ENQUEUE_READ_BUFFER: Failed to enqueue buffer " << #buffer \
+        << " for read due to error code " << status);\
     }\
     \
     status = queue.flush();\
     if(status != CL_SUCCESS)\
     {\
-      std::stringstream ss;\
-      ss << "ENQUEUE_READ_BUFFER_O: Failed to flush buffer" << #buffer \
-        << " for read due to error code " << status << "\n";\
-      throw SimException(ss.str());\
+      THROW_SIMEX("ENQUEUE_READ_BUFFER: Failed to flush buffer" << #buffer \
+        << " for read due to error code " << status);\
     }\
     \
     eventStatus = CL_QUEUED;\
@@ -575,49 +664,37 @@
       status = readEvt.getInfo<cl_int>(CL_EVENT_COMMAND_EXECUTION_STATUS, &eventStatus);\
       if(status != CL_SUCCESS)\
       {\
-        std::stringstream ss;\
-        ss << "ENQUEUE_READ_BUFFER_O: Failed to get successefull read event status "\
-          << "for buffer " << #buffer << " due to error code " << status << "\n";\
-        throw SimException(ss.str());\
+        THROW_SIMEX("ENQUEUE_READ_BUFFER: Failed to get successefull read event status "\
+          << "for buffer " << #buffer << " due to error code " << status);\
       }\
     }\
   }
+  
+/*Enqueue read buffer*/
+#define IF_HIT_READ(select, selectHit, validMask)\
+  if((select & selectHit) && !((validMask) & selectHit))
   
 /*Set kernel argument*/
 #define SET_KERNEL_ARG(kernel, arg, argNum)\
   {\
     cl_int status;\
     status = kernel.setArg(argNum, arg);\
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "Kernel::setArg() failed. (" #arg ")"))\
-    {\
-      return SDK_FAILURE;\
-    }\
-  }
-  
-#define SET_KERNEL_ARG_O(kernel, arg, argNum)\
-  {\
-    cl_int status;\
-    status = kernel.setArg(argNum, arg);\
     if(status != CL_SUCCESS)\
     {\
-      std::stringstream ss;\
-      ss << "SET_KERNEL_ARG_O: Failed to set kernel argument #" << argNum << ", "\
-      << #arg << " for kernel " << #kernel << " due to error code " << status << "\n";\
-      throw SimException(ss.str());\
+      THROW_SIMEX("SET_KERNEL_ARG: Failed to set kernel argument #" << argNum << ", "\
+      << #arg << " for kernel " << #kernel << " due to error code " << status);\
     }\
   }
-  
-#define ENQUEUE_KERNEL(kernel, gThreads, lThreads, events, ndrEvt)\
+
+#define ENQUEUE_KERNEL(queue, kernel, gThreads, lThreads, events, ndrEvt)\
   {\
     cl_int status;\
     status = queue.enqueueNDRangeKernel\
-    (kernel, cl::NullRange, gThreads, lThreads, events, &ndrEvt);\
+      (kernel, cl::NullRange, gThreads, lThreads, events, &ndrEvt);\
     if(status != CL_SUCCESS)\
     {\
-      std::stringstream ss;\
-      ss << "ENQUEUE_KERNEL: Failed to enqueue kernel " << #kernel << " due to error code " \
-      << status << "\n";\
-      throw SimException(ss.str());\
+      THROW_SIMEX("ENQUEUE_KERNEL: Failed to enqueue kernel " << #kernel << " due to error code " \
+        << status)\
     }\
   }
   
@@ -629,30 +706,13 @@
 
 
 
-/***************************************************************************************************
-  Exceptions
-***************************************************************************************************/
+/** ############################################################################################# **
 
-#define CATCH_GENERIC(stream, message, action)\
-  catch(exception& e)\
-  {\
-    stream << #message << ": Standard Exception: " << e.what() << "\n";\
-    action;\
-  }\
-  catch (...)\
-  {\
-    stream << #message << ": unknown exception occured" << "\n";\
-    action;\
-  }
+  IV. Program Execution Definitions and Parameters
   
-#define CATCH(stream, message, action)\
-  catch(SimException& e)\
-  {\
-    stream << #message << ": " << e.what() << "\n";\
-    action;\
-  }\
-  CATCH_GENERIC(stream, message, action)
-/**************************************************************************************************/
+  (Note: they may utilize definitions from section III)
+  
+** ############################################################################################# **/
 
 
 
@@ -720,7 +780,7 @@
 /*Max number of time slots (define the longest delay)*/
 #define EVENT_TIME_SLOTS                                      16
 /*Minimum event delay latency*/
-#define MINIMUM_PROPAGATION_DELAY                             1.0f
+#define MINIMUM_PROPAGATION_DELAY                             1.0
 /*Populate network state with user defined parameters. Useful to start spiking right away.*/
 #if !(defined(PREINITIALIZE_NETWORK_STATE))
   #define PREINITIALIZE_NETWORK_STATE                         1
@@ -823,8 +883,6 @@
   #endif
   /*Enable high-level verification of sort results*/
   #define SORT_VERIFY_ENABLE                                  1
-  /*Enable high-level verification of model variables, spikes, events for whole network*/
-  #define NETWORK_VERIFY_ENABLE                               1
   /*Log model variables with parameters LOG_MODEL_VARIABLES_* defined above*/
   #define LOG_MODEL_VARIABLES                                 1
   /*Log simulation messages*/
@@ -847,7 +905,11 @@
   /*Enable compiler flags that allow device to produce same result as host by disabling math 
     optimizations*/
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
-  /*Profiling mode*/
+  /*Profiling mode
+    0 - Off
+    1 - Application-level profiling
+    2 - Kernel-level profiling
+  */
   #define PROFILING_MODE                                      0
   /*Enable gathering statistics*/
   #define STATISTICS_ENABLE                                   1
@@ -861,10 +923,15 @@
   #endif
   /*Enable validation of parameters, data ranges, etc in classes*/
   #define CLASS_VALIDATION_ENABLE                             1
-  /*Unit tests are enabled either automatically when not all data producers are enabled or 
-    when FORCE_UNIT_TEST is set to 1*/
-  #if !(defined(FORCE_UNIT_TEST))
-  #define FORCE_UNIT_TEST                                     0
+  /*Define Unit Test mode:
+    0 - unit testing: a unit test for operation is forced if relevant operator/kernel is enabled 
+        to support it
+    1 - integration testing: a unit test is enabled automatically if at least one of required 
+        preceeding operators/kernels is not enabled
+    2 - unit testing is restricted
+  */
+  #if !(defined(UNIT_TEST_MODE))
+  #define UNIT_TEST_MODE                                      1
   #endif
 
 #elif SIMULATION_MODE == 1
@@ -884,7 +951,6 @@
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      0
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
-  #define NETWORK_VERIFY_ENABLE                               1
   #define ERROR_TRACK_ENABLE                                  1
   /**/
   #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
@@ -901,8 +967,8 @@
   /**/
   #define CLASS_VALIDATION_ENABLE                             1
   /**/
-  #if !(defined(FORCE_UNIT_TEST))
-  #define FORCE_UNIT_TEST                                     0
+  #if !(defined(UNIT_TEST_MODE))
+  #define UNIT_TEST_MODE                                      1
   #endif
   
 #elif SIMULATION_MODE == 2
@@ -923,7 +989,6 @@
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      1
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
-  #define NETWORK_VERIFY_ENABLE                               1
   #define ERROR_TRACK_ENABLE                                  0
   /**/
   #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
@@ -940,8 +1005,8 @@
   /**/
   #define CLASS_VALIDATION_ENABLE                             0
   /**/
-  #if !(defined(FORCE_UNIT_TEST))
-  #define FORCE_UNIT_TEST                                     0
+  #if !(defined(UNIT_TEST_MODE))
+  #define UNIT_TEST_MODE                                      2
   #endif
   
 #elif SIMULATION_MODE == 3
@@ -962,7 +1027,6 @@
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      1
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      1
-  #define NETWORK_VERIFY_ENABLE                               0
   #define ERROR_TRACK_ENABLE                                  0
   /**/
   #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
@@ -979,8 +1043,8 @@
   /**/
   #define CLASS_VALIDATION_ENABLE                             0
   /**/
-  #if !(defined(FORCE_UNIT_TEST))
-  #define FORCE_UNIT_TEST                                     0
+  #if !(defined(UNIT_TEST_MODE))
+  #define UNIT_TEST_MODE                                      2
   #endif
   
 #elif SIMULATION_MODE == 4
@@ -1001,7 +1065,6 @@
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      2
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      1
-  #define NETWORK_VERIFY_ENABLE                               0
   #define ERROR_TRACK_ENABLE                                  0
   /**/
   #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
@@ -1018,8 +1081,8 @@
   /**/
   #define CLASS_VALIDATION_ENABLE                             0
   /**/
-  #if !(defined(FORCE_UNIT_TEST))
-  #define FORCE_UNIT_TEST                                     0
+  #if !(defined(UNIT_TEST_MODE))
+  #define UNIT_TEST_MODE                                      1
   #endif
   
 #elif SIMULATION_MODE == 5
@@ -1040,7 +1103,6 @@
   #define STATISTICS_ENABLE                                   0
   #define PROFILING_MODE                                      0
   #define COMPILER_FLAGS_OPTIMIZE_ENABLE                      0
-  #define NETWORK_VERIFY_ENABLE                               0
   #define ERROR_TRACK_ENABLE                                  0
   /**/
   #if !(defined(KERNEL_ENDSTEP_VERIFY_EVERY_STEPS))
@@ -1057,8 +1119,8 @@
   /**/
   #define CLASS_VALIDATION_ENABLE                             0
   /**/
-  #if !(defined(FORCE_UNIT_TEST))
-  #define FORCE_UNIT_TEST                                     0
+  #if !(defined(UNIT_TEST_MODE))
+  #define UNIT_TEST_MODE                                      1
   #endif
   
 #else
@@ -1087,17 +1149,6 @@
 
 
 /***************************************************************************************************
-  Enable validation of parameters, data ranges, etc in classes for highly used methods
-***************************************************************************************************/
-#define CONNECTOME_VALIDATION_ENABLE                          CLASS_VALIDATION_ENABLE
-#define SPIKE_EVENTS_VALIDATION_ENABLE                        CLASS_VALIDATION_ENABLE
-#define SYNAPTIC_EVENTS_VALIDATION_ENABLE                     CLASS_VALIDATION_ENABLE
-#define OPERATOR_SCAN_VALIDATION_ENABLE                       CLASS_VALIDATION_ENABLE
-/**************************************************************************************************/
-
-
-
-/***************************************************************************************************
   Simulation parameters for the CPU implementation used as a verification reference
 ***************************************************************************************************/
 /*Synaptic event queue size limit per nrn: */
@@ -1114,28 +1165,61 @@
 ***************************************************************************************************/
 /*String used to tag statistics relevant to all kernels*/
 #define KERNEL_ALL                                            "All Kernels"
+
+/*File name to put defines for OpenCL preprocessor*/
 #define OCL_COMPILER_OPTIONS_FILE_NAME                        "oclCompilerOptions.txt"
 
-#if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
-  #define _aligned_malloc __mingw_aligned_malloc 
-  #define _aligned_free  __mingw_aligned_free 
-#endif
+/**************************************************************************************************/
 
-/**/
-#ifndef _WIN32
-#if defined(__INTEL_COMPILER)
-  #pragma warning(disable : 1125)
-#endif
-#endif
 
-/*Data accessor*/
+
+/** ############################################################################################# **
+
+  V. Dependent Parameters, Macros and Definitions 
+  
+  (Note: some of them depend on definitions in section IV and may use definitions from section III)
+  
+** ############################################################################################# **/
+
+
+
+/***************************************************************************************************
+  Exceptions
+***************************************************************************************************/
+
+#define THROW_ERROR_TRACK(specifier, step, getErrorDataCode, errorData)\
+  if(!((step+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))\
+  {\
+    getErrorDataCode\
+    \
+    if(this->errorData[0] != 0)\
+    {\
+      THROW_SIMEX(specifier << " received error code from the device: " << this->errorData[0]);\
+    }\
+  }
+  
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Data accessors
+***************************************************************************************************/
+
 #if SIMULATION_MODE > 1
   #define SAFE_GET(variable) variable
 #else
   #define SAFE_GET(variable) (1 ? variable : 0)
 #endif
 
-/*Random number generation*/
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Random number generation
+***************************************************************************************************/
+
 #if RANDOM_GEN_MODE == 0
   #define SET_RANDOM_SEED(seed, counter)      
 #elif RANDOM_GEN_MODE == 1
@@ -1143,6 +1227,91 @@
 #else
   
 #endif
+
+#if CLASS_VALIDATION_ENABLE
+#define GET_RANDOM_INT(setValue, max, minPercent, maxPercent)\
+  {\
+    if(minPercent > maxPercent)\
+    {\
+      throw SimException("GET_RANDOM_INT: (minPercent > maxPercent)");\
+    }\
+    if((minPercent > 100.0) || (maxPercent > 100.0))\
+    {\
+      throw SimException("GET_RANDOM_INT: ((minPercent > 100.0) || (maxPercent > 100.0))");\
+    }\
+    if((minPercent < 0.0) || (maxPercent < 0.0))\
+    {\
+      throw SimException("GET_RANDOM_INT: ((minPercent < 0.0) || (maxPercent < 0.0))");\
+    }\
+    if(minPercent == maxPercent)\
+    {\
+      setValue = cl_uint(((double)max)*(maxPercent/100.0));\
+    }\
+    else\
+    {\
+      setValue = cl_uint(((double)(max))*((minPercent/100.0) + \
+        abs(((maxPercent-minPercent)/100.0)*((double)rand()/((double)RAND_MAX)))));\
+    }\
+  }
+  
+#else
+
+#define GET_RANDOM_INT(setValue, max, minPercent, maxPercent)\
+  {\
+    if(minPercent == maxPercent)\
+    {\
+      setValue = cl_uint(((double)max)*(maxPercent/100.0));\
+    }\
+    else\
+    {\
+      setValue = cl_uint(((double)(max))*((minPercent/100.0) + \
+        abs(((maxPercent-minPercent)/100.0)*((double)rand()/((double)RAND_MAX)))));\
+    }\
+  }
+#endif
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Profiling
+***************************************************************************************************/
+
+/*Kernel-level profiling*/
+#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+  #define KERNEL_LEVEL_PROFILING                              1
+#else
+  #define KERNEL_LEVEL_PROFILING                              0
+#endif
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Kernel handling
+***************************************************************************************************/
+
+/*Kernel enqueue*/
+#if KERNEL_LEVEL_PROFILING
+  
+  #define ENQUEUE_KERNEL_V0(step, statsStruct, queue, kernel, globalThreads, localThreads, events, \
+    event, tag)\
+    {\
+      double startAppTime = 0;\
+      START_TIMER(step, START_PROFILING_AT_STEP, startAppTime);\
+      \
+      ENQUEUE_KERNEL(queue, kernel, globalThreads, localThreads, events, event);\
+      \
+      END_TIMER(step, START_PROFILING_AT_STEP, event, tag, startAppTime, statsStruct);\
+    }
+#else
+  #define ENQUEUE_KERNEL_V0(step, statsStruct, queue, kernel, globalThreads, localThreads, events, \
+    event, tag)\
+    ENQUEUE_KERNEL(queue, kernel, globalThreads, localThreads, events, event);
+#endif
+
 /**************************************************************************************************/
 
 
@@ -1178,32 +1347,24 @@
 #endif
 
 /*Logging macro*/
-#if LOG_SIMULATION && LOG_REPORT
-  #define LOG(message, type)\
-    if(type == 0)\
-    {\
-      time_t t; time (&t); char *s=ctime(&t); s[strlen(s)-1]=0;\
-      *dataToSimulationLogFile << s << " " << message << std::endl;\
-    }\
-    if(type == 1)\
-    {\
-      *dataToReportLogFile << message << std::endl;\
-    }
-#elif LOG_SIMULATION
-  #define LOG(message, type)\
-    if(type == 0)\
-    {\
-      time_t t; time (&t); char *s=ctime(&t); s[strlen(s)-1]=0;\
-      *dataToSimulationLogFile << ctime(&t) << " " << message << std::endl;\
-    }
-#elif LOG_REPORT
-  #define LOG(message, type)\
-    if(type == 1)\
+#if LOG_REPORT
+  #define LOG_REP(message)\
     {\
       *dataToReportLogFile << message << std::endl;\
     }
 #else
-  #define LOG(message, type)
+  #define LOG_REP(message)
+#endif
+
+/*Logging macro*/
+#if LOG_SIMULATION
+  #define LOG_SIM(message)\
+    {\
+      time_t t; time (&t); char *s=ctime(&t); s[strlen(s)-1]=0;\
+      *dataToSimulationLogFile << ctime(&t) << " " << message << std::endl;\
+    }
+#else
+  #define LOG_SIM(message)
 #endif
 /**************************************************************************************************/
 
@@ -1227,7 +1388,9 @@
 
 /** ############################################################################################# **
 
-  II. Kernel-specific Parameters, Macros and Definitions
+  VI. Kernel-specific Parameters, Macros and Definitions 
+  
+  (Note: they depend on definitions in section IV and may utilize definitions from section III)
   
   Configuration interface for each kernel exists for tuning kernels to desired functionality and
   performance. Preprocessor allows to define parameters as literals, which reduces memory use, 
@@ -1426,6 +1589,20 @@
     (EXPAND_EVENTS_GRID_SIZE_WG*EXPAND_EVENTS_WG_SIZE_WF)
 #endif
 #endif
+/*
+                                               Default Definitions
+*/
+#if !defined (EXPAND_EVENTS_DEBUG_ENABLE)
+  #define EXPAND_EVENTS_DEBUG_ENABLE                          0
+#endif
+/* *** */
+#if !defined (EXPAND_EVENTS_ERROR_TRACK_ENABLE)
+  #define EXPAND_EVENTS_ERROR_TRACK_ENABLE                    0
+#endif
+/* *** */
+#if !defined (EXPAND_EVENTS_VERIFY_ENABLE)
+  #define EXPAND_EVENTS_VERIFY_ENABLE                         0
+#endif
 /**************************************************************************************************/
 
 
@@ -1451,7 +1628,7 @@
   
   /*Error tracking and codes*/
   /*CONTROL: enable error tracking*/
-  #define SCAN_ERROR_TRACK_ENABLE                             0
+  #define SCAN_ERROR_TRACK_ENABLE                             ERROR_TRACK_ENABLE
   #define SCAN_ERROR_BUFFER_SIZE_WORDS                        1
   #define SCAN_ERROR_CODE_1                                   0x1
   
@@ -1501,6 +1678,9 @@
                                                Variants
 */
 /*VARIANT_00*/
+#if !(defined(SCAN_DEVICE_V00))
+  #define SCAN_DEVICE_V00                                     0
+#endif
 #if SCAN_ENABLE_V00
   /*Host and Device*/
   #define SCAN_HISTOGRAM_TOTAL_BINS_V00                       (1<<4)
@@ -1510,17 +1690,32 @@
                                                               (SCAN_HISTOGRAM_TOTAL_BINS_V00*\
                                                               SCAN_HISTOGRAM_BIN_SIZE_V00))
   /*Device*/
-#ifdef SCAN_DEVICE_V00
+#if SCAN_DEVICE_V00
   #define SCAN_HISTOGRAM_TOTAL_BINS                           SCAN_HISTOGRAM_TOTAL_BINS_V00
   #define SCAN_HISTOGRAM_BIN_SIZE                             SCAN_HISTOGRAM_BIN_SIZE_V00
   #define SCAN_HISTOGRAM_IN_TYPE                              SCAN_HISTOGRAM_IN_TYPE_V00
   #define SCAN_HISTOGRAM_ELEMENTS_PER_WI                      ((SCAN_HISTOGRAM_TOTAL_BINS*\
                                                               SCAN_HISTOGRAM_BIN_SIZE)/\
                                                               SCAN_WG_SIZE_WI)
+/*
+                                               Restrictions
+*/
+#if	((SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE)%SCAN_WG_SIZE_WI != 0)
+  #error (Parameter (SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE) must be divisible by \
+  SCAN_WG_SIZE_WI)
 #endif
-#endif  
-/*END VARIANT_00*/
+/* *** */
+#if	(SCAN_HISTOGRAM_ELEMENTS_PER_WI%4 != 0)
+  #error (Parameter SCAN_HISTOGRAM_ELEMENTS_PER_WI must be divisible by 4)
+#endif
+/* *** */
+#endif  /*END SCAN_DEVICE_V01*/
+#endif  /*END VARIANT_00*/
+
 /*VARIANT_01*/
+#if !(defined(SCAN_DEVICE_V01))
+  #define SCAN_DEVICE_V01                                     0
+#endif
 #if SCAN_ENABLE_V01
   /*Host and Device*/
   #define SCAN_HISTOGRAM_TOTAL_BINS_V01                       (1<<4)
@@ -1532,16 +1727,13 @@
                                                               SCAN_HISTOGRAM_BIN_SIZE_V01*\
                                                               SCAN_HISTOGRAM_BIN_BACKETS))
   /*Device*/
-#ifdef SCAN_DEVICE_V01
+#if SCAN_DEVICE_V01
   #define SCAN_HISTOGRAM_TOTAL_BINS                           SCAN_HISTOGRAM_TOTAL_BINS_V01
   #define SCAN_HISTOGRAM_BIN_SIZE                             SCAN_HISTOGRAM_BIN_SIZE_V01
   #define SCAN_HISTOGRAM_IN_TYPE                              SCAN_HISTOGRAM_IN_TYPE_V01
   #define SCAN_HISTOGRAM_ELEMENTS_PER_WI                      ((SCAN_HISTOGRAM_TOTAL_BINS*\
                                                               SCAN_HISTOGRAM_BIN_SIZE)/\
                                                               SCAN_WG_SIZE_WI)
-#endif
-#endif  
-/*END VARIANT_01*/
 /*
                                                Restrictions
 */
@@ -1549,9 +1741,35 @@
   #error (Parameter (SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE) must be divisible by \
   SCAN_WG_SIZE_WI)
 #endif
+/* *** */
 #if	(SCAN_HISTOGRAM_ELEMENTS_PER_WI%4 != 0)
   #error (Parameter SCAN_HISTOGRAM_ELEMENTS_PER_WI must be divisible by 4)
 #endif
+/* *** */
+#endif  /*END SCAN_DEVICE_V01*/
+#endif  /*END VARIANT_01*/
+/*
+                                               Restrictions
+*/
+/*Device sections of variant definitions can be enabled only one at a time*/
+#if	(SCAN_DEVICE_V00 && SCAN_DEVICE_V01)
+  #error (Parameters SCAN_DEVICE_V00 && SCAN_DEVICE_V01 must be enabled one at a time)
+#endif
+/* *** */
+#endif
+/*
+                                               Default Definitions
+*/
+#if !defined (SCAN_DEBUG_ENABLE)
+  #define SCAN_DEBUG_ENABLE                                   0
+#endif
+/* *** */
+#if !defined (SCAN_ERROR_TRACK_ENABLE)
+  #define SCAN_ERROR_TRACK_ENABLE                             0
+#endif
+/* *** */
+#if !defined (SCAN_VERIFY_ENABLE)
+  #define SCAN_VERIFY_ENABLE                                  0
 #endif
 /**************************************************************************************************/
 
@@ -1726,23 +1944,6 @@
 #endif
 #endif
 /*
-                                               Restrictions
-*/
-#if	(GROUP_EVENTS_WF_SIZE_WI%GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER != 0)
-  #error (Parameter GROUP_EVENTS_WF_SIZE_WI must be divisible by \
-          GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER)
-#endif
-#if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT && (GROUP_EVENTS_ELEMENTS_PER_WI != 4)
-  #error GROUP_EVENTS_ELEMENTS_PER_WI has to be 4 if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT is enabled
-#endif
-#if GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2 > GROUP_EVENTS_WF_SIZE_WI
-  #error GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2 can't be more than GROUP_EVENTS_WF_SIZE_WI
-#endif
-#if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT && (GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER != 16)
-  #error BUG: GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER has to be 16 if \
-    GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT is set
-#endif
-/*
                                                Variants
 */
 /*
@@ -1751,6 +1952,9 @@
             data. Sorts by keys the key-value pairs based on provided scanned histogram. 
             Computes new histogram for next stage.
 */
+#if !(defined(GROUP_EVENTS_DEVICE_V00))
+  #define GROUP_EVENTS_DEVICE_V00                               0
+#endif
 #if GROUP_EVENTS_ENABLE_V00
   /*Host and Device*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00                  0
@@ -1759,7 +1963,7 @@
   #define GROUP_EVENTS_SOURCE_KEY_OFFSET_V00                    1
   
   /*Device*/
-#ifdef GROUP_EVENTS_DEVICE_V00
+#if GROUP_EVENTS_DEVICE_V00
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00
   /*Bit shift used for computing the outgoing histogram of target neurons*/
@@ -1784,6 +1988,9 @@
             Sorts by keys the key-value pairs based on provided scanned histogram. 
             Computes new histogram for next stage.
 */
+#if !(defined(GROUP_EVENTS_DEVICE_V01))
+  #define GROUP_EVENTS_DEVICE_V01                               0
+#endif
 #if GROUP_EVENTS_ENABLE_V01
   /*Host-visible copies of device parameters*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01                  4
@@ -1792,7 +1999,7 @@
   #define GROUP_EVENTS_VALUES_MODE_V01                          2
   
   /*Device*/
-#ifdef GROUP_EVENTS_DEVICE_V01
+#if GROUP_EVENTS_DEVICE_V01
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01
   /*Bit shift used for computing the outgoing histogram of target neurons*/
@@ -1817,6 +2024,9 @@
             This variant is the same as VARIANT_01 except it replaces data with new key at the end.
             This allows to continue sorting with new key in the next stages.
 */
+#if !(defined(GROUP_EVENTS_DEVICE_V02))
+  #define GROUP_EVENTS_DEVICE_V02                               0
+#endif
 #if GROUP_EVENTS_ENABLE_V02
   /*Host-visible copies of device parameters*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V02                  4
@@ -1826,7 +2036,7 @@
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET_V02               0
   
   /*Device*/
-#ifdef GROUP_EVENTS_DEVICE_V02
+#if GROUP_EVENTS_DEVICE_V02
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V02
   /*Bit shift used for computing the outgoing histogram of target neurons*/
@@ -1851,6 +2061,9 @@
             This variant is the same as VARIANT_01 except it relocate original values in place
             of pointers. No histogram for the next stage is computed.
 */
+#if !(defined(GROUP_EVENTS_DEVICE_V03))
+  #define GROUP_EVENTS_DEVICE_V03                               0
+#endif
 /*TODO: need to disable histogram out*/
 #if GROUP_EVENTS_ENABLE_V03
   /*Host-visible copies of device parameters*/
@@ -1860,7 +2073,7 @@
   #define GROUP_EVENTS_VALUES_MODE_V03                          2
 
   /*Device*/
-#ifdef GROUP_EVENTS_DEVICE_V03
+#if GROUP_EVENTS_DEVICE_V03
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V03
   /*Bit shift used for computing the outgoing histogram of target neurons*/
@@ -1880,6 +2093,48 @@
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   0
 #endif
 #endif/*END VARIANT_03*/
+/*
+                                               Restrictions
+*/
+/*Device sections of variant definitions can be enabled only one at a time*/
+#if	(GROUP_EVENTS_DEVICE_V00 && GROUP_EVENTS_DEVICE_V01)
+  #error \
+    (Parameters GROUP_EVENTS_DEVICE_V00 && GROUP_EVENTS_DEVICE_V01 must be enabled one at a time)
+#endif
+#if	(GROUP_EVENTS_DEVICE_V00 && GROUP_EVENTS_DEVICE_V02)
+  #error \
+    (Parameters GROUP_EVENTS_DEVICE_V00 && GROUP_EVENTS_DEVICE_V02 must be enabled one at a time)
+#endif
+#if	(GROUP_EVENTS_DEVICE_V00 && GROUP_EVENTS_DEVICE_V03)
+  #error \
+    (Parameters GROUP_EVENTS_DEVICE_V00 && GROUP_EVENTS_DEVICE_V03 must be enabled one at a time)
+#endif
+#if	(GROUP_EVENTS_DEVICE_V01 && GROUP_EVENTS_DEVICE_V02)
+  #error \
+    (Parameters GROUP_EVENTS_DEVICE_V01 && GROUP_EVENTS_DEVICE_V02 must be enabled one at a time)
+#endif
+#if	(GROUP_EVENTS_DEVICE_V01 && GROUP_EVENTS_DEVICE_V03)
+  #error \
+    (Parameters GROUP_EVENTS_DEVICE_V01 && GROUP_EVENTS_DEVICE_V03 must be enabled one at a time)
+#endif
+#if	(GROUP_EVENTS_DEVICE_V02 && GROUP_EVENTS_DEVICE_V03)
+  #error \
+    (Parameters GROUP_EVENTS_DEVICE_V02 && GROUP_EVENTS_DEVICE_V03 must be enabled one at a time)
+#endif
+/* *** */
+#if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT && (GROUP_EVENTS_ELEMENTS_PER_WI != 4)
+  #error GROUP_EVENTS_ELEMENTS_PER_WI has to be 4 if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT is enabled
+#endif
+/* *** */
+#if GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2 > GROUP_EVENTS_WF_SIZE_WI
+  #error GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2 can't be more than GROUP_EVENTS_WF_SIZE_WI
+#endif
+/* *** */
+#if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT && (GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER != 16)
+  #error BUG: GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER has to be 16 if \
+    GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT is set
+#endif
+/* *** */
 #endif /*GROUP_EVENTS_ENABLE*/
 /**************************************************************************************************/
 
@@ -2033,7 +2288,7 @@
   Kernel configuration interface for updating model variables
   
 ***************************************************************************************************/
-#if UPDATE_NEURONS_ENABLE_V00 || UPDATE_NEURONS_ENABLE_V01
+#if UPDATE_NEURONS_ENABLE_V00
 /*
                                                Generic parameters
 */
@@ -2082,13 +2337,6 @@
   #define UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS               2
   #define UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS                  (UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE * \
                                                                   UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
-  /*Number of constant coefficient types*/
-  #define UPDATE_NEURONS_CONST_COEFFICIENTS                       4
-  /*Accessor to constant coefficients*/
-  #define CONST_CO(mem, type, index)                              *(mem + type*(UPDATE_NEURONS_PS_ORDER_LIMIT+1)+index)
-  #define CONST_TOL(mem)                                          *(mem + UPDATE_NEURONS_CONST_COEFFICIENTS*(UPDATE_NEURONS_PS_ORDER_LIMIT+1))
-  #define CONST_SIZE                                              (UPDATE_NEURONS_CONST_COEFFICIENTS*(UPDATE_NEURONS_PS_ORDER_LIMIT+1) + 1)
-  
   /*NN parameters*/
   #define UPDATE_NEURONS_TOTAL_NEURON_BITS                        TOTAL_NEURON_BITS /*16*/
   #define UPDATE_NEURONS_TOTAL_NEURONS                            (1<<UPDATE_NEURONS_TOTAL_NEURON_BITS)
@@ -2138,20 +2386,19 @@
   #define UPDATE_NEURONS_C                                        200.0f
   #define UPDATE_NEURONS_a                                        0.03f
   
+  /*Number of constant coefficient types*/
+  #define UPDATE_NEURONS_CONST_COEFFICIENTS                       4
+  /*Accessor to constant coefficients*/
+  #define CONST_CO(mem, type, index)                              *(mem + type*\
+                                                                  (UPDATE_NEURONS_PS_ORDER_LIMIT+1)+\
+                                                                  index)
+  #define CONST_TOL(mem)                                          *(mem + UPDATE_NEURONS_CONST_COEFFICIENTS*\
+                                                                  (UPDATE_NEURONS_PS_ORDER_LIMIT+1))
+  #define CONST_SIZE                                              (UPDATE_NEURONS_CONST_COEFFICIENTS*\
+                                                                  (UPDATE_NEURONS_PS_ORDER_LIMIT+1) + 1)
+  
   /*Optimizations*/
   #define UPDATE_NEURONS_DT_1_0_OPTIMIZATION                      1
-  
-/*
-                                               Restrictions
-*/
-#if UPDATE_NEURONS_ELEMENTS_PER_WI != 1
-  #error (UPDATE_NEURONS_ELEMENTS_PER_WI has to be 1)
-#endif
-#if	((UPDATE_NEURONS_TOLERANCE_MODE == 2) && \
-    (UPDATE_NEURONS_TOTAL_NEURONS < UPDATE_NEURONS_TOLERANCE_CHUNKS))
-  #error (UPDATE_NEURONS_TOTAL_NEURONS has to be no less than UPDATE_NEURONS_TOLERANCE_CHUNKS)
-#endif
-
 /*
                                                Variants
 */
@@ -2183,7 +2430,7 @@
 #endif
   #define UPDATE_NEURONS_STRUCTS_V00                              1
 
-  /*Wisible to Device*/
+  /*Visible to Device*/
 #ifdef UPDATE_NEURONS_DEVICE_V00
   #define UPDATE_NEURONS_WG_SIZE_WF                               UPDATE_NEURONS_WG_SIZE_WF_V00
   #define UPDATE_NEURONS_WG_SIZE_WI                               UPDATE_NEURONS_WG_SIZE_WI_V00
@@ -2197,12 +2444,28 @@
   #error(UPDATE_NEURONS_TOTAL_NEURONS must be multiple of (UPDATE_NEURONS_ELEMENTS_PER_WI*\
     UPDATE_NEURONS_WG_SIZE_WI_V00*UPDATE_NEURONS_GRID_SIZE_WG_V00))
 #endif
+/* *** */
 #if(UPDATE_NEURONS_SPIKE_PACKETS_V00%UPDATE_NEURONS_WG_SIZE_WF_V00)
   #error(UPDATE_NEURONS_SPIKE_PACKETS_V00 must be multiple of UPDATE_NEURONS_WG_SIZE_WF_V00)
 #endif
-
-
+/* *** */
 #endif  /*END VARIANT_00*/
+/*
+                                               Restrictions
+*/
+#if UPDATE_NEURONS_PS_ORDER_LIMIT < 2
+  #error (UPDATE_NEURONS_PS_ORDER_LIMIT must be >= 2)
+#endif
+/* *** */
+#if UPDATE_NEURONS_ELEMENTS_PER_WI != 1
+  #error (UPDATE_NEURONS_ELEMENTS_PER_WI has to be 1)
+#endif
+/* *** */
+#if	((UPDATE_NEURONS_TOLERANCE_MODE == 2) && \
+    (UPDATE_NEURONS_TOTAL_NEURONS < UPDATE_NEURONS_TOLERANCE_CHUNKS))
+  #error (UPDATE_NEURONS_TOTAL_NEURONS has to be no less than UPDATE_NEURONS_TOLERANCE_CHUNKS)
+#endif
+/* *** */
 #endif /*UPDATE_NEURONS_ENABLE*/
 /**************************************************************************************************/
 
@@ -2210,7 +2473,12 @@
 
 /** ############################################################################################# **
 
-  III. Integration Restrictions
+  VII. Integration Restrictions
+  
+  (Note: This section depends on definitions in section VI)
+  
+  The purpose of Integration Restrictions is to verify consistency between related definitions
+  between kernels when these kernels are integrated in a single program
   
 ** ############################################################################################# **/
 
@@ -2256,6 +2524,10 @@
 #if (GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS != EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
   #error (GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS != EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
 #endif
+#if (GROUP_EVENTS_TOTAL_NEURON_BITS && EXPAND_EVENTS_TOTAL_NEURON_BITS) &&\
+    (GROUP_EVENTS_TOTAL_NEURON_BITS != EXPAND_EVENTS_TOTAL_NEURON_BITS)
+  #error (GROUP_EVENTS_TOTAL_NEURON_BITS != EXPAND_EVENTS_TOTAL_NEURON_BITS)
+#endif
 #endif
 
 /*If both SCAN_ENABLE_V00 and GROUP_EVENTS_ENABLE_VXX are enabled*/
@@ -2298,10 +2570,10 @@
 #endif
 
 /*If both SCAN_ENABLE_V01 and GROUP_EVENTS_ENABLE_VXX are enabled*/
-#if (((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) && SCAN_ENABLE_V01) ||\
-     ((GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) && SCAN_ENABLE_V01) ||\
-     ((GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) && SCAN_ENABLE_V01) ||\
-     ((GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) && SCAN_ENABLE_V01))
+#if (((GROUP_EVENTS_ENABLE_V00) && SCAN_ENABLE_V01) ||\
+     ((GROUP_EVENTS_ENABLE_V01) && SCAN_ENABLE_V01) ||\
+     ((GROUP_EVENTS_ENABLE_V02) && SCAN_ENABLE_V01) ||\
+     ((GROUP_EVENTS_ENABLE_V03) && SCAN_ENABLE_V01))
 #if (GROUP_EVENTS_GRID_SIZE_WG != SCAN_HISTOGRAM_BIN_BACKETS)
   #error (GROUP_EVENTS_GRID_SIZE_WG != SCAN_HISTOGRAM_BIN_BACKETS)
 #endif
@@ -2317,36 +2589,97 @@
 
 /** ############################################################################################# **
 
-  III. Unit tests
+  VIII. Enabling/Disabling Operators
+  
+  (Note: This section depends on definitions in section VI)
   
 ** ############################################################################################# **/
 
 
 
-/*Enable unit test for Scan V00*/
-#if (FORCE_UNIT_TEST)
-  #define SCAN_ENABLE_UNIT_TEST_V00                         (SCAN_ENABLE_V00)
-#else
-  #define SCAN_ENABLE_UNIT_TEST_V00                         (SCAN_ENABLE_V00 && !(EXPAND_EVENTS_ENABLE))
-#endif
-#if SCAN_ENABLE_UNIT_TEST_V00
-  #undef SCAN_VERIFY_ENABLE
-  #define SCAN_VERIFY_ENABLE                                1
+/*Enable Operator_Expand*/
+#define ENABLE_OPERATOR_EXPAND            (EXPAND_EVENTS_ENABLE)
+
+/*Enable Operator_Scan*/
+#define ENABLE_OPERATOR_SCAN              (SCAN_ENABLE_V00 || SCAN_ENABLE_V01)
+
+/*Enable Operator_Sort*/
+#define ENABLE_OPERATOR_SORT              (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || \
+                                           GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03)
+
+
+
+/** ############################################################################################# **
+
+  IX. Enabling/Disabling Unit Tests
+  
+  (Note: This section depends on definitions in section VI)
+  
+** ############################################################################################# **/
+
+
+
+/*Validate UNIT_TEST_MODE*/
+#if !((UNIT_TEST_MODE == 0) || (UNIT_TEST_MODE == 1) || (UNIT_TEST_MODE == 2))
+  #error (UNIT_TEST_MODE: provided mode is not supported)
 #endif
 
-/*Enable unit test for Scan V01*/
-#if (FORCE_UNIT_TEST)
-  #define SCAN_ENABLE_UNIT_TEST_V01                         (SCAN_ENABLE_V01)
-#else
-  #define SCAN_ENABLE_UNIT_TEST_V01                         (SCAN_ENABLE_V01 && \
-                                                            !(GROUP_EVENTS_ENABLE_V00 && \
-                                                            GROUP_EVENTS_ENABLE_V01 && \
-                                                            GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT \
-                                                            && GROUP_EVENTS_ENABLE_V02))
+/*Enable unit test for Operator_Expand*/
+#if (UNIT_TEST_MODE == 0)
+  #define ENABLE_UNIT_TEST_EXPAND_EVENTS                    (EXPAND_EVENTS_ENABLE)
+#elif (UNIT_TEST_MODE == 1)
+  #define ENABLE_UNIT_TEST_EXPAND_EVENTS                    (EXPAND_EVENTS_ENABLE && (\
+                                                            !(UPDATE_NEURONS_ENABLE_V00)))
+#elif (UNIT_TEST_MODE == 2)
+  #define ENABLE_UNIT_TEST_EXPAND_EVENTS                    (EXPAND_EVENTS_ENABLE && (\
+                                                            !(UPDATE_NEURONS_ENABLE_V00)))
+#if ENABLE_UNIT_TEST_EXPAND_EVENTS
+  #error (ENABLE_UNIT_TEST_EXPAND_EVENTS: cannot enable integration tests in this mode)
 #endif
-#if SCAN_ENABLE_UNIT_TEST_V01
-  #undef SCAN_VERIFY_ENABLE
-  #define SCAN_VERIFY_ENABLE                                1
 #endif
+
+/*Enable unit test for Operator_Scan V00*/
+#if (UNIT_TEST_MODE == 0)
+  #define ENABLE_UNIT_TEST_SCAN_V00                         (SCAN_ENABLE_V00)
+#elif (UNIT_TEST_MODE == 1)
+  #define ENABLE_UNIT_TEST_SCAN_V00                         (SCAN_ENABLE_V00 && (\
+                                                            !(EXPAND_EVENTS_ENABLE)))
+#elif (UNIT_TEST_MODE == 2)
+  #define ENABLE_UNIT_TEST_SCAN_V00                         (SCAN_ENABLE_V00 && (\
+                                                            !(EXPAND_EVENTS_ENABLE)))
+#if ENABLE_UNIT_TEST_SCAN_V00
+  #error (ENABLE_UNIT_TEST_SCAN_V00: cannot enable integration tests in this mode)
+#endif
+#endif
+
+/*Enable unit test for Operator_Scan V01*/
+#if (UNIT_TEST_MODE == 0)
+  #define ENABLE_UNIT_TEST_SCAN_V01                         (SCAN_ENABLE_V01)
+#elif (UNIT_TEST_MODE == 1)
+  #define ENABLE_UNIT_TEST_SCAN_V01                         (SCAN_ENABLE_V01 && (\
+                                                            !(GROUP_EVENTS_ENABLE_V00) || \
+                                                            !(GROUP_EVENTS_ENABLE_V01 && \
+                                                            GROUP_EVENTS_ENABLE_V02)))
+#elif (UNIT_TEST_MODE == 2)
+  #define ENABLE_UNIT_TEST_SCAN_V01                         (SCAN_ENABLE_V01 && (\
+                                                            !(GROUP_EVENTS_ENABLE_V00) || \
+                                                            !(GROUP_EVENTS_ENABLE_V01 && \
+                                                            GROUP_EVENTS_ENABLE_V02)))
+#if ENABLE_UNIT_TEST_SCAN_V01
+  #error (ENABLE_UNIT_TEST_SCAN_V01: cannot enable integration tests in this mode)
+#endif
+#endif
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/
+
+
 
 #endif /*INC_DEFINITIONS_H*/

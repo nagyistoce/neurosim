@@ -15,12 +15,21 @@
 
 
 /***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
   Class Preprocessor Definitions
 ***************************************************************************************************/
 
 #define SPIKE_EVENTS_VALID_SPIKES         0x1
-#define SPIKE_EVENTS_VALID_EXPAND_DEBUG   0x2
-#define SPIKE_EVENTS_VALID_EXPAND_ERROR   0x4
+#define SPIKE_EVENTS_VALID_ALL            (SPIKE_EVENTS_VALID_SPIKES)
 
 /**************************************************************************************************/
 
@@ -30,15 +39,14 @@
   Forward declarations for cyclic dependency
 ***************************************************************************************************/
 
-class Connectome;
-class SynapticEvents;
+
 
 /**************************************************************************************************/
 
 
 
 /**
-  @class SpikeEvents
+  @class Data_SpikeEvents
 
   Models spike events.
 
@@ -46,7 +54,7 @@ class SynapticEvents;
 
   @date 2012/04/17
  */
-class SpikeEvents 
+class Data_SpikeEvents 
 {
 /**************************************************************************************************/
   public:  /*public variables*/
@@ -65,22 +73,13 @@ class SpikeEvents
 
 
 
-  bool resetObject;
-  cl_uint dataValid;
-  
-  unsigned int srandSeed;
-  unsigned int srandCounter;
-  
   cl_uint neuronCount;
   cl_uint spikePacketSize;
   cl_uint spikePacketSizeWords;
   cl_uint spikePackets;
   cl_uint simulationStepSize;
   cl_uint spikeDatumSize;
-  
-  std::stringstream *dataToSimulationLogFile;
-  std::stringstream *dataToReportLogFile;
-  
+
   size_t dataSpikePacketsSize;
   size_t dataSpikePacketsSizeBytes;
   cl_uint *dataSpikePackets;
@@ -91,39 +90,17 @@ class SpikeEvents
 
   cl_uint *dataPastSpikePackets;
   cl_uint *dataPastSpikePacketCounts;
+
+  std::stringstream *dataToSimulationLogFile;
+  std::stringstream *dataToReportLogFile;
   
-#if EXPAND_EVENTS_ENABLE
-  bool setKernelArguments;
-  cl_uint lmExpandEventsSizeBytes;
-  size_t blockSizeX_KernelExpandEvents;
-  size_t blockSizeY_KernelExpandEvents;
-  cl_uint argNumExpandEvents;
-  cl::Kernel kernelExpandEvents;
-  cl::NDRange *globalThreadsExpandEvents;
-  cl::NDRange *localThreadsExpandEvents;
+  cl_uint dataValid;
   
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_DEBUG_ENABLE)
-  size_t dataExpandEventsDebugHostSize;
-  size_t dataExpandEventsDebugHostSizeBytes;
-  cl_uint* dataExpandEventsDebugHost;
-  cl::Buffer dataExpandEventsDebugHostBuffer;
+  unsigned int srandSeed;
+  unsigned int srandCounter;
+
   
-  size_t dataExpandEventsDebugDeviceSize;
-  size_t dataExpandEventsDebugDeviceSizeBytes;
-  cl_uint* dataExpandEventsDebugDevice;
-  cl::Buffer dataExpandEventsDebugDeviceBuffer;
-#endif
-
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ERROR_TRACK_ENABLE)
-  size_t dataExpandEventsErrorSize;
-  size_t dataExpandEventsErrorSizeBytes;
-  cl_uint* dataExpandEventsError;
-  cl::Buffer dataExpandEventsErrorBuffer;
-#endif
-#endif
-
-
-
+  
 /**************************************************************************************************/
   public: /*public methods*/
 /**************************************************************************************************/
@@ -134,8 +111,55 @@ class SpikeEvents
   /**
     Constructor.
   */
-  SpikeEvents
-  ();
+  Data_SpikeEvents
+  (
+    cl::Context                         &context,
+    cl::Device                          &device,
+    cl::CommandQueue                    &queue,
+    cl_bool                             block,
+    struct kernelStatistics             &kernelStats,
+    std::stringstream                   *dataToSimulationLogFile,
+    std::stringstream                   *dataToReportLogFile,
+    cl_uint                             simulationStepSize,
+    cl_uint                             spikeDatumSize,
+    cl_uint                             spikePacketSizeWords,
+    cl_uint                             spikePacketSize,
+    cl_uint                             spikePackets,
+    cl_uint                             neuronCount
+  ) :
+    dataSpikePacketsBuffer(),
+    dataSpikePacketCountsBuffer(),
+    neuronCount(neuronCount),
+    spikePacketSize(spikePacketSize),
+    spikePacketSizeWords(spikePacketSizeWords),
+    spikePackets(spikePackets),
+    simulationStepSize(simulationStepSize),
+    spikeDatumSize(spikeDatumSize),
+    dataSpikePacketsSize(0),
+    dataSpikePacketsSizeBytes(0),
+    dataSpikePackets(NULL),
+    dataSpikePacketCountsSize(0),
+    dataSpikePacketCountsSizeBytes(0),
+    dataSpikePacketCounts(NULL),
+    dataPastSpikePackets(NULL),
+    dataPastSpikePacketCounts(NULL),
+    dataToSimulationLogFile(dataToSimulationLogFile),
+    dataToReportLogFile(dataToReportLogFile),
+    dataValid(0),
+    srandSeed(1),
+    srandCounter(0)
+/**************************************************************************************************/
+  {
+    /* Must be called only from the constructor and only once*/
+    this->initialize
+    (
+      context,
+      device,
+      queue,
+      block,
+      kernelStats
+    );
+  };
 /**************************************************************************************************/
 
 
@@ -144,33 +168,31 @@ class SpikeEvents
   /**
     Destructor.
   */
-  ~SpikeEvents
-  ();
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Initializes this object.
-  */
-  void
-  initialize
-  (
-    cl::Context&,
-    cl::Device&,
-    cl::CommandQueue&,
-    cl_bool,
-    cl_uint, 
-    cl_uint,
-    cl_uint, 
-    cl_uint,
-    cl_uint, 
-    cl_uint,
-    struct kernelStatistics*,
-    std::stringstream*,
-    std::stringstream*
-  );
+  ~Data_SpikeEvents()
+  {
+    if(this->dataSpikePacketCounts)
+    {
+      free(this->dataSpikePacketCounts);
+      this->dataSpikePacketCounts = NULL;
+    }
+    if(this->dataSpikePackets)
+    {
+      free(this->dataSpikePackets);
+      this->dataSpikePackets = NULL;
+    }
+    if(this->dataPastSpikePacketCounts)
+    {
+      free(this->dataPastSpikePacketCounts);
+      this->dataPastSpikePacketCounts = NULL;
+    }
+    if(this->dataPastSpikePackets)
+    {
+      free(this->dataPastSpikePackets);
+      this->dataPastSpikePackets = NULL;
+    }
+    this->dataToSimulationLogFile = NULL;
+    this->dataToReportLogFile = NULL;
+  };
 /**************************************************************************************************/
 
 
@@ -208,7 +230,18 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Returns current spike count.
+    Returns current spike packet count.
+  */
+  cl_uint
+  getSpikePacketCount
+  ();
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Returns spike count in a spike packet
   */
   cl_uint
   getSpikeCount
@@ -279,35 +312,9 @@ class SpikeEvents
 
 
 
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_DEBUG_ENABLE)
 /**************************************************************************************************/
   /**
-    Invalidates current spike events (they become past spikes).
-  */
-  void 
-  invalidateDebug
-  ();
-/**************************************************************************************************/
-#endif
-
-
-
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_ERROR_TRACK_ENABLE)
-/**************************************************************************************************/
-  /**
-    Invalidates current spike events (they become past spikes).
-  */
-  void 
-  invalidateError
-  ();
-/**************************************************************************************************/
-#endif
-
-
-
-/**************************************************************************************************/
-  /**
-    Invalidates current spike events (they become past spikes).
+    Loads data from device to host (if it is not valid on the host).
   */
   void 
   refresh
@@ -318,115 +325,32 @@ class SpikeEvents
 
 
 
-#if EXPAND_EVENTS_ENABLE
-/**************************************************************************************************/
-  /**
-    Loads current spike events from the device if they are invalid on the host.
-  */
-  void 
-  expand
-  (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    struct kernelStatistics*,
-#endif
-    cl_uint,
-    cl_uint,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&,
-    cl::Event&
-  );
-/**************************************************************************************************/
-#endif
-
-
-
-#if EXPAND_EVENTS_ENABLE
-/**************************************************************************************************/
-  /**
-    Loads current spike events from the device if they are invalid on the host.
-  */
-  void 
-  expand
-  (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    struct kernelStatistics*,
-#endif
-    cl_uint,
-    cl_uint,
-    cl_uint,
-    cl_int,
-    double,
-    double,
-    double,
-    double,
-    double,
-    double,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&,
-    cl::Event&
-  );
-/**************************************************************************************************/
-#endif
-
-
-
-#if EXPAND_EVENTS_ENABLE
-/**************************************************************************************************/
-  /**
-    Loads current spike events from the device if they are invalid on the host.
-  */
-  void 
-  expand
-  (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    struct kernelStatistics*,
-#endif
-    cl_uint,
-    cl_uint,
-    cl_uint,
-    double,
-    double,
-    double,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&,
-    cl::Event&
-  );
-/**************************************************************************************************/
-#endif
-
-
-
 /**************************************************************************************************/
   private:  /*private methods*/
 /**************************************************************************************************/
 
 
 
-#if (EXPAND_EVENTS_ENABLE && EXPAND_EVENTS_VERIFY_ENABLE)
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Initializes this object. Must be called only from the constructor and only once.
   */
-  void 
-  verifyExpand
+  void
+  initialize
   (
-    cl_uint,
-    bool,
-    SynapticEvents&,
-    Connectome&,
-    cl::CommandQueue&
+    cl::Context&,
+    cl::Device&,
+    cl::CommandQueue&,
+    cl_bool,
+    struct kernelStatistics&
   );
 /**************************************************************************************************/
-#endif
 
 
 
 /**************************************************************************************************/
   /**
-    Loads current spike events from the device if they are invalid on the host.
+    Loads data from the device if it is invalid on the host.
   */
   void
   getData
@@ -441,40 +365,28 @@ class SpikeEvents
 
 /**************************************************************************************************/
   /**
-    Resets all variables to the default state.
+    Stores data on device.
   */
   void
-  reset
-  (
-    bool
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Stores spike data on device.
-  */
-  void
-  storeBuffers
+  storeData
   (
     cl::CommandQueue&,
     cl_bool,
     cl_uint
   );
 /**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Verifies if this object was initialized.
-  */
-  void
-  isInitialized
-  ();
-/**************************************************************************************************/
 };
 
-#endif
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/
+
+
+
+#endif  /*SPIKE_EVENTS_H_*/

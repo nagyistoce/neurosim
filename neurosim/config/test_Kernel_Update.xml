@@ -28,6 +28,9 @@
       <id>UPDATE_NEURONS_SMALL</id>
       <!-- Configuration -->
       <config>
+        <!-- COMPILER: 0x10000, 0x10001 -->
+        <param id="COMPILER">0x10000</param>
+      
         <!-- ENABLE_MASK: oct("0b0000000010000000") -->
         <param id="ENABLE_MASK">oct("0b0000000010000000")</param>
         
@@ -86,6 +89,9 @@
       <id>UPDATE_NEURONS_MEDIUM</id>
       <!-- Configuration -->
       <config>
+        <!-- COMPILER: 0x10000, 0x10001 -->
+        <param id="COMPILER">0x10000</param>
+      
         <!-- ENABLE_MASK: oct("0b0000000010000000") -->
         <param id="ENABLE_MASK">oct("0b0000000010000000")</param>
         
@@ -144,6 +150,9 @@
       <id>UPDATE_NEURONS_LARGE</id>
       <!-- Configuration -->
       <config>
+        <!-- COMPILER: 0x10000, 0x10001 -->
+        <param id="COMPILER">0x10000</param>
+      
         <!-- ENABLE_MASK: oct("0b0000000010000000") -->
         <param id="ENABLE_MASK">oct("0b0000000010000000")</param>
         
@@ -214,6 +223,8 @@
       <param id="Average Events/Iteration"></param>
       <param id="Average Spikes/Iteration"></param>
       <param id="Total Time"></param>
+      <param id="Total Setup Time"></param>
+      <param id="Total Run Time"></param>
       <param id="Result"></param>
       <param id="Kernel kernelExpandEvents Total Time"></param>
       <param id="Kernel kernelExpandEvents Average Time"></param>

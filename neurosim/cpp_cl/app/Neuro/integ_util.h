@@ -2,18 +2,44 @@
 #ifndef INC_INTEG_UTIL_H
 #define INC_INTEG_UTIL_H
 
-#include "Definitions.h"
-/*Models: */
-#include "iz_util.h"
-#include "integ_util.h"
-#include <CL/cl.hpp>
+
+
+/***************************************************************************************************
+  Includes
+***************************************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 #include <math.h>
+#include <CL/cl.hpp>
+
+#include "Definitions.h"
+
+/*Models: */
+#include "iz_util.h"
+#include "integ_util.h"
+
+/**************************************************************************************************/
 
 
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
+
+#if !defined (UPDATE_NEURONS_TOLERANCE_MODE)
+  #define UPDATE_NEURONS_TOLERANCE_MODE                       TOLERANCE_MODE
+#endif
+
+#if !defined (UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD)
+  #define UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD   1
+#endif
 
 extern void ps_update(DATA_TYPE **, int, int, DATA_TYPE, DATA_TYPE *);
 
@@ -27,7 +53,7 @@ extern int ps_step
   DATA_TYPE *,
   DATA_TYPE *,
   DATA_TYPE *,
-  void (*)(DATA_TYPE **,DATA_TYPE **,DATA_TYPE *), 
+  void (*)(DATA_TYPE **,DATA_TYPE *), 
 	void (*)(DATA_TYPE **,DATA_TYPE **,DATA_TYPE *,int),
   int, 
   int, 
@@ -67,5 +93,17 @@ extern void rzextr(int,double,double *,double *,double *,int,double *,
 
 extern int bs_step(double *, double *, double *, int, double, double *, 
   double *, void (*)(double *, double *, double *));
-  
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/
+
+
+
 #endif /* INC_INTEG_UTIL_H */

@@ -10,7 +10,7 @@
     {
       ss << dataExpandEventsDebugDevice[i*EXPAND_EVENTS_WF_SIZE_WI + j] << ",";
     }
-    LOG(ss.str(), 0)
+    LOG_SIM(ss.str(), 0)
   }
   
   =============================================================================================== */
@@ -22,6 +22,16 @@
 ***************************************************************************************************/
 
 #include "Common.hpp"
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
 
 /**************************************************************************************************/
 
@@ -43,7 +53,7 @@ getPath
 #endif
   std::string str(buffer);
   /* '\' == 92 */
-  int last = (int)str.find_last_of((char)92);
+  size_t last = str.find_last_of((char)92);
 #else
   char buffer[PATH_MAX + 1];
   ssize_t len;
@@ -52,7 +62,7 @@ getPath
   buffer[len] = '\0';
   std::string str(buffer);
   /* '/' == 47 */
-  int last = (int)str.find_last_of((char)47);
+  size_t last = str.find_last_of((char)47);
 #endif
   return str.substr(0, last + 1);
 }
@@ -68,8 +78,8 @@ getSource
 )
 /**************************************************************************************************/
 {
-  size_t      size;
-  char*       str;
+  std::streampos size;
+  char*         str;
 
   /* Open file stream*/
   std::fstream f(fileName, (std::fstream::in | std::fstream::binary));
@@ -77,17 +87,24 @@ getSource
   /* Check if we have opened file stream*/
   if (f.is_open()) 
   {
-    size_t  sizeFile;
+    std::streampos sizeFile;
     /* Find the stream size*/
     f.seekg(0, std::fstream::end);
-    size = sizeFile = (size_t)f.tellg();
+    size = sizeFile = f.tellg();
     f.seekg(0, std::fstream::beg);
 
-    str = new char[size + 1];
+    if(size < 0) 
+    {
+      f.close();
+      return  false;
+    }
+    
+    str = new char[(size_t)size + 1];
+    
     if(!str) 
     {
-        f.close();
-        return  false;
+      f.close();
+      return  false;
     }
 
     /* Read file*/
@@ -138,6 +155,9 @@ replaceNewlineWithSpaces
 void 
 createKernel
 (
+#if LOG_SIMULATION
+  std::stringstream   *dataToSimulationLogFile,
+#endif
   cl::Context         &context,
   cl::Device          &device,
   cl::Kernel          &kernel,
@@ -167,25 +187,20 @@ createKernel
   
   if(!getSource(kernelPath.c_str(), kernelSrc))
   {
-    std::stringstream ss;
-    ss << "IntegrationTest::createKernel: Failed to load kernel file: " << kernelPath << std::endl;
-    throw SimException(ss.str());
+    THROW_SIMEX("Neurosim::createKernel: Failed to load kernel file: " << kernelPath);
   }
   
   defPath.append("Definitions.h");
   
   if(!getSource(defPath.c_str(), defSrc))
   {
-    std::stringstream ss;
-    ss << "IntegrationTest::createKernel: Failed to load kernel file: " << defPath << std::endl;
-    throw SimException(ss.str());
+    THROW_SIMEX("Neurosim::createKernel: Failed to load kernel file: " << defPath);
   }
 
   /*To nearest 4B chunk*/
   size_t sourceCodeSize = ((defSrc.size() + kernelSrc.size())/sizeof(int)+1)*sizeof(int);
   /*size_t sourceCodeSize = defSrc.size() + kernelSrc.size();*/
-  std::cout << "Source code size (" << kernelName << "): " << ((float)sourceCodeSize)/1024.0 
-    << " KB" << std::endl;
+  LOG_SIM("Source code size (" << kernelName << "): " << ((float)sourceCodeSize)/1024.0 << " KB");
     
   char *sourceCode = (char *) calloc(sourceCodeSize, sizeof(char));
   sourceCode[0] = '\0';
@@ -196,19 +211,16 @@ createKernel
 
   program = cl::Program(context, programSource, &err);
   
+  free(sourceCode);
+  
   if(err != CL_SUCCESS)
   {
-    std::stringstream ss;
-    ss << "IntegrationTest::createKernel: Failed cl::Program(Source) due to error code " 
-    << err << "\n";
-    throw SimException(ss.str());
+    THROW_SIMEX("Neurosim::createKernel: Failed cl::Program(Source) due to error code " << err);
   }
 
   if(!getSource(flagsPath.c_str(), flagsSrc))
   {
-    std::stringstream ss;
-    ss << "IntegrationTest::createKernel: Failed to load flags file: " << flagsPath << std::endl;
-    throw SimException(ss.str());
+    THROW_SIMEX("Neurosim::createKernel: Failed to load flags file: " << flagsPath);
   }
   
   replaceNewlineWithSpaces(flagsSrc);
@@ -216,12 +228,12 @@ createKernel
   flagsStr.append(flags);
   if(flagsStr.size() != 0)
   {
-    std::cout << "Build Options (" << kernelName << "): " << flagsStr.c_str() << std::endl;
+    LOG_SIM("Build Options (" << kernelName << "): " << flagsStr.c_str());
   }
   
   vector<cl::Device> deviceVector;
   deviceVector.push_back(device);
-  std::cout << "Building for device: " << (device).getInfo<CL_DEVICE_NAME>() << std::endl;
+  LOG_SIM("Building for device: " << (device).getInfo<CL_DEVICE_NAME>());
   err = program.build(deviceVector, flagsStr.c_str());
   
   if(err != CL_SUCCESS)
@@ -229,20 +241,17 @@ createKernel
     if(err == CL_BUILD_PROGRAM_FAILURE)
     {
       std::string str = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
-
-      std::cout << " \n\t\t\tBUILD LOG\n";
-      std::cout << " ************************************************\n";
+      
+      std::cout << " \n\tBUILD LOG for kernel " << kernelName << "\n";
+      std::cout << "*******************************************************************\n";
       std::cout << str << std::endl;
-      std::cout << " ************************************************\n";
+      std::cout << "*******************************************************************\n";
     }
   }
 
   if(err != CL_SUCCESS)
   {
-    std::stringstream ss;
-    ss << "IntegrationTest::createKernel: Failed cl::Program:build due to error code " 
-    << err << "\n";
-    throw SimException(ss.str());
+    THROW_SIMEX("Neurosim::createKernel: Failed cl::Program:build due to error code " << err);
   }
   
   /* Create kernel */
@@ -250,10 +259,7 @@ createKernel
 
   if(err != CL_SUCCESS)
   {
-    std::stringstream ss;
-    ss << "IntegrationTest::createKernel: Failed cl::Kernel() due to error code " 
-    << err << "\n";
-    throw SimException(ss.str());
+    THROW_SIMEX("Neurosim::createKernel: Failed cl::Kernel() due to error code " << err);
   }
 
   /* Check group size against group size returned by kernel */
@@ -262,20 +268,62 @@ createKernel
     
   if(err != CL_SUCCESS)
   {
-    std::stringstream ss;
-    ss << "IntegrationTest::createKernel: Failed Kernel::getWorkGroupInfo() due to error code " 
-    << err << "\n";
-    throw SimException(ss.str());
+    THROW_SIMEX("Neurosim::createKernel: Failed Kernel::getWorkGroupInfo() due to error code " 
+      << err);
   }
 
   if((blockSizeX * blockSizeY) > kernelWorkGroupSize)
   {
-    std::stringstream ss;
-    
-    ss << "IntegrationTest::createKernel: Out of Resources!" << std::endl;
-    ss << "Group Size specified : " << blockSizeX * blockSizeY << std::endl;
-    ss << "Max Group Size supported on the kernel : " << kernelWorkGroupSize << std::endl;
-    throw SimException(ss.str());
+    THROW_SIMEX("Neurosim::createKernel: Out of Resources!" << std::endl
+      << "Group Size specified : " << blockSizeX * blockSizeY << std::endl
+      << "Max Group Size supported on the kernel : " << kernelWorkGroupSize);
   }
 }
+/**************************************************************************************************/
+
+
+
+bool 
+findTargetDevice
+(
+  vector<cl::Device>                  platformDevices,
+  const char                          *targetDevices,
+  std::vector<cl::Device>::iterator   *d
+)
+/**************************************************************************************************/
+{
+  bool found = false;
+  char *str = (char *) calloc(0xFFFF, sizeof(char));
+  strcpy(str, targetDevices);
+  char *pch;
+  pch = strtok (str, ",");
+  
+  while (pch != NULL)
+  {
+    for(*d = platformDevices.begin(); *d != platformDevices.end(); ++(*d)) 
+    {
+      std::string deviceName = (*(*d)).getInfo<CL_DEVICE_NAME>();
+      
+      if(strcmp(deviceName.c_str(), pch) == 0)
+      {
+        found = true; break;
+      }
+    }
+    if(found){break;}
+    pch = strtok (NULL, ",");
+  }
+  
+  free(str);
+  return found;
+}
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
 /**************************************************************************************************/

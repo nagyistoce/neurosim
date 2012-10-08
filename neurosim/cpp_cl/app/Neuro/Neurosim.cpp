@@ -1,10 +1,7 @@
 
 /* ===============================================================================================
 
-  TODO:
-  - reduce/restructure: synaptic connectome data structure, time slot data structure, tik/tok
-    structures.
-  - review buffer flags fore read/write operations
+                                              :-)
   
   =============================================================================================== */
 
@@ -14,14 +11,26 @@
   Includes
 ***************************************************************************************************/
 
-#include "IntegrationTest.hpp"
+#include "Neurosim.hpp"
 
 /**************************************************************************************************/
 
 
 
-int
-IntegrationTest::allocateHostData
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
+
+/**************************************************************************************************/
+
+
+
+#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
+    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+void
+Neurosim::allocateHostData
 (
   cl::Device  &device
 )
@@ -29,23 +38,14 @@ IntegrationTest::allocateHostData
 {
   cl_uint size = 0;
   
-#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
+#if ((GROUP_EVENTS_ENABLE_V00) ||\
+     (GROUP_EVENTS_ENABLE_V01) ||\
+     (GROUP_EVENTS_ENABLE_V02) ||\
+     (GROUP_EVENTS_ENABLE_V03))
   {
-#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-    (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-    (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)||\
-    (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
   size = GROUP_EVENTS_GRID_SIZE_WG*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
-#endif
 
-  /* allocate memory for histogram and its verification*/
-  CALLOC(dataHistogramGroupEventsTik, cl_uint, size);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataHistogramGroupEventsTik);
-  
   CALLOC(dataHistogramGroupEventsVerify, cl_uint, size);
   }
 #endif
@@ -201,9 +201,8 @@ IntegrationTest::allocateHostData
 #if MAKE_EVENT_PTRS_ENABLE && UPDATE_NEURONS_ENABLE_V00
   if(size != size1)
   {
-    std::cerr << "ERROR, allocateHostData: (MAKE_EVENT_PTRS_ENABLE and "
-      << "UPDATE_NEURONS_ENABLE_V00 pointer struct size mismatch)" << std::endl;
-    return SDK_FAILURE;
+    throw SimException("Neurosim::allocateHostData: MAKE_EVENT_PTRS_ENABLE and "
+      "UPDATE_NEURONS_ENABLE_V00 pointer struct size mismatch");
   }
 #endif
   size = size1;
@@ -268,15 +267,14 @@ IntegrationTest::allocateHostData
 	for(int i=0; i<4; i++)
     {co[i] = (DATA_TYPE *)malloc((UPDATE_NEURONS_PS_ORDER_LIMIT+1)*sizeof(DATA_TYPE));}
 #endif
-/**************************************************************************************************/
-
-  return SDK_SUCCESS;
 }
+/**************************************************************************************************/
+#endif
 
 
 
 int
-IntegrationTest::initializeUnsortedEvents
+Neurosim::initializeUnsortedEvents
 /**************************************************************************************************/
 (
   cl_uint totalBuffers,
@@ -365,21 +363,22 @@ IntegrationTest::initializeUnsortedEvents
       dataHistogram[offset]++;
     }
   }
-  return SDK_SUCCESS;
+  return 1;
 }
 /**************************************************************************************************/
 
 
 
+#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
+    GROUP_EVENTS_ENABLE_V03
 int
-IntegrationTest::initializeGrouppedEvents
+Neurosim::initializeGrouppedEvents
 /**************************************************************************************************/
 (
   cl_uint enableValues,
   cl_uint totalBuffers,
   cl_uint bufferSize,
   cl_uint destinationBufferSize,
-  cl_uint elementSizeWords,
   cl_uint histogramBinSize,
   cl_uint histogramTotalBins,
   cl_uint histogramBitMask,
@@ -387,7 +386,7 @@ IntegrationTest::initializeGrouppedEvents
   cl_uint histogramOutBitShift,
   cl_uint histogramOutTotalGroups,
   cl_uint histogramOutBitMask,
-  cl_uint histogramOutSize,
+  size_t  histogramOutSize,
   cl_uint keyOffset,
   cl_uint *dataUnsortedEventCounts,
   cl_uint *dataUnsortedEventTargets,
@@ -397,15 +396,14 @@ IntegrationTest::initializeGrouppedEvents
   cl_uint *dataHistogram,
   cl_uint *dataHistogramOut
 ){
-  int result = SDK_SUCCESS;
-  
+  int result = 1;
+
   /* allocate memory for offset copies used in verification data generation*/
   cl_uint size = (histogramTotalBins*histogramBinSize + 1);
   cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
   memcpy(dataOffsetGroupEventsCopy, dataHistogram, size*sizeof(cl_uint));
   
   /*Init data for verification*/
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
   cl_uint total_synaptic_events = 
     dataHistogram[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
   
@@ -424,7 +422,6 @@ IntegrationTest::initializeGrouppedEvents
     wg_chunk_size++;
   }
   wg_chunk_size *= (GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI);
-#endif
 
   /*Group events for verification*/
   for(cl_uint b = 0; b < totalBuffers; b++)
@@ -472,14 +469,13 @@ IntegrationTest::initializeGrouppedEvents
         std::cout << "initializeGrouppedEvents: Destination event bin pointer overlaps with "
           << "next pointer for bin " << 
           bin << ", buffer " << b << std::endl;
-        result = SDK_FAILURE; 
+        result = 0; 
         break;
       }
       
       /*Calculate offset in the grouped data space*/
       cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
         
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
       /*Compute histogram key for target neuron*/
       cl_uint hist_out_ptr = 
         /*WG offset for histogram out*/
@@ -492,12 +488,11 @@ IntegrationTest::initializeGrouppedEvents
       {
         std::cout << "initializeGrouppedEvents: Pointer to an element in output histogram is "
           << "outside of its range" << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
       /*Increment counter for this bin.*/
       dataHistogramOut[hist_out_ptr]++;
-#endif
       
       /*Store event at its group location (grouped by bins)*/
       dataGroupedEvents[dest_offset] = key;
@@ -508,17 +503,19 @@ IntegrationTest::initializeGrouppedEvents
       /*Increment ptr for next data item*/
       dataOffsetGroupEventsCopy[bin_offset]++;
     }
-    if(result != SDK_SUCCESS){break;}
+    if(result != 1){break;}
   }
   free(dataOffsetGroupEventsCopy);
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
+#if GROUP_EVENTS_ENABLE_V01
 int 
-IntegrationTest::initializeDataForKernelGroupEventsV01
+Neurosim::initializeDataForKernelGroupEventsV01
 /**************************************************************************************************/
 (
   int step, 
@@ -526,9 +523,8 @@ IntegrationTest::initializeDataForKernelGroupEventsV01
   double percentBufferSizeDeviation
 ){
 
-  int result = SDK_SUCCESS;
+  int result = 1;
 
-#if GROUP_EVENTS_ENABLE_V01
   cl_uint max_offset = 0;
   
   cl_uint shiftFirstStage, shiftNextStage;
@@ -538,8 +534,8 @@ IntegrationTest::initializeDataForKernelGroupEventsV01
   }
   else
   {
-    shiftFirstStage = GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01*step;;
-    shiftNextStage = GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01*(step+1);
+    shiftFirstStage = GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01 * (cl_uint)step;;
+    shiftNextStage = GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01 * ((cl_uint)step + 1);
   }
 
 #if (GROUP_EVENTS_DEBUG_ENABLE)
@@ -550,11 +546,8 @@ IntegrationTest::initializeDataForKernelGroupEventsV01
   /*Set it with non-zero since kernel should zero it out*/
   memset(dataErrorGroupEvents, 0xF, dataErrorGroupEventsSizeBytes);
 #endif
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
-  memset(dataHistogramGroupEventsTik, 0, dataHistogramGroupEventsTikSizeBytes);
-#endif
+  memset((*operatorSort).dataHistogramGroupEventsTik, 0, (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
   memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
-  memset(dataHistogramGroupEventsTik, 0, dataHistogramGroupEventsTikSizeBytes);
   memset(dataGroupEventsTok, 0, dataGroupEventsTokSizeBytes);
   memset(dataHistogramGroupEventsTok, 0, dataHistogramGroupEventsTokSizeBytes);
 
@@ -628,10 +621,10 @@ IntegrationTest::initializeDataForKernelGroupEventsV01
     std::cout << "initializeDataForKernelGroupEventsV01: Destination event buffer overflow. " << 
       "Need to increase GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE, which is currently " << 
       GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE << " above " << max_offset << std::endl;
-    result = SDK_FAILURE;
+    result = 0;
   }
 
-  if(result != SDK_FAILURE)
+  if(result != 0)
   {
     result = initializeGrouppedEvents
     (
@@ -639,7 +632,6 @@ IntegrationTest::initializeDataForKernelGroupEventsV01
       GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
       GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
       GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
-      GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
       GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
       GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
       GROUP_EVENTS_HISTOGRAM_BIN_MASK,
@@ -647,7 +639,7 @@ IntegrationTest::initializeDataForKernelGroupEventsV01
       shiftNextStage,
       GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
       GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT,
-      dataHistogramGroupEventsTikSize,
+      (*operatorSort).dataHistogramGroupEventsTikSize,
       keyOffset,
       dataUnsortedEventCountsTemp,
       dataUnsortedEventTargetsTemp,
@@ -655,22 +647,22 @@ IntegrationTest::initializeDataForKernelGroupEventsV01
       dataUnsortedEventWeightsTemp,
       dataGroupEventsTik,
       dataHistogramTemp,
-      dataHistogramGroupEventsTik
+      (*operatorSort).dataHistogramGroupEventsTik
     );
   }
 
-  if(result != SDK_FAILURE)
+  if(result != 0)
   {
-  runningSum = dataHistogramGroupEventsTik[0];
-  dataHistogramGroupEventsTik[0] = 0;
+  runningSum = (*operatorSort).dataHistogramGroupEventsTik[0];
+  (*operatorSort).dataHistogramGroupEventsTik[0] = 0;
   
   /*Compute offsets*/
   for(cl_uint j = 1; 
     j < (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE + 1); j++)
   {
     
-    cl_uint d = dataHistogramGroupEventsTik[j];
-    dataHistogramGroupEventsTik[j] = runningSum;
+    cl_uint d = (*operatorSort).dataHistogramGroupEventsTik[j];
+    (*operatorSort).dataHistogramGroupEventsTik[j] = runningSum;
     runningSum += d;
   }
   }
@@ -681,27 +673,23 @@ IntegrationTest::initializeDataForKernelGroupEventsV01
   free(dataUnsortedEventWeightsTemp);
   free(dataUnsortedEventCountsTemp);
   return result;
-#else
-  std::cerr << "ERROR, initializeDataForKernelGroupEventsV01: " 
-    << "(GROUP_EVENTS_ENABLE_V01 is not true)" << std::endl;
-  return SDK_FAILURE;
-#endif
 }
 /**************************************************************************************************/
+#endif
 
 
 
+#if GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
 int 
-IntegrationTest::initializeDataForKernelGroupEventsV02_V03
+Neurosim::initializeDataForKernelGroupEventsV02_V03
 /**************************************************************************************************/
 (
-  cl_uint step, 
+  int step, 
   cl_uint keyOffset,
   double percentBufferSizeDeviation
 ){
-  int result = SDK_SUCCESS;
+  int result = 1;
 
-#if GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
   cl_uint shiftFirstStage, shiftNextStage;
   if(step < 0)
   {
@@ -709,8 +697,8 @@ IntegrationTest::initializeDataForKernelGroupEventsV02_V03
   }
   else
   {
-    shiftFirstStage = GROUP_EVENTS_HISTOGRAM_BIN_BITS*step;;
-    shiftNextStage = GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT*(step+1);
+    shiftFirstStage = GROUP_EVENTS_HISTOGRAM_BIN_BITS * (cl_uint)step;;
+    shiftNextStage = GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT * ((cl_uint)step+1);
   }
 
 #if (GROUP_EVENTS_DEBUG_ENABLE)
@@ -720,15 +708,12 @@ IntegrationTest::initializeDataForKernelGroupEventsV02_V03
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
   memset(dataErrorGroupEvents, 0, dataErrorGroupEventsSizeBytes);
 #endif
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
-  memset(dataHistogramGroupEventsTik, 0, dataHistogramGroupEventsTikSizeBytes);
-#endif
+  memset((*operatorSort).dataHistogramGroupEventsTik, 0, (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
   memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
-  memset(synapticEvents.dataUnsortedEventCounts, 0, synapticEvents.dataUnsortedEventCountsSizeBytes);
-  memset(synapticEvents.dataUnsortedEventTargets, 0, synapticEvents.dataUnsortedEventTargetsSizeBytes);
-  memset(synapticEvents.dataUnsortedEventDelays, 0, synapticEvents.dataUnsortedEventDelaysSizeBytes);
-  memset(synapticEvents.dataUnsortedEventWeights, 0, synapticEvents.dataUnsortedEventWeightsSizeBytes);
-  memset(dataHistogramGroupEventsTik, 0, dataHistogramGroupEventsTikSizeBytes);
+  memset((*synapticEvents).dataUnsortedEventCounts, 0, (*synapticEvents).dataUnsortedEventCountsSizeBytes);
+  memset((*synapticEvents).dataUnsortedEventTargets, 0, (*synapticEvents).dataUnsortedEventTargetsSizeBytes);
+  memset((*synapticEvents).dataUnsortedEventDelays, 0, (*synapticEvents).dataUnsortedEventDelaysSizeBytes);
+  memset((*synapticEvents).dataUnsortedEventWeights, 0, (*synapticEvents).dataUnsortedEventWeightsSizeBytes);
   memset(dataGroupEventsTok, 0, dataGroupEventsTokSizeBytes);
   memset(dataHistogramGroupEventsTok, 0, dataHistogramGroupEventsTokSizeBytes);
 
@@ -749,10 +734,10 @@ IntegrationTest::initializeDataForKernelGroupEventsV02_V03
     keyOffset,
     10.0f,
     percentBufferSizeDeviation,
-    synapticEvents.dataUnsortedEventCounts,
-    synapticEvents.dataUnsortedEventTargets,
-    synapticEvents.dataUnsortedEventDelays,
-    synapticEvents.dataUnsortedEventWeights,
+    (*synapticEvents).dataUnsortedEventCounts,
+    (*synapticEvents).dataUnsortedEventTargets,
+    (*synapticEvents).dataUnsortedEventDelays,
+    (*synapticEvents).dataUnsortedEventWeights,
     dataHistogramTemp
   );
 
@@ -789,10 +774,10 @@ IntegrationTest::initializeDataForKernelGroupEventsV02_V03
     std::cout << "initializeDataForKernelGroupEventsV02_V03: Destination event buffer overflow. " << 
       "Need to increase GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE, which is currently " << 
       GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE << " above " << runningSum << std::endl;
-    result = SDK_FAILURE;
+    result = 0;
   }
 
-  if(result != SDK_FAILURE)
+  if(result != 0)
   {
     result = initializeGrouppedEvents
     (
@@ -800,7 +785,6 @@ IntegrationTest::initializeDataForKernelGroupEventsV02_V03
       GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
       GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
       GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
-      GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
       GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
       GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
       GROUP_EVENTS_HISTOGRAM_BIN_MASK,
@@ -808,48 +792,44 @@ IntegrationTest::initializeDataForKernelGroupEventsV02_V03
       shiftNextStage,
       GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
       GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT,
-      dataHistogramGroupEventsTikSize,
+      (*operatorSort).dataHistogramGroupEventsTikSize,
       keyOffset,
-      synapticEvents.dataUnsortedEventCounts,
-      synapticEvents.dataUnsortedEventTargets,
-      synapticEvents.dataUnsortedEventDelays,
-      synapticEvents.dataUnsortedEventWeights,
+      (*synapticEvents).dataUnsortedEventCounts,
+      (*synapticEvents).dataUnsortedEventTargets,
+      (*synapticEvents).dataUnsortedEventDelays,
+      (*synapticEvents).dataUnsortedEventWeights,
       dataGroupEventsTik,
       dataHistogramTemp,
-      dataHistogramGroupEventsTik
+      (*operatorSort).dataHistogramGroupEventsTik
     );
   }
 
-  if(result != SDK_FAILURE)
+  if(result != 0)
   {
-    runningSum = dataHistogramGroupEventsTik[0];
-    dataHistogramGroupEventsTik[0] = 0;
+    runningSum = (*operatorSort).dataHistogramGroupEventsTik[0];
+    (*operatorSort).dataHistogramGroupEventsTik[0] = 0;
     
     /*Compute offsets*/
     for(cl_uint j = 1; 
       j < (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE + 1); j++)
     {
       
-      cl_uint d = dataHistogramGroupEventsTik[j];
-      dataHistogramGroupEventsTik[j] = runningSum;
+      cl_uint d = (*operatorSort).dataHistogramGroupEventsTik[j];
+      (*operatorSort).dataHistogramGroupEventsTik[j] = runningSum;
       runningSum += d;
     }
   }
 
   free(dataHistogramTemp);
   return result;
-#else
-  std::cerr << "ERROR, initializeDataForKernelGroupEventsV02_V03: " 
-    << "(GROUP_EVENTS_ENABLE_V02 or GROUP_EVENTS_ENABLE_V03 are not true)" << std::endl;
-  return SDK_FAILURE;
-#endif
 }
 /**************************************************************************************************/
+#endif
 
 
 
 int 
-IntegrationTest::initializeSortedEvents
+Neurosim::initializeSortedEvents
 (
   cl_uint mode,
   cl_uint maxEventId,
@@ -868,7 +848,7 @@ IntegrationTest::initializeSortedEvents
 #define PRINT_initializeSortedEvents  0
   
   bool enableGaba = true;
-  int result = SDK_SUCCESS;
+  int result = 1;
   cl_uint totalBoundaries = 0, maxBoundariesPerWf = 0, currentWindow = 0, currentId = 0;
   
 #if PRINT_initializeSortedEvents
@@ -933,7 +913,7 @@ IntegrationTest::initializeSortedEvents
       if(time > 1.0)
       {
         std::cerr << "ERROR, initializeSortedEvents, event time exceeds max" << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
       }
     }
     if(mode > 1)
@@ -972,7 +952,7 @@ IntegrationTest::initializeSortedEvents
       std::cerr << "ERROR, initializeSortedEvents, pointer struct buffer size " 
         << " is outside of valid range: " << maxBoundariesPerWf << " > " << structSizeLimit 
         << " (" << 100.0-structBufferSizeMargin << "% of " << structSize/structPitch << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
   }
 
@@ -982,10 +962,11 @@ IntegrationTest::initializeSortedEvents
 
 
 
+#if MAKE_EVENT_PTRS_ENABLE
 int 
-IntegrationTest::initializeDataForKernelMakeEventPtrs
+Neurosim::initializeDataForKernelMakeEventPtrs
 (
-  cl_uint mode,
+  int mode,
   cl_uint step
 )
 /**************************************************************************************************/
@@ -995,8 +976,8 @@ IntegrationTest::initializeDataForKernelMakeEventPtrs
   - enhence with test cases:
     - insert key change at the inter WI, inter WF boundaries
 */
-#if MAKE_EVENT_PTRS_ENABLE
-  int result = SDK_SUCCESS;
+
+  int result = 1;
 
   /*Reset buffers*/
   memset(dataHistogramGroupEventsTok, 0, dataHistogramGroupEventsTokSizeBytes);
@@ -1113,18 +1094,14 @@ IntegrationTest::initializeDataForKernelMakeEventPtrs
 #endif
   
   return result;
-#else
-  std::cerr << "ERROR, initializeDataForKernelMakeEventPtrs: " 
-    << "(MAKE_EVENT_PTRS_ENABLE is not true)" << std::endl;
-  return SDK_FAILURE;
-#endif
 }
 /**************************************************************************************************/
+#endif
 
 
 
 int 
-IntegrationTest::initializeEventPointers
+Neurosim::initializeEventPointers
 (
   bool    verify,
   cl_uint totalSortedEvents,
@@ -1135,7 +1112,7 @@ IntegrationTest::initializeEventPointers
 )
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
   
   pointersToEvents[sortedEvents[0]*pointersPitch] = 0;
 
@@ -1149,7 +1126,7 @@ IntegrationTest::initializeEventPointers
       {
         std::cerr << "ERROR, initializeEventPointers, pointer data structure overflow: " 
           << sortedEvents[j] << " >= " << totalPointers << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
       else
@@ -1166,7 +1143,7 @@ IntegrationTest::initializeEventPointers
         std::cerr << "ERROR, initializeEventPointers, detected violation of key sort order " 
           << sortedEvents[j] << " < " 
           << sortedEvents[j-1] << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
       if(*((cl_float *)(&sortedEvents[j + totalSortedEvents])) < 
@@ -1175,7 +1152,7 @@ IntegrationTest::initializeEventPointers
         std::cerr << "ERROR, initializeEventPointers, detected violation of value sort order " 
           << *((cl_float *)(&sortedEvents[j + totalSortedEvents])) << " < " 
           << *((cl_float *)(&sortedEvents[j-1 + totalSortedEvents])) << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
     }
@@ -1194,8 +1171,9 @@ IntegrationTest::initializeEventPointers
 
 
 
+#if UPDATE_NEURONS_ENABLE_V00
 int
-IntegrationTest::psInit
+Neurosim::psInit
 (
   cl_uint     totalNeurons,
   int         injectCurrentUntilStep,
@@ -1203,7 +1181,6 @@ IntegrationTest::psInit
 )
 /**************************************************************************************************/
 {
-#if UPDATE_NEURONS_ENABLE_V00
   /*
   const double tols[16] = {1e-1,1e-2,1e-3,1e-4,1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,
                            1e-11,1e-12,1e-13,1e-14,1e-15,1e-16};
@@ -1217,7 +1194,6 @@ IntegrationTest::psInit
   */
   double
     dt = UPDATE_NEURONS_DT,
-    p_connect = 10.0/100.0,
     C=UPDATE_NEURONS_C,
     vr=-65,
     vt=-50,
@@ -1247,7 +1223,7 @@ IntegrationTest::psInit
   
   /*Read a sample of variables from a file: */
   std::vector <std::vector <CL_DATA_TYPE> > neuronVariablesSample;
-  if(neuronVariablesSampleFile != "")
+  if(neuronVariablesSampleFile != NULL)
   {
     std::ifstream infile(neuronVariablesSampleFile);
     
@@ -1255,7 +1231,7 @@ IntegrationTest::psInit
     {
       std::cerr << "ERROR, psInit: Failed to open neuronVariablesSampleFile: " << 
         neuronVariablesSampleFile << std::endl;
-      return SDK_FAILURE;
+      return 0;
     }
 
     bool header = true;
@@ -1282,7 +1258,7 @@ IntegrationTest::psInit
     {
       std::cerr << "ERROR, psInit: Failed to close neuronVariablesSampleFile: " << 
         neuronVariablesSampleFile << std::endl;
-      return SDK_FAILURE;
+      return 0;
     }
     
     infile.close();
@@ -1325,7 +1301,7 @@ IntegrationTest::psInit
     nrnp_ps->a = a_ps;
     
     /*Variables: */
-    if(neuronVariablesSampleFile != "")
+    if(neuronVariablesSampleFile != NULL)
     {
       std::vector <CL_DATA_TYPE> record = neuronVariablesSample[i%sampleSize];
       nrnp_ps->v      = record[0];
@@ -1363,15 +1339,17 @@ IntegrationTest::psInit
   /*Initialize delay time counter: */
   for(unsigned int i=0; i < UPDATE_NEURONS_TOTAL_NEURONS; i++){ne[i] = -1;}
   
-  return SDK_SUCCESS;
-#endif
+  return 1;
+
 }
 /**************************************************************************************************/
+#endif
 
 
 
+#if UPDATE_NEURONS_ENABLE_V00
 int 
-IntegrationTest::initializeDataForKernelUpdateNeurons
+Neurosim::initializeDataForKernelUpdateNeurons
 (
   bool          resetEvents,
   bool          resetParameters,
@@ -1381,17 +1359,16 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
 )
 /**************************************************************************************************/
 {
-#if UPDATE_NEURONS_ENABLE_V00
-  int result = SDK_SUCCESS;
+  int result = 1;
   
   SET_RANDOM_SEED(srandSeed, srandCounter);
-  LOG("initializeDataForKernelUpdateNeurons: set srand seed to " << srandSeed, 0);
+  LOG_SIM("initializeDataForKernelUpdateNeurons: set srand seed to " << srandSeed);
 
   if(resetVariables || resetParameters)
   {
     result = psInit(UPDATE_NEURONS_TOTAL_NEURONS, UPDATE_NEURONS_INJECT_CURRENT_UNTIL_STEP, 
       neuronVariablesSampleFile);
-    if(result != SDK_SUCCESS){return result;}
+    if(result != 1){return result;}
   }
 
   if(resetEvents)
@@ -1411,7 +1388,7 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
       dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
       dataGroupEventsTik
     );
-    if(result != SDK_SUCCESS){return result;}
+    if(result != 1){return result;}
     
     memset(dataMakeEventPtrsStruct, 0, dataMakeEventPtrsStructSizeBytes);
     
@@ -1424,7 +1401,7 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
       dataGroupEventsTik,
       dataMakeEventPtrsStruct
     );
-    if(result != SDK_SUCCESS){return result;}
+    if(result != 1){return result;}
   }
 
   if(resetVariables)
@@ -1490,18 +1467,16 @@ IntegrationTest::initializeDataForKernelUpdateNeurons
   }
   
   return result;
-#else
-  std::cerr << "ERROR, initializeDataForKernelUpdateNeurons: " 
-    << "(UPDATE_NEURONS_ENABLE_V00 is not true)" << std::endl;
-  return SDK_FAILURE;
-#endif
 }
 /**************************************************************************************************/
+#endif
 
 
 
-int
-IntegrationTest::registerLocalMemory
+#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
+    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+void
+Neurosim::registerLocalMemory
 (
   cl::Device  &device
 )
@@ -1519,7 +1494,7 @@ IntegrationTest::registerLocalMemory
   lmlocalHistogramReferenceSizeBytes = lmlocalHistogramReference;
   REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmlocalHistogramReference);
 
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT && GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT)
+#if (GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT)
   cl_uint lmGroupEventsHistogramOut = sizeof(cl_uint)*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT);
   lmGroupEventsHistogramOutSizeBytes = lmGroupEventsHistogramOut;
@@ -1564,29 +1539,30 @@ IntegrationTest::registerLocalMemory
   REGISTER_MEMORY(kernelTag, MEM_LOCAL, lmSpikePackets);
   }
 #endif
-/**************************************************************************************************/
-
-  return SDK_SUCCESS;
 }
+/**************************************************************************************************/
+#endif
 
 
 
-int
-IntegrationTest::getPlatformStats()
+void
+Neurosim::getPlatformStats()
 {
   cl_int err;
 
-  // Plaform info
+  /* Plaform info */
   err = cl::Platform::get(&platforms);
 
   if (err != CL_SUCCESS) 
   {
-    std::cerr << "ERROR: " <<  "cl::Platform::get()" << " (" << err << ")" << std::endl;
-    return SDK_FAILURE;
+    std::stringstream ss;
+    ss << "Neurosim::getPlatformStats: " <<  "cl::Platform::get()" << " (" << err << ")" 
+      << std::endl;
+    throw SimException(ss.str());
   }
 
-  // Iteratate over platforms
-  LOG("Number of platforms:\t\t\t\t " << platforms.size(), 0);
+  /* Iteratate over platforms */
+  LOG_SIM("Number of platforms:\t\t\t\t " << platforms.size());
 
   for
   (
@@ -1594,413 +1570,204 @@ IntegrationTest::getPlatformStats()
     i != platforms.end(); 
     ++i
   ){
-    LOG("  Plaform Profile:\t\t\t\t " << (*i).getInfo<CL_PLATFORM_PROFILE>().c_str(), 0);
-    LOG("  Plaform Version:\t\t\t\t " << (*i).getInfo<CL_PLATFORM_VERSION>().c_str(), 0);
-    LOG("  Plaform Name:\t\t\t\t\t " << (*i).getInfo<CL_PLATFORM_NAME>().c_str(), 0);
-    LOG("  Plaform Vendor:\t\t\t\t " << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), 0);
+    LOG_SIM("  Plaform Profile:\t\t\t\t " << (*i).getInfo<CL_PLATFORM_PROFILE>().c_str());
+    LOG_SIM("  Plaform Version:\t\t\t\t " << (*i).getInfo<CL_PLATFORM_VERSION>().c_str());
+    LOG_SIM("  Plaform Name:\t\t\t\t\t " << (*i).getInfo<CL_PLATFORM_NAME>().c_str());
+    LOG_SIM("  Plaform Vendor:\t\t\t\t " << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str());
     if ((*i).getInfo<CL_PLATFORM_EXTENSIONS>().size() > 0) 
     {
-      LOG("  Plaform Extensions:\t\t\t " << (*i).getInfo<CL_PLATFORM_EXTENSIONS>().c_str(), 0);
+      LOG_SIM("  Plaform Extensions:\t\t\t " << (*i).getInfo<CL_PLATFORM_EXTENSIONS>().c_str());
     }
   }
-  LOG(std::endl << std:: endl, 0);
+  LOG_SIM(std::endl << std:: endl);
 
-  // Now Iteratate over each platform and its devices
+  /* Now Iteratate over each platform and its devices */
   for 
   (
     std::vector<cl::Platform>::iterator p = platforms.begin(); 
     p != platforms.end(); 
     ++p
   ){
-    LOG("  Plaform Name:\t\t\t\t\t " << (*p).getInfo<CL_PLATFORM_NAME>().c_str(), 0);
+    LOG_SIM("  Plaform Name:\t\t\t\t\t " << (*p).getInfo<CL_PLATFORM_NAME>().c_str());
        
     std::vector<cl::Device> devices;
     (*p).getDevices(CL_DEVICE_TYPE_ALL, &devices);
     
-    LOG("Number of devices:\t\t\t\t " << devices.size(), 0);
+    LOG_SIM("Number of devices:\t\t\t\t " << devices.size());
   
     for (std::vector<cl::Device>::iterator i = devices.begin(); i != devices.end(); ++i) 
     {
-      LOG("  Device Type:\t\t\t\t\t ", 0);
+      LOG_SIM("  Device Type:\t\t\t\t\t ");
       cl_device_type dtype = (*i).getInfo<CL_DEVICE_TYPE>();
       switch (dtype) 
       {
         case CL_DEVICE_TYPE_ACCELERATOR:
-          LOG("CL_DEVICE_TYPE_ACCRLERATOR", 0);
+          LOG_SIM("CL_DEVICE_TYPE_ACCRLERATOR");
         break;
         case CL_DEVICE_TYPE_CPU:
-          LOG("CL_DEVICE_TYPE_CPU", 0);
+          LOG_SIM("CL_DEVICE_TYPE_CPU");
         break;
         case CL_DEVICE_TYPE_DEFAULT:
-          LOG("CL_DEVICE_TYPE_DEFAULT", 0);
+          LOG_SIM("CL_DEVICE_TYPE_DEFAULT");
         break;
         case CL_DEVICE_TYPE_GPU:
-          LOG("CL_DEVICE_TYPE_GPU", 0);
+          LOG_SIM("CL_DEVICE_TYPE_GPU");
         break;
       }
 
-      LOG("  Device ID:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_VENDOR_ID>(), 0);
-      LOG("  Max compute units:\t\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>(), 0);
-      LOG("  Max work items dimensions:\t\t\t " 
-        << (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>(), 0);
+      LOG_SIM("  Device ID:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_VENDOR_ID>());
+      LOG_SIM("  Max compute units:\t\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>());
+      LOG_SIM("  Max work items dimensions:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>());
 
       
       cl::detail::param_traits<cl::detail::cl_device_info,CL_DEVICE_MAX_WORK_ITEM_SIZES>::
         param_type witems = (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
       for (cl_uint x = 0; x < (*i).getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>(); x++) 
       {
-        LOG("    Max work items[" << x << "]:\t\t\t\t " << witems[x], 0);
+        LOG_SIM("    Max work items[" << x << "]:\t\t\t\t " << witems[x]);
       }
 
-      LOG("  Max work group size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>(), 0);
-      LOG("  Preferred vector width char:\t\t\t " 
-        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR>(), 0);
-      LOG("  Preferred vector width short:\t\t " 
-        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT>(), 0);
-      LOG("  Preferred vector width int:\t\t\t " 
-        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT>(), 0);
-      LOG("  Preferred vector width long:\t\t\t " 
-        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG>(), 0);
-      LOG("  Preferred vector width float:\t\t " 
-        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT>(), 0);
-      LOG("  Preferred vector width double:\t\t " 
-        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE>(), 0);
-      LOG("  Max clock frequency:\t\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>() 
-        << "Mhz", 0);
-      LOG("  Address bits:\t\t\t\t " << (*i).getInfo<CL_DEVICE_ADDRESS_BITS>(), 0);
-      LOG("  Max memeory allocation:\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>(), 0);
-      LOG("  Image support:\t\t\t\t " 
-        << ((*i).getInfo<CL_DEVICE_IMAGE_SUPPORT>() ? "Yes" : "No"), 0);
+      LOG_SIM("  Max work group size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>());
+      LOG_SIM("  Preferred vector width char:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR>());
+      LOG_SIM("  Preferred vector width short:\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT>());
+      LOG_SIM("  Preferred vector width int:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT>());
+      LOG_SIM("  Preferred vector width long:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG>());
+      LOG_SIM("  Preferred vector width float:\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT>());
+      LOG_SIM("  Preferred vector width double:\t\t " 
+        << (*i).getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE>());
+      LOG_SIM("  Max clock frequency:\t\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>() 
+        << "Mhz");
+      LOG_SIM("  Address bits:\t\t\t\t " << (*i).getInfo<CL_DEVICE_ADDRESS_BITS>());
+      LOG_SIM("  Max memeory allocation:\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>());
+      LOG_SIM("  Image support:\t\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_IMAGE_SUPPORT>() ? "Yes" : "No"));
       
       if ((*i).getInfo<CL_DEVICE_IMAGE_SUPPORT>()) 
       {
-        LOG("  Max number of images read arguments:\t\t " 
-          << (*i).getInfo<CL_DEVICE_MAX_READ_IMAGE_ARGS>(), 0);
-        LOG("  Max number of images write arguments:\t " 
-          << (*i).getInfo<CL_DEVICE_MAX_WRITE_IMAGE_ARGS>(), 0);
-        LOG("  Max image 2D width:\t\t\t\t " 
-          << (*i).getInfo<CL_DEVICE_IMAGE2D_MAX_WIDTH>(), 0);
-        LOG("  Max image 2D height:\t\t\t\t " 
-          << (*i).getInfo<CL_DEVICE_IMAGE2D_MAX_HEIGHT>(), 0);
-        LOG("  Max image 3D width:\t\t\t\t " 
-          << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_WIDTH>(), 0);
-        LOG("  Max image 3D height:\t\t\t\t " 
-          << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_HEIGHT>(), 0);
-        LOG("  Max image 3D depth:\t\t\t\t " 
-          << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_DEPTH>(), 0);
-        LOG("  Max samplers within kernel:\t\t\t " 
-          << (*i).getInfo<CL_DEVICE_MAX_SAMPLERS>(), 0);      
+        LOG_SIM("  Max number of images read arguments:\t\t " 
+          << (*i).getInfo<CL_DEVICE_MAX_READ_IMAGE_ARGS>());
+        LOG_SIM("  Max number of images write arguments:\t " 
+          << (*i).getInfo<CL_DEVICE_MAX_WRITE_IMAGE_ARGS>());
+        LOG_SIM("  Max image 2D width:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE2D_MAX_WIDTH>());
+        LOG_SIM("  Max image 2D height:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE2D_MAX_HEIGHT>());
+        LOG_SIM("  Max image 3D width:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_WIDTH>());
+        LOG_SIM("  Max image 3D height:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_HEIGHT>());
+        LOG_SIM("  Max image 3D depth:\t\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_IMAGE3D_MAX_DEPTH>());
+        LOG_SIM("  Max samplers within kernel:\t\t\t " 
+          << (*i).getInfo<CL_DEVICE_MAX_SAMPLERS>());      
       }
 
-      LOG("  Max size of kernel argument:\t\t\t " 
-        << (*i).getInfo<CL_DEVICE_MAX_PARAMETER_SIZE>(), 0);
-      LOG("  Alignment (bits) of base address:\t\t " 
-        << (*i).getInfo<CL_DEVICE_MEM_BASE_ADDR_ALIGN>(), 0);
-      LOG("  Minimum alignment (bytes) for any datatype:\t " 
-        << (*i).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>(), 0);
-      LOG("  Single precision floating point capability", 0);
-      LOG("    Denorms:\t\t\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & 
-        CL_FP_DENORM ? "Yes" : "No"), 0);
-      LOG("    Quiet NaNs:\t\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & 
-        CL_FP_INF_NAN ? "Yes" : "No"), 0);
-      LOG("    Round to nearest even:\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
-        CL_FP_ROUND_TO_NEAREST ? "Yes" : "No"), 0);
-      LOG("    Round to zero:\t\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
-        CL_FP_ROUND_TO_ZERO ? "Yes" : "No"), 0);
-      LOG("    Round to +ve and infinity:\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
-        CL_FP_ROUND_TO_INF ? "Yes" : "No"), 0);
-      LOG("    IEEE754-2008 fused multiply-add:\t\t " 
-        << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & CL_FP_FMA ? "Yes" : "No"), 0);
-      LOG("    Correctly rounded div and sqrt:\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
-        CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT ? "Yes" : "No"), 0);
-      LOG("  Cache type:\t\t\t\t\t ", 0);
+      LOG_SIM("  Max size of kernel argument:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_MAX_PARAMETER_SIZE>());
+      LOG_SIM("  Alignment (bits) of base address:\t\t " 
+        << (*i).getInfo<CL_DEVICE_MEM_BASE_ADDR_ALIGN>());
+      LOG_SIM("  Minimum alignment (bytes) for any datatype:\t " 
+        << (*i).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>());
+      LOG_SIM("  Single precision floating point capability");
+      LOG_SIM("    Denorms:\t\t\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & 
+        CL_FP_DENORM ? "Yes" : "No"));
+      LOG_SIM("    Quiet NaNs:\t\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & 
+        CL_FP_INF_NAN ? "Yes" : "No"));
+      LOG_SIM("    Round to nearest even:\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
+        CL_FP_ROUND_TO_NEAREST ? "Yes" : "No"));
+      LOG_SIM("    Round to zero:\t\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
+        CL_FP_ROUND_TO_ZERO ? "Yes" : "No"));
+      LOG_SIM("    Round to +ve and infinity:\t\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
+        CL_FP_ROUND_TO_INF ? "Yes" : "No"));
+      LOG_SIM("    IEEE754-2008 fused multiply-add:\t\t " 
+        << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() & CL_FP_FMA ? "Yes" : "No"));
+      LOG_SIM("    Correctly rounded div and sqrt:\t\t " << ((*i).getInfo<CL_DEVICE_SINGLE_FP_CONFIG>() &  
+        CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT ? "Yes" : "No"));
+      LOG_SIM("  Cache type:\t\t\t\t\t ");
 
       switch ((*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHE_TYPE>()) 
       {
         case CL_NONE:
-          LOG("None", 0);
+          LOG_SIM("None");
         break;
         case CL_READ_ONLY_CACHE:
-          LOG("Read only", 0);
+          LOG_SIM("Read only");
         break;
         case CL_READ_WRITE_CACHE:
-          LOG("Read/Write", 0);
+          LOG_SIM("Read/Write");
         break;
       }
-      LOG("  Cache line size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE>(), 0);
-      LOG("  Cache size:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHE_SIZE>(), 0);
-      LOG("  Global memory size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>(), 0);
-      LOG("  Constant buffer size:\t\t\t " 
-        << (*i).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>(), 0);
-      LOG("  Max number of constant args:\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_CONSTANT_ARGS>(), 0);
-      LOG("  Local memory type:\t\t\t\t ", 0);
+      LOG_SIM("  Cache line size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE>());
+      LOG_SIM("  Cache size:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_CACHE_SIZE>());
+      LOG_SIM("  Global memory size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>());
+      LOG_SIM("  Constant buffer size:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>());
+      LOG_SIM("  Max number of constant args:\t\t\t " << (*i).getInfo<CL_DEVICE_MAX_CONSTANT_ARGS>());
+      LOG_SIM("  Local memory type:\t\t\t\t ");
 
       switch ((*i).getInfo<CL_DEVICE_LOCAL_MEM_TYPE>()) 
       {
         case CL_LOCAL:
-          LOG("Scratchpad", 0);
+          LOG_SIM("Scratchpad");
         break;
         case CL_GLOBAL:
-          LOG("Scratchpad", 0);
+          LOG_SIM("Scratchpad");
         break;
       }
       
-      LOG("  Local memory size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>(), 0);
-      LOG("  Profiling timer resolution:\t\t\t " 
-        << (*i).getInfo<CL_DEVICE_PROFILING_TIMER_RESOLUTION>(), 0);
-      LOG("  Device endianess:\t\t\t\t " 
-        << ((*i).getInfo<CL_DEVICE_ENDIAN_LITTLE>() ? "Little" : "Big") , 0);
-      LOG("  Available:\t\t\t\t\t " 
-        << ((*i).getInfo<CL_DEVICE_AVAILABLE>() ? "Yes" : "No"), 0);
-      LOG("  Compiler available:\t\t\t\t " 
-        << ((*i).getInfo<CL_DEVICE_COMPILER_AVAILABLE>() ? "Yes" : "No"), 0);
-      LOG("  Execution capabilities:\t\t\t\t ", 0);
-      LOG("    Execute OpenCL kernels:\t\t\t " 
-        << ((*i).getInfo<CL_DEVICE_EXECUTION_CAPABILITIES>() & CL_EXEC_KERNEL ? "Yes" : "No"), 0);
-      LOG("    Execute native function:\t\t\t " << ((*i).getInfo<CL_DEVICE_EXECUTION_CAPABILITIES>() 
-        & CL_EXEC_NATIVE_KERNEL ? "Yes" : "No"), 0);
-      LOG("  Queue properties:\t\t\t\t ", 0);
-      LOG("    Out-of-Order:\t\t\t\t " << ((*i).getInfo<CL_DEVICE_QUEUE_PROPERTIES>() & 
-        CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE ? "Yes" : "No"), 0);
-      LOG("    Profiling :\t\t\t\t\t " << ((*i).getInfo<CL_DEVICE_QUEUE_PROPERTIES>() & 
-        CL_QUEUE_PROFILING_ENABLE ? "Yes" : "No"), 0);
-      LOG("  Platform ID:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_PLATFORM>(), 0);
-      LOG("  Name:\t\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_NAME>().c_str(), 0);
-      LOG("  Vendor:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_VENDOR>().c_str(), 0);
-      LOG("  Driver version:\t\t\t\t " << (*i).getInfo<CL_DRIVER_VERSION>().c_str(), 0);
-      LOG("  Profile:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_PROFILE>().c_str(), 0);
-      LOG("  Version:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_VERSION>().c_str(), 0);
-      LOG("  Extensions:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_EXTENSIONS>().c_str(), 0);
+      LOG_SIM("  Local memory size:\t\t\t\t " << (*i).getInfo<CL_DEVICE_LOCAL_MEM_SIZE>());
+      LOG_SIM("  Profiling timer resolution:\t\t\t " 
+        << (*i).getInfo<CL_DEVICE_PROFILING_TIMER_RESOLUTION>());
+      LOG_SIM("  Device endianess:\t\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_ENDIAN_LITTLE>() ? "Little" : "Big"));
+      LOG_SIM("  Available:\t\t\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_AVAILABLE>() ? "Yes" : "No"));
+      LOG_SIM("  Compiler available:\t\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_COMPILER_AVAILABLE>() ? "Yes" : "No"));
+      LOG_SIM("  Execution capabilities:\t\t\t\t ");
+      LOG_SIM("    Execute OpenCL kernels:\t\t\t " 
+        << ((*i).getInfo<CL_DEVICE_EXECUTION_CAPABILITIES>() & CL_EXEC_KERNEL ? "Yes" : "No"));
+      LOG_SIM("    Execute native function:\t\t\t " << ((*i).getInfo<CL_DEVICE_EXECUTION_CAPABILITIES>() 
+        & CL_EXEC_NATIVE_KERNEL ? "Yes" : "No"));
+      LOG_SIM("  Queue properties:\t\t\t\t ");
+      LOG_SIM("    Out-of-Order:\t\t\t\t " << ((*i).getInfo<CL_DEVICE_QUEUE_PROPERTIES>() & 
+        CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE ? "Yes" : "No"));
+      LOG_SIM("    Profiling :\t\t\t\t\t " << ((*i).getInfo<CL_DEVICE_QUEUE_PROPERTIES>() & 
+        CL_QUEUE_PROFILING_ENABLE ? "Yes" : "No"));
+      LOG_SIM("  Platform ID:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_PLATFORM>());
+      LOG_SIM("  Name:\t\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_NAME>().c_str());
+      LOG_SIM("  Vendor:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_VENDOR>().c_str());
+      LOG_SIM("  Driver version:\t\t\t\t " << (*i).getInfo<CL_DRIVER_VERSION>().c_str());
+      LOG_SIM("  Profile:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_PROFILE>().c_str());
+      LOG_SIM("  Version:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_VERSION>().c_str());
+      LOG_SIM("  Extensions:\t\t\t\t\t " << (*i).getInfo<CL_DEVICE_EXTENSIONS>().c_str());
     }
   }
-
-  return SDK_SUCCESS;
 }
 
 
 
-int 
-IntegrationTest::genBinaryImage()
+void 
+Neurosim::setup()
 {
-    cl_int err = CL_SUCCESS;
-    cl::Program program;
+#if STATISTICS_ENABLE
+  double startSetupTime;
+  GET_TIME_NS(startSetupTime);
+#endif
 
-    /*
-     * Have a look at the available platforms and pick either
-     * the AMD one if available or a reasonable default.
-     */
-    err = cl::Platform::get(&platforms);
-    if(!sampleCommon->checkVal(err, 
-        CL_SUCCESS,
-        "Platform::get() failed."))
-    {
-        return SDK_FAILURE;
-    }
-
-    std::vector<cl::Platform>::iterator i;
-    if(platforms.size() > 0)
-    {
-        for(i = platforms.begin(); i != platforms.end(); ++i)
-        {
-            if(!strcmp((*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), 
-                "Advanced Micro Devices, Inc."))
-            {
-                break;
-            }
-        }
-    }
-
-    cl_context_properties cps[5] = 
-    {
-        CL_CONTEXT_PLATFORM, 
-        (cl_context_properties)(*i)(), 
-        CL_CONTEXT_OFFLINE_DEVICES_AMD,
-        (cl_context_properties)1,
-        0
-    };
-
-    context = cl::Context(CL_DEVICE_TYPE_ALL, cps, NULL, NULL, &err);
-    if(!sampleCommon->checkVal(err, 
-        CL_SUCCESS,
-        "Context::Context() failed."))
-    {
-        return SDK_FAILURE;
-    }
-
-
-    devices = context.getInfo<CL_CONTEXT_DEVICES>();
-    if(!sampleCommon->checkVal(err, 
-        CL_SUCCESS,
-        "Context::getInfo() failed."))
-    {
-        return SDK_FAILURE;
-    }
-
-    std::cout << "Platform :" << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
-    size_t numDevices = devices.size();
-
-    if (numDevices == 0) 
-    {
-        std::cerr << "No device available\n";
-        return SDK_FAILURE;
-    }
-
-    /* create a CL program using the kernel source */
-    streamsdk::SDKFile kernelFile;
-    std::string kernelPath = sampleCommon->getPath();
-    kernelPath.append("Kernel_ObtainSynapticEvents.cl");
-    if(!kernelFile.open(kernelPath.c_str()))
-    {
-        std::cout << "Failed to load kernel file : " << kernelPath << std::endl;
-        return SDK_FAILURE;
-    }
-
-    cl::Program::Sources programSource(1, 
-        std::make_pair(kernelFile.source().data(), 
-        kernelFile.source().size()));
-    
-    program = cl::Program(context, programSource, &err);
-    if(!sampleCommon->checkVal(err, 
-        CL_SUCCESS,
-        "Program::program() failed."))
-    {
-        return SDK_FAILURE;
-    }
-
-    std::string flagsStr = std::string("");
-
-    // Get additional options
-    if(isComplierFlagsSpecified())
-    {
-        streamsdk::SDKFile flagsFile;
-        std::string flagsPath = sampleCommon->getPath();
-        flagsPath.append(flags.c_str());
-        if(!flagsFile.open(flagsPath.c_str()))
-        {
-            std::cout << "Failed to load flags file: " << flagsPath << std::endl;
-            return SDK_FAILURE;
-        }
-        flagsFile.replaceNewlineWithSpaces();
-        const char * flags = flagsFile.source().c_str();
-        flagsStr.append(flags);
-    }
-
-    if(flagsStr.size() != 0)
-        std::cout << "Build Options are : " << flagsStr.c_str() << std::endl;
-
-
-    err = program.build(devices, flagsStr.c_str());
-    sampleCommon->checkVal(err, CL_SUCCESS, "Program::build() failed.");
-
-    std::cout << "Number of devices found : " << numDevices << "\n\n";
-
-    std::vector<size_t> binarySizes = program.getInfo<CL_PROGRAM_BINARY_SIZES>(&err);
-    if(!sampleCommon->checkVal(err, 
-        CL_SUCCESS,
-        "Program::getInfo(CL_PROGRAM_BINARY_SIZES) failed."))
-    {
-        return SDK_FAILURE;
-    }
-
-    std::vector<char*> binaries = program.getInfo<CL_PROGRAM_BINARIES>(&err);
-    if(!sampleCommon->checkVal(err, 
-        CL_SUCCESS,
-        "Program::getInfo(CL_PROGRAM_BINARIES) failed."))
-    {
-        return SDK_FAILURE;
-    }   
-
-    /* dump out each binary into its own separate file. */
-    std::vector<cl::Device>::iterator deviceIndx = devices.begin();
-    for(size_t i = 0; i < numDevices; i++, deviceIndx++)
-    {
-        char fileName[100];
-        sprintf(fileName, "%s.%d", dumpBinary.c_str(), (int)i);
-        if(binarySizes[i] != 0)
-        {
-            std::string deviceName = (*deviceIndx).getInfo<CL_DEVICE_NAME>(&err);
-            if(!sampleCommon->checkVal(err,
-                                       CL_SUCCESS,
-                                       "Device::getInfo(CL_DEVICE_NAME) failed."))
-            {
-                return SDK_FAILURE;
-            }
-
-            printf( "%s binary kernel: %s\n", deviceName.c_str(), fileName);
-            streamsdk::SDKFile BinaryFile;
-            if(!BinaryFile.writeBinaryToFile(fileName, 
-                                             binaries[i], 
-                                             binarySizes[i]))
-            {
-                std::cout << "Failed to load kernel file : " << fileName << std::endl;
-                return SDK_FAILURE;
-            }
-        }
-        else
-        {
-            printf("Skipping %s since there is no binary data to write!\n",
-                    fileName);
-        }
-    }
-
-    return SDK_SUCCESS;
-}
-
-
-
-
-/*Find target device from the list of target devices*/
-bool 
-IntegrationTest::findTargetDevice
-(
-  vector<cl::Device>                  platformDevices,
-  const char                          *targetDevices,
-  std::vector<cl::Device>::iterator   *d
-){
-  bool found = false;
-  char *str = (char *) calloc(0xFFFF, sizeof(char));
-  strcpy(str, targetDevices);
-  char *pch;
-  pch = strtok (str, ",");
-  
-  while (pch != NULL)
-  {
-    for(*d = platformDevices.begin(); *d != platformDevices.end(); ++(*d)) 
-    {
-      std::string deviceName = (*(*d)).getInfo<CL_DEVICE_NAME>();
-      
-      if(strcmp(deviceName.c_str(), pch) == 0)
-      {
-        found = true; break;
-      }
-    }
-    if(found){break;}
-    pch = strtok (NULL, ",");
-  }
-  
-  free(str);
-  return found;
-}
-
-
-
-int 
-IntegrationTest::setupCL()
-{
-  try
-  {
   cl_int err = CL_SUCCESS;
   cl_device_type dType;
   cl_uint myDeviceId;
   bool found = false;
 
   err = cl::Platform::get(&platforms);
-  if(!sampleCommon->checkVal(err, 
-      CL_SUCCESS,
-      "Platform::get() failed."))
-  {
-      return SDK_FAILURE;
-  }
+  ASSERT_CL_SUCCESS(err, "Neurosim::setupCL: Platform::get() failed.")
 
   /*Find target platform*/
   found = false;
@@ -2016,9 +1783,10 @@ IntegrationTest::setupCL()
   
   if(!found)
   {
-    std::cout << "Unable to find target platform with vendor " << 
+    std::stringstream ss;
+    ss << "Neurosim::setup: Unable to find target platform with vendor " << 
       (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
-    return SDK_FAILURE;
+    throw SimException(ss.str());
   }
   
   (*i).getDevices(CL_DEVICE_TYPE_ALL, &devices);
@@ -2029,12 +1797,13 @@ IntegrationTest::setupCL()
   
   if(!found)
   {
-    std::cout << "Unable to find target devices " << TARGET_DEVICE_NAME 
+    std::stringstream ss;
+    ss << "Neurosim::setup: Unable to find target devices " << TARGET_DEVICE_NAME 
       << " on platform from vendor "  << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
-    return SDK_FAILURE;
+    throw SimException(ss.str());
   }
   
-  std::cout << "Found device " << (*d).getInfo<CL_DEVICE_NAME>() << "\n";
+  LOG_SIM("Found device " << (*d).getInfo<CL_DEVICE_NAME>());
       
   dType = (*d).getInfo<CL_DEVICE_TYPE>();
   myDeviceId = (*d).getInfo<CL_DEVICE_VENDOR_ID>();
@@ -2047,92 +1816,68 @@ IntegrationTest::setupCL()
   };
 
   context = cl::Context(dType, cps, NULL, NULL, &err);
-  if(!sampleCommon->checkVal(err, 
-      CL_SUCCESS,
-      "Context::Context() failed."))
-  {
-      return SDK_FAILURE;
-  }
+  ASSERT_CL_SUCCESS(err, "Neurosim::setupCL: Context::Context() failed.")
 
   devices = context.getInfo<CL_CONTEXT_DEVICES>();
-  if(!sampleCommon->checkVal(err, 
-      CL_SUCCESS,
-      "Context::getInfo() failed."))
-  {
-      return SDK_FAILURE;
-  }
+  ASSERT_CL_SUCCESS(err, "Neurosim::setupCL: Context::getInfo() failed.")
   
-  int deviceCount = (int)devices.size();
-
   FIND_TARGET_DEVICE(devices, TARGET_DEVICE_NAME, d, found);
   
   if(!found)
   {
-    std::cout << "Unable to find target devices " << TARGET_DEVICE_NAME 
+    std::stringstream ss;
+    ss << "Neurosim::setup: Unable to find target devices " << TARGET_DEVICE_NAME 
       << " within created context on platform from vendor "  
       << (*i).getInfo<CL_PLATFORM_VENDOR>().c_str() << "\n";
-    return SDK_FAILURE;
+    throw SimException(ss.str());
   }
   
-  std::cout << "Creating command queue for device " << (*d).getInfo<CL_DEVICE_NAME>() 
-    << std::endl;
+  LOG_SIM("Creating command queue for device " << (*d).getInfo<CL_DEVICE_NAME>());
   commandQueue = cl::CommandQueue(context, *d, 0, &err);
-  if(!sampleCommon->checkVal(err, CL_SUCCESS, "CommandQueue::CommandQueue() failed."))
-  {
-      return SDK_FAILURE;
-  }
+  ASSERT_CL_SUCCESS(err, "Neurosim::setupCL: CommandQueue::CommandQueue() failed.")
 
   /* Allocate host memory objects*/
-  if(allocateHostData(*d) != SDK_SUCCESS)
-  {
-    return SDK_FAILURE;
-  }
-  
-    /*Initialize objects*/
-
-#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
-    CREATE_BUFFER(CL_MEM_READ_WRITE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes);
+#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
+    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+  this->allocateHostData(*d);
 #endif
-  {
+
+    /*Initialize data objects*/
+    
 #if EXPAND_EVENTS_ENABLE
-    synapticEvents.initialize
-    (
-      context,
-      *d,
-      commandQueue,
-      CL_FALSE,
-      EXPAND_EVENTS_TIME_SLOTS,
-      EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS,
-      EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE,
-      EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS,
-      EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS,
-      &kernelStats,
-      dataToSimulationLogFile,
-      dataToReportLogFile
-    );
+  synapticEvents = new Data_SynapticEvents
+  (
+    context,
+    *d,
+    commandQueue,
+    CL_FALSE,
+    kernelStats,
+    dataToSimulationLogFile,
+    dataToReportLogFile,
+    EXPAND_EVENTS_TIME_SLOTS,
+    EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS,
+    EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE,
+    EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS,
+    EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS
+  );
 #elif GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || \
   GROUP_EVENTS_ENABLE_V03
-    synapticEvents.initialize
-    (
-      context,
-      *d,
-      commandQueue,
-      CL_FALSE,
-      GROUP_EVENTS_TIME_SLOTS,
-      GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
-      GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
-      GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
-      GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
-      &kernelStats,
-      dataToSimulationLogFile,
-      dataToReportLogFile
-    );
+  synapticEvents = new Data_SynapticEvents
+  (
+    context,
+    *d,
+    commandQueue,
+    CL_FALSE,
+    kernelStats,
+    dataToSimulationLogFile,
+    dataToReportLogFile,
+    GROUP_EVENTS_TIME_SLOTS,
+    GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
+    GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
+    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
+    GROUP_EVENTS_HISTOGRAM_BIN_SIZE
+  );
 #endif
-  }
 
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
@@ -2176,106 +1921,73 @@ IntegrationTest::setupCL()
   /* allocate memory for spike data */
   {
 #if EXPAND_EVENTS_ENABLE
-    spikeEvents.initialize
+    spikeEvents = new Data_SpikeEvents
     (
       context,
       *d,
       commandQueue,
       CL_FALSE,
+      kernelStats,
+      dataToSimulationLogFile,
+      dataToReportLogFile,
       SIMULATION_STEP_SIZE,
       EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS,
       EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS,
       EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE,
       EXPAND_EVENTS_SPIKE_PACKETS,
-      EXPAND_EVENTS_TOTAL_NEURONS,
-      &kernelStats,
-      dataToSimulationLogFile,
-      dataToReportLogFile
+      EXPAND_EVENTS_TOTAL_NEURONS
     );
     
-    connectome.initialize
+    connectome = new Data_Connectome
     (
       context,
       *d,
       commandQueue,
       CL_FALSE,
+      kernelStats,
+      dataToSimulationLogFile,
+      dataToReportLogFile,
       EXPAND_EVENTS_TOTAL_NEURONS,
       MAX_SYNAPSES_PER_NEURON,
       SYNAPSE_DEVIATION_RATIO,
-      &kernelStats,
-      dataToSimulationLogFile,
-      dataToReportLogFile
+      SYNAPSE_GABA_PERCENT,
+      EXPAND_EVENTS_MIN_DELAY,
+      EXPAND_EVENTS_MAX_DELAY
     );
 #elif UPDATE_NEURONS_ENABLE_V00
-    spikeEvents.initialize
+    spikeEvents = new Data_SpikeEvents
     (
       context,
       *d,
       commandQueue,
       CL_FALSE,
+      kernelStats,
+      dataToSimulationLogFile,
+      dataToReportLogFile,
       SIMULATION_STEP_SIZE,
       UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS,
       UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS,
       UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE,
       UPDATE_NEURONS_SPIKE_PACKETS_V00,
-      UPDATE_NEURONS_TOTAL_NEURONS,
-      &kernelStats,
-      dataToSimulationLogFile,
-      dataToReportLogFile
+      UPDATE_NEURONS_TOTAL_NEURONS
     );
 #endif
   }
-#endif
-
-#if SCAN_ENABLE_V00 || SCAN_ENABLE_V01
-  operatorScan.initialize
-  (
-    context,
-    *d,
-    commandQueue,
-    CL_FALSE,
-    &kernelStats,
-    dataToSimulationLogFile,
-    dataToReportLogFile
-  );
-#if SCAN_ENABLE_UNIT_TEST_V00
-  operatorScan.setupUnitTest_v00
-  (
-    SCAN_HISTOGRAM_TIME_SLOTS,
-    SCAN_HISTOGRAM_TOTAL_BINS_V00,
-    SCAN_HISTOGRAM_BIN_SIZE_V00,
-    context,
-    *d,
-    commandQueue,
-    CL_FALSE,
-    &kernelStats
-  );
-#endif
-#if SCAN_ENABLE_UNIT_TEST_V01
-  operatorScan.setupUnitTest_v01
-  (
-    SCAN_HISTOGRAM_BIN_BACKETS,
-    SCAN_HISTOGRAM_TOTAL_BINS_V01,
-    SCAN_HISTOGRAM_BIN_SIZE_V01,
-    context,
-    *d,
-    commandQueue,
-    CL_FALSE,
-    &kernelStats
-  );
-#endif
 #endif
 
 #if GROUP_EVENTS_ENABLE_V00
   {
     createKernel
     (
+#if LOG_SIMULATION
+      dataToSimulationLogFile,
+#endif
       context,
       *d,
       kernelGroupEventsV00,
       GROUP_EVENTS_KERNEL_FILE_NAME,
       GROUP_EVENTS_KERNEL_NAME,
-      "-D GROUP_EVENTS_DEVICE_V00",
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D GROUP_EVENTS_DEVICE_V00=1",
       blockSizeX_kernelGroupEventsV00,
       blockSizeY_kernelGroupEventsV00
     );
@@ -2286,12 +1998,15 @@ IntegrationTest::setupCL()
   {
     createKernel
     (
+#if LOG_SIMULATION
+      dataToSimulationLogFile,
+#endif
       context,
       *d,
       kernelGroupEventsV01,
       GROUP_EVENTS_KERNEL_FILE_NAME,
       GROUP_EVENTS_KERNEL_NAME,
-      "-D GROUP_EVENTS_DEVICE_V01",
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D GROUP_EVENTS_DEVICE_V01=1",
       blockSizeX_kernelGroupEventsV01,
       blockSizeY_kernelGroupEventsV01
     );
@@ -2302,12 +2017,15 @@ IntegrationTest::setupCL()
   {
     createKernel
     (
+#if LOG_SIMULATION
+      dataToSimulationLogFile,
+#endif
       context,
       *d,
       kernelGroupEventsV02,
       GROUP_EVENTS_KERNEL_FILE_NAME,
       GROUP_EVENTS_KERNEL_NAME,
-      "-D GROUP_EVENTS_DEVICE_V02",
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D GROUP_EVENTS_DEVICE_V02=1",
       blockSizeX_kernelGroupEventsV02,
       blockSizeY_kernelGroupEventsV02
     );
@@ -2318,12 +2036,15 @@ IntegrationTest::setupCL()
   {
     createKernel
     (
+#if LOG_SIMULATION
+      dataToSimulationLogFile,
+#endif
       context,
       *d,
       kernelGroupEventsV03,
       GROUP_EVENTS_KERNEL_FILE_NAME,
       GROUP_EVENTS_KERNEL_NAME,
-      "-D GROUP_EVENTS_DEVICE_V03",
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D GROUP_EVENTS_DEVICE_V03=1",
       blockSizeX_kernelGroupEventsV03,
       blockSizeY_kernelGroupEventsV03
     );
@@ -2350,24 +2071,30 @@ IntegrationTest::setupCL()
 #endif
     createKernel
     (
+#if LOG_SIMULATION
+      dataToSimulationLogFile,
+#endif
       context,
       *d,
       kernelMakeEventPtrs,
       MAKE_EVENT_PTRS_KERNEL_FILE_NAME,
       MAKE_EVENT_PTRS_KERNEL_NAME,
-      "",
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF),
       blockSizeX_kernelMakeEventPtrs,
       blockSizeY_kernelMakeEventPtrs
     );
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
     createKernel
     (
+#if LOG_SIMULATION
+      dataToSimulationLogFile,
+#endif
       context,
       *d,
       kernelGlueEventPtrs,
       GLUE_EVENT_PTRS_KERNEL_FILE_NAME,
       GLUE_EVENT_PTRS_KERNEL_NAME,
-      "",
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF),
       blockSizeX_kernelGlueEventPtrs,
       blockSizeY_kernelGlueEventPtrs
     );
@@ -2395,18 +2122,23 @@ IntegrationTest::setupCL()
     
     createKernel
     (
+#if LOG_SIMULATION
+      dataToSimulationLogFile,
+#endif
       context,
       *d,
       kernelUpdateNeuronsV00,
       UPDATE_NEURONS_KERNEL_FILE_NAME,
       UPDATE_NEURONS_KERNEL_NAME,
 #if COMPILER_FLAGS_OPTIMIZE_ENABLE
-      "-D UPDATE_NEURONS_DEVICE_V00 -cl-denorms-are-zero -cl-mad-enable -cl-no-signed-zeros "
-      "-cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math",
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D UPDATE_NEURONS_DEVICE_V00=1 "
+      "-cl-denorms-are-zero -cl-mad-enable -cl-no-signed-zeros -cl-unsafe-math-optimizations "
+      "-cl-finite-math-only -cl-fast-relaxed-math",
 #else
-      /*"-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",*/
-      /*"-D UPDATE_NEURONS_DEVICE_V00",*/
-      "-D UPDATE_NEURONS_DEVICE_V00",
+      /*"-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D UPDATE_NEURONS_DEVICE_V00=1 "
+      "-cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",*/
+      /*"-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D UPDATE_NEURONS_DEVICE_V00=1",*/
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D UPDATE_NEURONS_DEVICE_V00=1",
 #endif
       blockSizeX_kernelUpdateNeuronsV00,
       blockSizeY_kernelUpdateNeuronsV00
@@ -2414,18 +2146,25 @@ IntegrationTest::setupCL()
     
     createKernel
     (
+#if LOG_SIMULATION
+      dataToSimulationLogFile,
+#endif
       context,
       *d,
       kernelUpdateSpikedNeuronsV00,
       UPDATE_NEURONS_KERNEL_FILE_NAME,
       UPDATE_NEURONS_SPIKED_KERNEL_NAME,
 #if COMPILER_FLAGS_OPTIMIZE_ENABLE
-      "-D UPDATE_NEURONS_DEVICE_V00 -cl-denorms-are-zero -cl-mad-enable -cl-no-signed-zeros "
-      "-cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math",
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D UPDATE_NEURONS_DEVICE_V00=1 "
+      "-cl-denorms-are-zero -cl-mad-enable -cl-no-signed-zeros -cl-unsafe-math-optimizations "
+      "-cl-finite-math-only -cl-fast-relaxed-math",
 #else
-      /*"-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",*/
-      /*"-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt",*/
-      "-D UPDATE_NEURONS_DEVICE_V00 -cl-fp32-correctly-rounded-divide-sqrt",
+      /*"-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D UPDATE_NEURONS_DEVICE_V00=1 "
+      "-cl-fp32-correctly-rounded-divide-sqrt -cl-opt-disable",*/
+      /*"-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D UPDATE_NEURONS_DEVICE_V00=1 "
+      "-cl-fp32-correctly-rounded-divide-sqrt",*/
+      "-D COMPILER=" TOSTRING(COMPILER_CONTROL_OFF) " -D UPDATE_NEURONS_DEVICE_V00=1 "
+      "-cl-fp32-correctly-rounded-divide-sqrt",
 #endif
       blockSizeX_kernelUpdateNeuronsV00,
       blockSizeY_kernelUpdateNeuronsV00
@@ -2433,170 +2172,255 @@ IntegrationTest::setupCL()
   }
 #endif
 
-  /* Register local memory for stats */
-  if(registerLocalMemory(*d) != SDK_SUCCESS)
-  {
-    return SDK_FAILURE;
-  }
-
-  /*Validate mem allocations against device-specific restrictions for all registered kernels*/
-  {
-    bool print = 1;
-    set<std::string>::iterator kernel_name;
-
-    print ? std::cout << "Memory Allocations:" << std::endl, true : false;
+    /*Initialize operator objects*/
     
+#if ENABLE_OPERATOR_SCAN
+  operatorScan = new Operator_Scan
+  (
+#if SCAN_DEBUG_ENABLE || SCAN_ERROR_TRACK_ENABLE || \
+    ENABLE_UNIT_TEST_SCAN_V00 || ENABLE_UNIT_TEST_SCAN_V01
+    CL_FALSE,
+    commandQueue,
+#endif
+    context,
+    *d,
+    kernelStats,
+    dataToSimulationLogFile,
+    dataToReportLogFile
+  );
+#endif
+    
+#if ENABLE_OPERATOR_SORT
+  operatorSort = new Operator_Sort
+  (
+    context,
+    *d,
+    commandQueue,
+    CL_FALSE,
+    kernelStats,
+    dataToSimulationLogFile,
+    dataToReportLogFile,
+    GROUP_EVENTS_GRID_SIZE_WG,
+    GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
+    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT
+  );
+#endif
+    
+#if ENABLE_OPERATOR_EXPAND
+  operatorExpand = new Operator_Expand
+  (
+#if (EXPAND_EVENTS_DEBUG_ENABLE || EXPAND_EVENTS_ERROR_TRACK_ENABLE)
+    CL_FALSE,
+    commandQueue,
+#endif
+    context,
+    *d,
+    kernelStats,
+    dataToSimulationLogFile,
+    dataToReportLogFile
+  );
+#endif
+
+  /* Register local memory for stats */
+#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
+    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+  this->registerLocalMemory(*d);
+#endif
+  
+  /* Log memory for stats */
+  this->getMemoryUsageStats();
+  
+#if STATISTICS_ENABLE
+  GET_TIME_NS(this->setupTime);
+  this->setupTime -= startSetupTime;
+#endif
+}
+
+
+
+void
+Neurosim::getMemoryUsageStats
+()
+/**************************************************************************************************/
+{
+  set<std::string>::iterator kernel_name;
+
+  LOG_SIM("Memory Allocations:");
+  
+  for
+  (
+    kernel_name = kernelStats.kernelNames.begin();
+    kernel_name != kernelStats.kernelNames.end(); 
+    ++kernel_name
+  ){
+    map<std::string, size_t>::iterator m;
+
+    LOG_SIM("  Kernel " << *kernel_name << ":");
+
+    /*GM allocations*/
+    if(*kernel_name == KERNEL_ALL)
+    {
+      LOG_SIM("    Global Memory (global scope):");
+    }
+    map<std::string, size_t> gmSizes = kernelStats.gmSizes[*kernel_name];
+    cl_ulong gmAllSizeBytes = 0, gmMaxSizeBytes = 0;
     for
     (
-      kernel_name = kernelStats.kernelNames.begin();
-      kernel_name != kernelStats.kernelNames.end(); 
-      ++kernel_name
+      m = gmSizes.begin(); 
+      m != gmSizes.end(); 
+      ++m
     ){
-      map<std::string, size_t>::iterator m;
+      std::string name = (m->first);
+      size_t size = (m->second);
       
-      print ? std::cout << " Kernel " << *kernel_name << ":" << std::endl, true : false;
-
-      /*Validate GM allocations*/
-      print ? std::cout << "\tGlobal Memory (global scope):" << std::endl, true : false;
-      map<std::string, size_t> gmSizes = kernelStats.gmSizes[*kernel_name];
-      cl_ulong gmAllSizeBytes = 0, gmMaxSizeBytes = 0;
-      for
-      (
-        m = gmSizes.begin(); 
-        m != gmSizes.end(); 
-        ++m
-      ){
-        std::string name = (m->first);
-        size_t size = (m->second);
-
+      if(*kernel_name == KERNEL_ALL)
+      {
         if(name.compare("TOTAL") != 0)
         {
           if(gmMaxSizeBytes < size){gmMaxSizeBytes = size;}
-          print ? std::cout << "\t\t" << name << ": " << ((float)size)/(1024.0*1024.0) << " MB" 
-            << std::endl, true : false;
+          LOG_SIM("        " << name << ": " << ((double)size)/(1024.0*1024.0) << " MB");
         }
         else
         {
           gmAllSizeBytes = size;
         }
       }
-      print ? std::cout << "\t\tTOTAL: " << ((float)gmAllSizeBytes)/(1024.0*1024.0) << " MB" 
-        << std::endl, true : false;
-        
+      else
+      {
+        if(size != 0)
+        {
+          std::stringstream ss;
+          ss << "Neurosim::getMemoryUsageStats: detected non-zero GM entry for " << *kernel_name 
+            << ": " << name << ": " << ((double)size)/(1024.0*1024.0) << " MB" << std::endl;
+          throw SimException(ss.str());
+        }
+      }
+    }
+
+    if(*kernel_name == KERNEL_ALL)
+    {
+      LOG_SIM("        TOTAL: " << ((double)gmAllSizeBytes)/(1024.0*1024.0) << " MB");
+      LOG_REP("Total GM:" << (((double)gmAllSizeBytes)/(1024.0*1024.0)));
+      LOG_REP("Max GM:" << (((double)gmMaxSizeBytes)/(1024.0*1024.0)));
+    }
+
+    /*CM allocations*/
+    if(*kernel_name == KERNEL_ALL)
+    {
+      LOG_SIM("    Constant Memory (global scope):");
+    }
+    map<std::string, size_t> cmSizes = kernelStats.cmSizes[*kernel_name];
+    cl_ulong cmAllSizeBytes = 0;
+    for
+    (
+      m = cmSizes.begin(); 
+      m != cmSizes.end(); 
+      ++m
+    ){
+      std::string name = (m->first);
+      size_t size = (m->second);
+
       if(*kernel_name == KERNEL_ALL)
       {
-        LOG("Total GM:" << (((float)gmAllSizeBytes)/(1024.0*1024.0)), 1);
-        LOG("Max GM:" << (((float)gmMaxSizeBytes)/(1024.0*1024.0)), 1);
-      }
-
-      /*Validate CM allocations*/
-      print ? std::cout << "\tConstant Memory (global scope):" << std::endl, true : false;
-      map<std::string, size_t> cmSizes = kernelStats.cmSizes[*kernel_name];
-      cl_ulong cmAllSizeBytes = 0;
-      for
-      (
-        m = cmSizes.begin(); 
-        m != cmSizes.end(); 
-        ++m
-      ){
-        std::string name = (m->first);
-        size_t size = (m->second);
-
         if(name.compare("TOTAL") != 0)
         {
-          print ? std::cout << "\t\t" << name << ": " << ((float)size)/(1024.0) << " KB" 
-            << std::endl, true : false;
+          LOG_SIM("        " << name << ": " << ((double)size)/(1024.0) << " KB");
         }
         else
         {
           cmAllSizeBytes = size;
         }
       }
-      print ? std::cout << "\t\tTOTAL: " << ((float)cmAllSizeBytes)/(1024.0) << " KB" 
-        << std::endl, true : false;
-      
-      /*Validate LM allocations*/
-      print ? std::cout << "\tLocal Memory (WG scope):" << std::endl, true : false;
-      map<std::string, size_t> lmSizes = kernelStats.lmSizes[*kernel_name];
-      cl_ulong lmAllSizeBytes = 0;
-      for
-      (
-        m = lmSizes.begin(); 
-        m != lmSizes.end(); 
-        ++m
-      ){
-        std::string name = (m->first);
-        size_t size = (m->second);
+      else
+      {
+        if(size != 0)
+        {
+          std::stringstream ss;
+          ss << "Neurosim::getMemoryUsageStats: detected non-zero CM entry for " << *kernel_name 
+            << ": " << name << ": " << ((double)size)/(1024.0) << " KB" << std::endl;
+          throw SimException(ss.str());
+        }
+      }
+    }
 
+    if(*kernel_name == KERNEL_ALL)
+    {
+      LOG_SIM("        TOTAL: " << ((double)cmAllSizeBytes)/(1024.0) << " KB");
+    }
+    
+    /*LM allocations*/
+    if(*kernel_name != KERNEL_ALL)
+    {
+      LOG_SIM("    Local Memory (WG scope):");
+    }
+    map<std::string, size_t> lmSizes = kernelStats.lmSizes[*kernel_name];
+    cl_ulong lmAllSizeBytes = 0;
+    for
+    (
+      m = lmSizes.begin(); 
+      m != lmSizes.end(); 
+      ++m
+    ){
+      std::string name = (m->first);
+      size_t size = (m->second);
+
+      if(*kernel_name != KERNEL_ALL)
+      {
         if(name.compare("TOTAL") != 0)
         {
-          print ? std::cout << "\t\t" << name << ": " << ((float)size)/(1024.0) << " KB" 
-            << std::endl, true : false;
+          LOG_SIM("        " << name << ": " << ((double)size)/(1024.0) << " KB");
         }
         else
         {
           lmAllSizeBytes = size;
         }
       }
-      print ? std::cout << "\t\tTOTAL: " << ((float)lmAllSizeBytes)/(1024.0) << " KB" 
-        << std::endl, true : false;
+      else
+      {
+        if(size != 0)
+        {
+          std::stringstream ss;
+          ss << "Neurosim::getMemoryUsageStats: detected non-zero LM entry for " << *kernel_name 
+            << ": " << name << ": " << ((double)size)/(1024.0) << " KB" << std::endl;
+          throw SimException(ss.str());
+        }
+      }
+    }
+    
+    if(*kernel_name != KERNEL_ALL)
+    {
+      LOG_SIM("        TOTAL: " << ((double)lmAllSizeBytes)/(1024.0) << " KB");
     }
   }
-  }
-  CATCH(std::cerr, setupCL, return SDK_FAILURE;)
-
-  return SDK_SUCCESS;
 }
+/**************************************************************************************************/
 
 
 
-double
-IntegrationTest::timeStampNs()
+void 
+Neurosim::run()
 {
-#ifdef WIN32
-  QueryPerformanceCounter((LARGE_INTEGER *)&current);
-  return ((double)current / (double)performanceFrequency);
-#else
-  struct timespec tp;
-  clock_gettime(CLOCK_MONOTONIC, &tp);
-  return (double) tp.tv_sec * (1000ULL * 1000ULL * 1000ULL) + (double) tp.tv_nsec;
+#if STATISTICS_ENABLE
+  double startRunTime;
+  GET_TIME_NS(startRunTime);
 #endif
-}
 
-
-
-int 
-IntegrationTest::run()
-{
   cl_int status;
   cl_int eventStatus = CL_QUEUED;
   cl::Event writeEvt = NULL;
-  
-  std::cout << "Started Execution" <<std::endl;
-  std::cout << "-------------------------------------------" << std::endl;
-  
+
   /*
     Initialize network
   */
 #if EXPAND_EVENTS_ENABLE
-    synapticEvents.clearUnsortedEvents
+    (*synapticEvents).clearUnsortedEvents
     (
       commandQueue, 
       CL_FALSE,
       0x3
     );
-
-    connectome.setConnections
-    (
-      commandQueue,
-      CL_FALSE,
-      SYNAPSE_GABA_PERCENT,
-      EXPAND_EVENTS_MIN_DELAY,
-      EXPAND_EVENTS_MAX_DELAY
-    );
-
 #if PREINITIALIZE_NETWORK_STATE
-    spikeEvents.setEvents
+    (*spikeEvents).setEvents
     (
       commandQueue,
       CL_FALSE,
@@ -2605,7 +2429,7 @@ IntegrationTest::run()
       NULL
     );
 #else
-    spikeEvents.setEvents
+    (*spikeEvents).setEvents
     (
       commandQueue,
       CL_FALSE,
@@ -2616,13 +2440,15 @@ IntegrationTest::run()
 
 #if PREINITIALIZE_NETWORK_STATE && GROUP_EVENTS_ENABLE_V00 && EXPAND_EVENTS_ENABLE
     {
-      synapticEvents.setUnsortedEvents
+      (*synapticEvents).setUnsortedEvents
       (
+#if CLASS_VALIDATION_ENABLE
+        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
+#endif
         commandQueue,
         CL_TRUE,
         false,
         PREINITIALIZE_NETWORK_TIME_SLOT_DELTA,
-        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
         GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00,
         GROUP_EVENTS_HISTOGRAM_BIN_MASK,
         GROUP_EVENTS_TOTAL_NEURONS,
@@ -2635,34 +2461,26 @@ IntegrationTest::run()
 #endif
 
 #if MAKE_EVENT_PTRS_ENABLE
-    if(initializeDataForKernelMakeEventPtrs(0, 0) != SDK_SUCCESS)
+    if(initializeDataForKernelMakeEventPtrs(0, 0) != 1)
     {
       std::cout << "Failed initializeDataForKernelMakeEventPtrs" << std::endl; 
     }
 #endif
 
 #if UPDATE_NEURONS_ENABLE_V00
-    spikeEvents.clearEvents(commandQueue, CL_FALSE);
+    (*spikeEvents).clearEvents(commandQueue, CL_FALSE);
 #if PREINITIALIZE_NETWORK_STATE
     if(initializeDataForKernelUpdateNeurons(0, 1, 1, 0, 
-      PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE) != SDK_SUCCESS)
+      PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE) != 1)
 #else
-    if(initializeDataForKernelUpdateNeurons(0, 1, 1, 0, "") != SDK_SUCCESS)
+    if(initializeDataForKernelUpdateNeurons(0, 1, 1, 0, NULL) != 1)
 #endif
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelUpdateNeurons");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelUpdateNeurons");
     }
 #if (LOG_MODEL_VARIABLES)
-    traceFile = new std::ofstream(LOG_MODEL_VARIABLES_FILE_NAME);
-    dataToTraceFile = new std::stringstream("", std::ios::out | std::ios::app);
-
-    if(!(*traceFile).is_open())
-    {
-      throw SimException("IntegrationTest::run: Unable to open trace file");
-    }
-
-    *dataToTraceFile << startTimeStamp;
-    *dataToTraceFile << LOG_MODEL_VARIABLES_FILE_HEADER << std::endl;
+    dataToTraceFile << startTimeStamp;
+    dataToTraceFile << LOG_MODEL_VARIABLES_FILE_HEADER << std::endl;
 #endif
 #endif
 
@@ -2674,34 +2492,25 @@ IntegrationTest::run()
         GROUP_EVENTS_TIME_SLOTS,
         GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
         GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
-        GROUP_EVENTS_TOTAL_NEURONS,
         REFERENCE_EVENT_QUEUE_SIZE,
-        synapticEvents.dataUnsortedEventCounts,
-        synapticEvents.dataUnsortedEventTargets,
-        synapticEvents.dataUnsortedEventWeights,
-        synapticEvents.dataUnsortedEventDelays,
+        (*synapticEvents).dataUnsortedEventCounts,
+        (*synapticEvents).dataUnsortedEventTargets,
+        (*synapticEvents).dataUnsortedEventWeights,
+        (*synapticEvents).dataUnsortedEventDelays,
         nrn_ps
       );
       
-      if(res != SDK_SUCCESS)
+      if(res != 1)
       {
-        throw SimException("IntegrationTest::run: Failed injectUnsortedEvents");
+        throw SimException("Neurosim::run: Failed injectUnsortedEvents");
       }
     }
-#endif
-
-#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataHistogramGroupEventsTikBuffer, 
-    dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
 #endif
 
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   {
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataGroupEventsTikBuffer, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, dataGroupEventsTikBuffer, 
     dataGroupEventsTikSizeBytes, dataGroupEventsTik);
   }
 #endif
@@ -2710,13 +2519,13 @@ IntegrationTest::run()
     GROUP_EVENTS_ENABLE_V03
   {
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
     dataDebugHostGroupEvents);
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataDebugDeviceGroupEventsBuffer, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, commandQueue, dataDebugDeviceGroupEventsBuffer, 
     dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
     dataErrorGroupEvents);
 #endif
   }
@@ -2725,21 +2534,21 @@ IntegrationTest::run()
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
     MAKE_EVENT_PTRS_ENABLE
   {
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataHistogramGroupEventsTokBuffer, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, dataHistogramGroupEventsTokBuffer, 
     dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
   }
 #endif
 
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
   {
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataGroupEventsTokBuffer, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, dataGroupEventsTokBuffer, 
     dataGroupEventsTokSizeBytes, dataGroupEventsTok);
   }
 #endif
 
 #if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   {
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, dataMakeEventPtrsStructBuffer, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, dataMakeEventPtrsStructBuffer, 
     dataMakeEventPtrsStructSizeBytes, dataMakeEventPtrsStruct);
   }
 #endif
@@ -2747,24 +2556,24 @@ IntegrationTest::run()
 #if UPDATE_NEURONS_ENABLE_V00
   {
 #if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, psToleranceBuffer, psToleranceSizeBytes, psTolerance);
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, psToleranceBuffer, psToleranceSizeBytes, psTolerance);
 #endif
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsErrorBuffer, dataUpdateNeuronsErrorSizeBytes, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataUpdateNeuronsErrorBuffer, dataUpdateNeuronsErrorSizeBytes, 
       dataUpdateNeuronsError);
 #endif
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, constantCoefficientsBuffer, constantCoefficientsSizeBytes, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, constantCoefficientsBuffer, constantCoefficientsSizeBytes, 
     constantCoefficients);
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, modelVariablesBuffer, modelVariablesSizeBytes, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
     modelVariables);
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, modelParametersBuffer, modelParametersSizeBytes, 
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, modelParametersBuffer, modelParametersSizeBytes, 
     modelParameters);
   }
 #endif
 
 #if MAKE_EVENT_PTRS_ENABLE
 #if (MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataMakeEventPtrsErrorBuffer, dataMakeEventPtrsErrorSizeBytes, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsErrorBuffer, dataMakeEventPtrsErrorSizeBytes, 
       dataMakeEventPtrsError);
 #endif
 #endif
@@ -2781,13 +2590,11 @@ IntegrationTest::run()
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
   SET_KERNEL_ARG(kernelGroupEventsV00, dataErrorGroupEventsBuffer, argNumGrupEventsV00++);
 #endif
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
-  SET_KERNEL_ARG(kernelGroupEventsV00, dataHistogramGroupEventsTikBuffer, argNumGrupEventsV00++);
-#endif
-  SET_KERNEL_ARG(kernelGroupEventsV00, synapticEvents.dataUnsortedEventCountsBuffer, argNumGrupEventsV00++);
-  SET_KERNEL_ARG(kernelGroupEventsV00, synapticEvents.dataUnsortedEventDelaysBuffer, argNumGrupEventsV00++);
+  SET_KERNEL_ARG(kernelGroupEventsV00, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV00++);
+  SET_KERNEL_ARG(kernelGroupEventsV00, (*synapticEvents).dataUnsortedEventCountsBuffer, argNumGrupEventsV00++);
+  SET_KERNEL_ARG(kernelGroupEventsV00, (*synapticEvents).dataUnsortedEventDelaysBuffer, argNumGrupEventsV00++);
   SET_KERNEL_ARG(kernelGroupEventsV00, dataGroupEventsTikBuffer, argNumGrupEventsV00++);
-  SET_KERNEL_ARG(kernelGroupEventsV00, synapticEvents.dataHistogramBuffer, argNumGrupEventsV00++);
+  SET_KERNEL_ARG(kernelGroupEventsV00, (*synapticEvents).dataHistogramBuffer, argNumGrupEventsV00++);
   }
 #endif
 
@@ -2814,9 +2621,9 @@ IntegrationTest::run()
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
   SET_KERNEL_ARG(kernelGroupEventsV02, dataErrorGroupEventsBuffer, argNumGrupEventsV02++);
 #endif
-  SET_KERNEL_ARG(kernelGroupEventsV02, synapticEvents.dataUnsortedEventTargetsBuffer, argNumGrupEventsV02++);
-  SET_KERNEL_ARG(kernelGroupEventsV02, synapticEvents.dataUnsortedEventDelaysBuffer, argNumGrupEventsV02++);
-  SET_KERNEL_ARG(kernelGroupEventsV02, synapticEvents.dataUnsortedEventWeightsBuffer, argNumGrupEventsV02++);
+  SET_KERNEL_ARG(kernelGroupEventsV02, (*synapticEvents).dataUnsortedEventTargetsBuffer, argNumGrupEventsV02++);
+  SET_KERNEL_ARG(kernelGroupEventsV02, (*synapticEvents).dataUnsortedEventDelaysBuffer, argNumGrupEventsV02++);
+  SET_KERNEL_ARG(kernelGroupEventsV02, (*synapticEvents).dataUnsortedEventWeightsBuffer, argNumGrupEventsV02++);
   }
 #endif
 
@@ -2830,9 +2637,9 @@ IntegrationTest::run()
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
   SET_KERNEL_ARG(kernelGroupEventsV03, dataErrorGroupEventsBuffer, argNumGrupEventsV03++);
 #endif
-  SET_KERNEL_ARG(kernelGroupEventsV03, synapticEvents.dataUnsortedEventTargetsBuffer, argNumGrupEventsV03++);
-  SET_KERNEL_ARG(kernelGroupEventsV03, synapticEvents.dataUnsortedEventDelaysBuffer, argNumGrupEventsV03++);
-  SET_KERNEL_ARG(kernelGroupEventsV03, synapticEvents.dataUnsortedEventWeightsBuffer, argNumGrupEventsV03++);
+  SET_KERNEL_ARG(kernelGroupEventsV03, (*synapticEvents).dataUnsortedEventTargetsBuffer, argNumGrupEventsV03++);
+  SET_KERNEL_ARG(kernelGroupEventsV03, (*synapticEvents).dataUnsortedEventDelaysBuffer, argNumGrupEventsV03++);
+  SET_KERNEL_ARG(kernelGroupEventsV03, (*synapticEvents).dataUnsortedEventWeightsBuffer, argNumGrupEventsV03++);
   }
 #endif
 
@@ -2880,9 +2687,9 @@ IntegrationTest::run()
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, constantCoefficientsBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, modelParametersBuffer, argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, modelVariablesBuffer, argNumUpdateNeuronsV00++);
-  SET_KERNEL_ARG(kernelUpdateNeuronsV00, spikeEvents.dataSpikePacketCountsBuffer, 
+  SET_KERNEL_ARG(kernelUpdateNeuronsV00, (*spikeEvents).dataSpikePacketCountsBuffer, 
     argNumUpdateNeuronsV00++);
-  SET_KERNEL_ARG(kernelUpdateNeuronsV00, spikeEvents.dataSpikePacketsBuffer, 
+  SET_KERNEL_ARG(kernelUpdateNeuronsV00, (*spikeEvents).dataSpikePacketsBuffer, 
     argNumUpdateNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataMakeEventPtrsStructBuffer, argNumUpdateNeuronsV00++);
   }
@@ -2909,9 +2716,9 @@ IntegrationTest::run()
     argNumUpdateSpikedNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, modelVariablesBuffer, 
     argNumUpdateSpikedNeuronsV00++);
-  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, spikeEvents.dataSpikePacketCountsBuffer, 
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, (*spikeEvents).dataSpikePacketCountsBuffer, 
     argNumUpdateSpikedNeuronsV00++);  
-  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, spikeEvents.dataSpikePacketsBuffer, 
+  SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, (*spikeEvents).dataSpikePacketsBuffer, 
     argNumUpdateSpikedNeuronsV00++);
   SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataMakeEventPtrsStructBuffer, 
     argNumUpdateSpikedNeuronsV00++);
@@ -2966,9 +2773,10 @@ IntegrationTest::run()
     blockSizeY_kernelUpdateNeuronsV00);
 #endif
 
-#if (PROFILING_MODE == 1 || PROFILING_MODE == 2) && (START_PROFILING_AT_STEP > -1)
+#if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > -1
   double startAppTime = 0, endAppTime = 0;
 #endif
+
 #if SIMULATION_SNAPSHOT
   bool takeSimSnapshot = false;
 #endif
@@ -3000,19 +2808,21 @@ IntegrationTest::run()
     if(currentTimeStep == START_PROFILING_AT_STEP)
     {
       std::cout << "\nStarted device timing at step " << currentTimeStep << std::endl;
-      startAppTime = timeStampNs();
+      GET_TIME_NS(startAppTime);
     }
 #endif
 /**************************************************************************************************/
-#if EXPAND_EVENTS_ENABLE
+#if ENABLE_OPERATOR_EXPAND
     {
-#if !(UPDATE_NEURONS_ENABLE_V00)
-    /*Unit test*/
-    spikeEvents.expand
+#if ENABLE_UNIT_TEST_EXPAND_EVENTS
+
+    (*operatorExpand).expandUnitTest
     (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
+      commandQueue,
+      ndrEvt,
       currentTimeStep,
       EXPAND_EVENTS_TIME_SLOTS,
       EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT,
@@ -3021,94 +2831,117 @@ IntegrationTest::run()
       SYNAPSE_GABA_PERCENT,
       EXPAND_EVENTS_MIN_DELAY,
       EXPAND_EVENTS_MAX_DELAY,
-      synapticEvents,
-      connectome,
-      commandQueue,
-      ndrEvt
+      (*spikeEvents),
+      (*synapticEvents),
+      (*connectome)
     );
     
 #elif OVERWRITE_SPIKES_UNTILL_STEP > 0
 
-    spikeEvents.expand
+    (*operatorExpand).expand
     (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
+      commandQueue,
+      ndrEvt,
       currentTimeStep,
       EXPAND_EVENTS_TIME_SLOTS,
       OVERWRITE_SPIKES_UNTILL_STEP,
       INITIALIZE_SPIKES_MIN_MAX_PERCENT,
-      synapticEvents,
-      connectome,
-      commandQueue,
-      ndrEvt
+      (*spikeEvents),
+      (*synapticEvents),
+      (*connectome)
     );
     
 #else
 
-    spikeEvents.expand
+    (*operatorExpand).expand
     (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
+      commandQueue,
+      ndrEvt,
       currentTimeStep,
       EXPAND_EVENTS_TIME_SLOTS,
-      synapticEvents,
-      connectome,
+      (*spikeEvents),
+      (*synapticEvents),
+      (*connectome)
+    );
+#endif
+
+#if EXPAND_EVENTS_VERIFY_ENABLE
+    (*operatorExpand).verifyExpand
+    (
       commandQueue,
-      ndrEvt
+      false,
+      currentTimeStep, 
+#if EXPAND_EVENTS_INTER_WF_COOPERATION == 0
+      (EXPAND_EVENTS_SPIKE_PACKETS_PER_WF),
+#else
+      (EXPAND_EVENTS_SPIKE_PACKETS_PER_WF*EXPAND_EVENTS_WG_SIZE_WF),
+#endif
+      EXPAND_EVENTS_HISTOGRAM_BIT_SHIFT,
+      EXPAND_EVENTS_HISTOGRAM_BIN_MASK,
+      EXPAND_EVENTS_MAX_DELAY,
+      EXPAND_EVENTS_MIN_DELAY,
+      (*spikeEvents),
+      (*synapticEvents),
+      (*connectome)
     );
 #endif
     }
 #endif
 /**************************************************************************************************/
-#if SCAN_ENABLE_V00
+#if ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V00
     {
-#if SCAN_ENABLE_UNIT_TEST_V00
-    operatorScan.scanUnitTest_v00
+#if ENABLE_UNIT_TEST_SCAN_V00
+
+    (*operatorScan).scanUnitTest_v00
     (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
-      currentTimeStep,
       commandQueue,
-      ndrEvt
+      ndrEvt,
+      currentTimeStep
     );
     
 #else
 
-#if DEVICE_HOST_DATA_COHERENCE && SCAN_VERIFY_ENABLE
-    synapticEvents.refresh(commandQueue, CL_FALSE);
+#if SCAN_VERIFY_ENABLE
+    (*synapticEvents).refresh(commandQueue, CL_FALSE);
 #endif
 
-    operatorScan.scan_v00
+    (*operatorScan).scan_v00
     (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
-      currentTimeStep,
-      SAFE_GET(synapticEvents.timeSlots),
-      SAFE_GET(synapticEvents.dataHistogramBuffer),
       commandQueue,
-      ndrEvt
+      ndrEvt,
+      currentTimeStep,
+      SAFE_GET((*synapticEvents).timeSlots),
+      (*synapticEvents).dataHistogramBuffer
     );
 
 #if DEVICE_HOST_DATA_COHERENCE
-    synapticEvents.invalidateHistogram();
+    (*synapticEvents).invalidateHistogram();
 #endif
 
 #if SCAN_VERIFY_ENABLE
-    cl_uint scanTimeStep = currentTimeStep % SAFE_GET(synapticEvents.timeSlots);
+    cl_uint scanTimeStep = currentTimeStep % SAFE_GET((*synapticEvents).timeSlots);
     
-    operatorScan.verifyScan_v00
+    (*operatorScan).verifyScan_v00
     (
-      (void*)&synapticEvents, 
-      SynapticEvents::getPreviousHistogramItem, 
-      SynapticEvents::getRecentHistogramItem,
-      SAFE_GET(synapticEvents.timeSlots),
-      SAFE_GET(synapticEvents.histogramBinCount),
-      SAFE_GET(synapticEvents.histogramBinSize),
-      commandQueue, 
+      commandQueue,
+      (void*)synapticEvents, 
+      Data_SynapticEvents::getPreviousHistogramItem, 
+      Data_SynapticEvents::getCurrentHistogramItem,
+      SAFE_GET((*synapticEvents).timeSlots),
+      SAFE_GET((*synapticEvents).histogramBinCount),
+      SAFE_GET((*synapticEvents).histogramBinSize),
       scanTimeStep
     );
 #endif
@@ -3133,10 +2966,8 @@ IntegrationTest::run()
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     memset(dataErrorGroupEvents, 0, dataErrorGroupEventsSizeBytes);
 #endif
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
     /*Set it with non-zero since kernel should zero it out*/
-    memset(dataHistogramGroupEventsTik, 0xF, dataHistogramGroupEventsTikSizeBytes);
-#endif
+    memset((*operatorSort).dataHistogramGroupEventsTik, 0xF, (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
     memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
     
 #if GROUP_EVENTS_TEST_MODE == -1
@@ -3150,13 +2981,15 @@ IntegrationTest::run()
     cl_uint detla = NULL;
 #endif
 
-    synapticEvents.setUnsortedEvents
+    (*synapticEvents).setUnsortedEvents
     (
+#if CLASS_VALIDATION_ENABLE
+      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
+#endif
       commandQueue,
       CL_TRUE,
       true,
       detla,
-      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
       GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00,
       GROUP_EVENTS_HISTOGRAM_BIN_MASK,
       GROUP_EVENTS_TOTAL_NEURONS,
@@ -3166,95 +2999,74 @@ IntegrationTest::run()
       0.0
     );
 
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-#endif
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
+
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
     }
 /*End unit test initialization*/
 
 #elif GROUP_EVENTS_VERIFY_ENABLE || SORT_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventTargetsBuffer, synapticEvents.dataUnsortedEventTargetsSizeBytes, 
-      synapticEvents.dataUnsortedEventTargets);
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventDelaysBuffer, synapticEvents.dataUnsortedEventDelaysSizeBytes, 
-      synapticEvents.dataUnsortedEventDelays);
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventWeightsBuffer, synapticEvents.dataUnsortedEventWeightsSizeBytes, 
-      synapticEvents.dataUnsortedEventWeights);
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataHistogramBuffer, synapticEvents.dataHistogramSizeBytes, synapticEvents.dataHistogram);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventTargets);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
+      (*synapticEvents).dataUnsortedEventDelays);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventWeights);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataHistogramBuffer, (*synapticEvents).dataHistogramSizeBytes, (*synapticEvents).dataHistogram);
 #endif
 
 #if SORT_VERIFY_ENABLE && \
     (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
      GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
-    if(captureUnsortedEvents(synapticEvents.dataUnsortedEventCounts, synapticEvents.dataUnsortedEventTargets, 
-       synapticEvents.dataUnsortedEventDelays, synapticEvents.dataUnsortedEventWeights) != SDK_SUCCESS)
+    if(captureUnsortedEvents((*synapticEvents).dataUnsortedEventCounts, (*synapticEvents).dataUnsortedEventTargets, 
+       (*synapticEvents).dataUnsortedEventDelays, (*synapticEvents).dataUnsortedEventWeights) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed captureUnsortedEvents.");
+      throw SimException("Neurosim::run: Failed captureUnsortedEvents.");
     }
 #endif
 
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 
     SET_KERNEL_ARG(kernelGroupEventsV00, groupEventsTimeStep, argNumGrupEventsV00);
     
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
-#endif
-
-    status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV00, cl::NullRange, 
-      globalThreadsGroupEventsV00, localThreadsGroupEventsV00, NULL, &ndrEvt);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
-    {
-      throw SimException("IntegrationTest::run: enqueueNDRangeKernel() failed for "
-        "kernelGroupEventsV00");
-    }
-    
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP)
-    {
-      status = ndrEvt.wait();
-      endAppTime = timeStampNs();
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-      {
-        throw SimException("IntegrationTest::run: cl:Event.wait() failed for "
-          "kernelGroupEventsV00");
-      }
-      REGISTER_TIME(kernelGroupEventsV00, (endAppTime-startAppTime), 1.0)
-    }
-#endif
+    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV00, 
+      globalThreadsGroupEventsV00, localThreadsGroupEventsV00, NULL, ndrEvt, 
+      "kernelGroupEventsV00");
 
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
         dataErrorGroupEvents);
       if(dataErrorGroupEvents[0] != 0)
       {
         std::stringstream ss;
-        ss << "IntegrationTest::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV00: "
+        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV00: "
           << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
         throw SimException(ss.str());
       }
     }
 #endif
 
-#if GROUP_EVENTS_VERIFY_ENABLE
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+#if DEVICE_HOST_DATA_COHERENCE
+    (*operatorSort).invalidateHistogram();
 #endif
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+
+#if GROUP_EVENTS_VERIFY_ENABLE
+    (*operatorSort).getData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
+    
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    if(verifyKernelGroupEventsV00(GROUP_EVENTS_SOURCE_KEY_OFFSET_V00) != SDK_SUCCESS)
+      
+    if(verifyKernelGroupEventsV00() != 1)
     {
-      throw SimException("IntegrationTest::run: Failed verifyKernelGroupEventsV00");
+      throw SimException("Neurosim::run: Failed verifyKernelGroupEventsV00");
     }
 #endif
     }
@@ -3276,50 +3088,56 @@ IntegrationTest::run()
 #endif
     {
 /**************************************************************************************************/
-#if SCAN_ENABLE_V01
+#if ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V01
     {
-#if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
-    operatorScan.scanUnitTest_v01
+#if !(GROUP_EVENTS_ENABLE_V00)
+
+    (*operatorScan).scanUnitTest_v01
     (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE
+      currentTimeStep,
+#endif
+#if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
-      currentTimeStep,
-      SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V01,
       commandQueue,
-      ndrEvt
+      ndrEvt,
+      SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V01
     );
     
 #else
 
 #if SCAN_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+    (*operatorSort).refreshHistogram(commandQueue, CL_TRUE);
 #endif
 
-    operatorScan.scan_v01
+    (*operatorScan).scan_v01
     (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE
+      currentTimeStep,
+#endif
+#if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
-      currentTimeStep,
-      dataHistogramGroupEventsTikBuffer,
       commandQueue,
-      ndrEvt
+      ndrEvt,
+      (*operatorSort).dataHistogramGroupEventsTikBuffer
     );
+    
+#if DEVICE_HOST_DATA_COHERENCE
+    (*operatorSort).invalidateHistogram();
+#endif
 
 #if SCAN_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsVerifySizeBytes, dataHistogramGroupEventsVerify);
-
-    operatorScan.verifyScan_v01
+    (*operatorScan).verifyScan_v01
     (
-      dataHistogramGroupEventsVerify,
-      dataHistogramGroupEventsTik,
+      commandQueue,
+      (void*)operatorSort, 
+      Operator_Sort::getPreviousHistogramItem,
+      Operator_Sort::getCurrentHistogramItem,
       SCAN_HISTOGRAM_BIN_BACKETS,
       SCAN_HISTOGRAM_TOTAL_BINS_V01,
-      SCAN_HISTOGRAM_BIN_SIZE_V01,
-      commandQueue
+      SCAN_HISTOGRAM_BIN_SIZE_V01
     );
 #endif
 #endif
@@ -3333,118 +3151,91 @@ IntegrationTest::run()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V01
     {
-      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01) 
     {
 #if GROUP_EVENTS_TEST_MODE == -1
-    if(initializeDataForKernelGroupEventsV01(sortStep-1, 1, 0) != SDK_SUCCESS)
+    if(initializeDataForKernelGroupEventsV01(((int)sortStep)-1, 1, 0) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelGroupEventsV01");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV01");
     }
 #elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
-    if(initializeDataForKernelGroupEventsV01(sortStep-1, 1, GROUP_EVENTS_TEST_MODE) != SDK_SUCCESS)
+    if(initializeDataForKernelGroupEventsV01(((int)sortStep)-1, 1, GROUP_EVENTS_TEST_MODE) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelGroupEventsV01");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV01");
     }
 #endif
 
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
+
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-#endif
     }
 /*End unit test initialization*/
 
 #elif GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*operatorSort).dataHistogramGroupEventsTikBuffer, 
+      (*operatorSort).dataHistogramGroupEventsTikSizeBytes, (*operatorSort).dataHistogramGroupEventsTik);
 #endif
 
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     SET_KERNEL_ARG(kernelGroupEventsV01, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV01++);
-#endif
     SET_KERNEL_ARG(kernelGroupEventsV01, dataGroupEventsTikBuffer, argNumGrupEventsV01);
     SET_KERNEL_ARG(kernelGroupEventsV01, dataGroupEventsTokBuffer, argNumGrupEventsV01+1);
-    SET_KERNEL_ARG(kernelGroupEventsV01, dataHistogramGroupEventsTikBuffer, argNumGrupEventsV01+2);
+    SET_KERNEL_ARG(kernelGroupEventsV01, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV01+2);
     SET_KERNEL_ARG(kernelGroupEventsV01, sortStep, argNumGrupEventsV01+3);
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV01--;
-#endif
 
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
-#endif
-
-    status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV01, cl::NullRange, 
-      globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, &ndrEvt);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
-    {
-      throw SimException("IntegrationTest::run: enqueueNDRangeKernel() failed for "
-        "kernelGroupEventsV01");
-    }
-    
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP)
-    {
-      status = ndrEvt.wait();
-      endAppTime = timeStampNs();
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-      {
-        throw SimException("IntegrationTest::run: cl:Event.wait() failed for "
-          "kernelGroupEventsV01");
-      }
-      REGISTER_TIME(kernelGroupEventsV01, (endAppTime-startAppTime), 1.0)
-    }
-#endif
+    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV01, 
+      globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, ndrEvt, 
+      "kernelGroupEventsV01");
 
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
         dataErrorGroupEvents);
       if(dataErrorGroupEvents[0] != 0)
       {
         std::stringstream ss;
-        ss << "IntegrationTest::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV01: "
+        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV01: "
           << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
         throw SimException(ss.str());
       }
     }
 #endif
 
-#if GROUP_EVENTS_VERIFY_ENABLE
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
+#if DEVICE_HOST_DATA_COHERENCE
+    (*operatorSort).invalidateHistogram();
 #endif
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
+
+#if GROUP_EVENTS_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
+      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    if(verifyKernelGroupEventsV01(sortStep) != SDK_SUCCESS)
+    if(verifyKernelGroupEventsV01(sortStep) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed verifyKernelGroupEventsV01");
+      throw SimException("Neurosim::run: Failed verifyKernelGroupEventsV01");
     }
 #endif
     }
@@ -3458,131 +3249,104 @@ IntegrationTest::run()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V02
     {
-      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01) 
     {
 #if GROUP_EVENTS_TEST_MODE == -1
-    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 1, 0) != SDK_SUCCESS)
+    if(initializeDataForKernelGroupEventsV02_V03(((int)sortStep)-1, 1, 0) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelGroupEventsV02_V03");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV02_V03");
     }
 #elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
-    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 1, GROUP_EVENTS_TEST_MODE) 
-      != SDK_SUCCESS)
+    if(initializeDataForKernelGroupEventsV02_V03(((int)sortStep)-1, 1, GROUP_EVENTS_TEST_MODE) 
+      != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelGroupEventsV02_V03");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV02_V03");
     }
 #endif
 
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventTargetsBuffer, synapticEvents.dataUnsortedEventTargetsSizeBytes, 
-      synapticEvents.dataUnsortedEventTargets);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventDelaysBuffer, synapticEvents.dataUnsortedEventDelaysSizeBytes, 
-      synapticEvents.dataUnsortedEventDelays);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventWeightsBuffer, synapticEvents.dataUnsortedEventWeightsSizeBytes, 
-      synapticEvents.dataUnsortedEventWeights);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
+    
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventTargets);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
+      (*synapticEvents).dataUnsortedEventDelays);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventWeights);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-#endif
     }
 /*End unit test initialization*/
 
 #elif GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventTargetsBuffer, synapticEvents.dataUnsortedEventTargetsSizeBytes, 
-      synapticEvents.dataUnsortedEventTargets);
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventDelaysBuffer, synapticEvents.dataUnsortedEventDelaysSizeBytes, 
-      synapticEvents.dataUnsortedEventDelays);
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventWeightsBuffer, synapticEvents.dataUnsortedEventWeightsSizeBytes, 
-      synapticEvents.dataUnsortedEventWeights);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventTargets);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
+      (*synapticEvents).dataUnsortedEventDelays);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventWeights);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
       dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*operatorSort).dataHistogramGroupEventsTikBuffer, 
+      (*operatorSort).dataHistogramGroupEventsTikSizeBytes, (*operatorSort).dataHistogramGroupEventsTik);
 #endif
 
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     SET_KERNEL_ARG(kernelGroupEventsV02, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV02++);
-#endif
     SET_KERNEL_ARG(kernelGroupEventsV02, dataGroupEventsTikBuffer, argNumGrupEventsV02);
     SET_KERNEL_ARG(kernelGroupEventsV02, dataGroupEventsTokBuffer, argNumGrupEventsV02+1);
-    SET_KERNEL_ARG(kernelGroupEventsV02, dataHistogramGroupEventsTikBuffer, argNumGrupEventsV02+2);
+    SET_KERNEL_ARG(kernelGroupEventsV02, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV02+2);
     SET_KERNEL_ARG(kernelGroupEventsV02, sortStep, argNumGrupEventsV02+3);
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV02--;
-#endif
 
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
-#endif
-
-    status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV02, cl::NullRange, 
-      globalThreadsGroupEventsV02, localThreadsGroupEventsV02, NULL, &ndrEvt);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
-    {
-      throw SimException("IntegrationTest::run: enqueueNDRangeKernel() failed for "
-        "kernelGroupEventsV02");
-    }
-    
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP)
-    {
-      status = ndrEvt.wait();
-      endAppTime = timeStampNs();
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-      {
-        throw SimException("IntegrationTest::run: cl:Event.wait() failed for "
-          "kernelGroupEventsV02");
-      }
-      REGISTER_TIME(kernelGroupEventsV02, (endAppTime-startAppTime), 1.0)
-    }
-#endif
-
+    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV02, 
+      globalThreadsGroupEventsV02, localThreadsGroupEventsV02, NULL, ndrEvt, 
+      "kernelGroupEventsV02");
+      
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
         dataErrorGroupEvents);
       if(dataErrorGroupEvents[0] != 0)
       {
         std::stringstream ss;
-        ss << "IntegrationTest::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV02: "
+        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV02: "
           << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
         throw SimException(ss.str());
       }
     }
 #endif
 
-#if GROUP_EVENTS_VERIFY_ENABLE
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
+#if DEVICE_HOST_DATA_COHERENCE
+    (*operatorSort).invalidateHistogram();
 #endif
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
+
+#if GROUP_EVENTS_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
+      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    if(verifyKernelGroupEventsV02(sortStep, GROUP_EVENTS_REPLACEMENT_KEY_OFFSET_V02) != SDK_SUCCESS)
+    if(verifyKernelGroupEventsV02(sortStep, GROUP_EVENTS_REPLACEMENT_KEY_OFFSET_V02) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed verifyKernelGroupEventsV02");
+      throw SimException("Neurosim::run: Failed verifyKernelGroupEventsV02");
     }
 #endif
     }
@@ -3592,16 +3356,11 @@ IntegrationTest::run()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02
     /*Swap buffers for next iteration*/
-    swap2(dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
+    swap2((*operatorSort).dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
     swap2(dataGroupEventsTikBuffer, dataGroupEventsTokBuffer);
 #endif
     }/*for*/
 /**************************************************************************************************/
-#if (GROUP_EVENTS_TOTAL_NEURON_BITS && EXPAND_EVENTS_TOTAL_NEURON_BITS) &&\
-    (GROUP_EVENTS_TOTAL_NEURON_BITS != EXPAND_EVENTS_TOTAL_NEURON_BITS)
-  #error (GROUP_EVENTS_TOTAL_NEURON_BITS != EXPAND_EVENTS_TOTAL_NEURON_BITS)
-#endif
-
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V03
     /*
       Sort positive integers (neuron IDs).
@@ -3615,51 +3374,56 @@ IntegrationTest::run()
 #endif
     {
 /**************************************************************************************************/
-#if SCAN_ENABLE_V01
+#if ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V01
     {
-#if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && \
-      GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT && GROUP_EVENTS_ENABLE_V02)
-    operatorScan.scanUnitTest_v01
+#if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02)
+
+    (*operatorScan).scanUnitTest_v01
     (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE
+      currentTimeStep,
+#endif
+#if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
-      currentTimeStep,
-      SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V01,
       commandQueue,
-      ndrEvt
+      ndrEvt,
+      SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V01
     );
     
 #else
 
 #if SCAN_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+    (*operatorSort).refreshHistogram(commandQueue, CL_TRUE);
 #endif
 
-    operatorScan.scan_v01
+    (*operatorScan).scan_v01
     (
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE
+      currentTimeStep,
+#endif
+#if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
-      currentTimeStep,
-      dataHistogramGroupEventsTikBuffer,
       commandQueue,
-      ndrEvt
+      ndrEvt,
+      (*operatorSort).dataHistogramGroupEventsTikBuffer
     );
+    
+#if DEVICE_HOST_DATA_COHERENCE
+    (*operatorSort).invalidateHistogram();
+#endif
 
 #if SCAN_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsVerifySizeBytes, dataHistogramGroupEventsVerify);
-
-    operatorScan.verifyScan_v01
+    (*operatorScan).verifyScan_v01
     (
-      dataHistogramGroupEventsVerify,
-      dataHistogramGroupEventsTik,
+      commandQueue,
+      (void*)operatorSort, 
+      Operator_Sort::getPreviousHistogramItem, 
+      Operator_Sort::getCurrentHistogramItem,
       SCAN_HISTOGRAM_BIN_BACKETS,
       SCAN_HISTOGRAM_TOTAL_BINS_V01,
-      SCAN_HISTOGRAM_BIN_SIZE_V01,
-      commandQueue
+      SCAN_HISTOGRAM_BIN_SIZE_V01
     );
 #endif
 #endif
@@ -3673,120 +3437,92 @@ IntegrationTest::run()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V01
     {
-      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && SCAN_ENABLE_V01 &&\
-      GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT && GROUP_EVENTS_ENABLE_V02)
+      GROUP_EVENTS_ENABLE_V02)
     {
 #if GROUP_EVENTS_TEST_MODE == -1
-    if(initializeDataForKernelGroupEventsV01(sortStep-1, 1, 0) != SDK_SUCCESS)
+    if(initializeDataForKernelGroupEventsV01(((int)sortStep)-1, 1, 0) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelGroupEventsV01");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV01");
     }
 #elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
-    if(initializeDataForKernelGroupEventsV01(sortStep-1, 1, GROUP_EVENTS_TEST_MODE) != SDK_SUCCESS)
+    if(initializeDataForKernelGroupEventsV01(((int)sortStep)-1, 1, GROUP_EVENTS_TEST_MODE) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelGroupEventsV01");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV01");
     }
 #endif
 
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
+
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-#endif
     }
 /*End unit test initialization*/
 
 #elif GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*operatorSort).dataHistogramGroupEventsTikBuffer, 
+      (*operatorSort).dataHistogramGroupEventsTikSizeBytes, (*operatorSort).dataHistogramGroupEventsTik);
 #endif
 
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     SET_KERNEL_ARG(kernelGroupEventsV01, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV01++);
-#endif
     SET_KERNEL_ARG(kernelGroupEventsV01, dataGroupEventsTikBuffer, argNumGrupEventsV01);
     SET_KERNEL_ARG(kernelGroupEventsV01, dataGroupEventsTokBuffer, argNumGrupEventsV01+1);
-    SET_KERNEL_ARG(kernelGroupEventsV01, dataHistogramGroupEventsTikBuffer, argNumGrupEventsV01+2);
+    SET_KERNEL_ARG(kernelGroupEventsV01, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV01+2);
     SET_KERNEL_ARG(kernelGroupEventsV01, sortStep, argNumGrupEventsV01+3);
-    
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV01--;
-#endif
 
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
-#endif
-
-    status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV01, cl::NullRange, 
-      globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, &ndrEvt);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
-    {
-      throw SimException("IntegrationTest::run: enqueueNDRangeKernel() failed for "
-        "kernelGroupEventsV01");
-    }
-    
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP)
-    {
-      status = ndrEvt.wait();
-      endAppTime = timeStampNs();
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-      {
-        throw SimException("IntegrationTest::run: cl:Event.wait() failed for "
-          "kernelGroupEventsV01");
-      }
-      REGISTER_TIME(kernelGroupEventsV01, (endAppTime-startAppTime), 1.0)
-    }
-#endif
-
+    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV01, 
+      globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, ndrEvt, 
+      "kernelGroupEventsV01");
+      
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
         dataErrorGroupEvents);
       if(dataErrorGroupEvents[0] != 0)
       {
         std::stringstream ss;
-        ss << "IntegrationTest::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV01: "
+        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV01: "
           << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
         throw SimException(ss.str());
       }
     }
 #endif
 
-#if GROUP_EVENTS_VERIFY_ENABLE
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
+#if DEVICE_HOST_DATA_COHERENCE
+    (*operatorSort).invalidateHistogram();
 #endif
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
+
+#if GROUP_EVENTS_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
+      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    if(verifyKernelGroupEventsV01(sortStep) != SDK_SUCCESS)
+    if(verifyKernelGroupEventsV01(sortStep) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed verifyKernelGroupEventsV01");
+      throw SimException("Neurosim::run: Failed verifyKernelGroupEventsV01");
     }
 #endif
     }
@@ -3800,139 +3536,112 @@ IntegrationTest::run()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V03
     {
-      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && SCAN_ENABLE_V01 &&\
-      GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT && GROUP_EVENTS_ENABLE_V02)
+      GROUP_EVENTS_ENABLE_V02)
     {
 #if GROUP_EVENTS_TEST_MODE == -1
-    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 1, 0) != SDK_SUCCESS)
+    if(initializeDataForKernelGroupEventsV02_V03(((int)sortStep)-1, 1, 0) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelGroupEventsV02_V03");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV02_V03");
     }
 #elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
-    if(initializeDataForKernelGroupEventsV02_V03(sortStep-1, 1, GROUP_EVENTS_TEST_MODE) 
-      != SDK_SUCCESS)
+    if(initializeDataForKernelGroupEventsV02_V03(((int)sortStep)-1, 1, GROUP_EVENTS_TEST_MODE) 
+      != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelGroupEventsV02_V03");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV02_V03");
     }
 #endif
 
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventTargetsBuffer, synapticEvents.dataUnsortedEventTargetsSizeBytes, 
-      synapticEvents.dataUnsortedEventTargets);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventDelaysBuffer, synapticEvents.dataUnsortedEventDelaysSizeBytes, 
-      synapticEvents.dataUnsortedEventDelays);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventWeightsBuffer, synapticEvents.dataUnsortedEventWeightsSizeBytes, 
-      synapticEvents.dataUnsortedEventWeights);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
+    
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventTargets);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
+      (*synapticEvents).dataUnsortedEventDelays);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventWeights);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-#if GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-#endif
     }
 /*End unit test initialization*/
 
 #elif GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventTargetsBuffer, synapticEvents.dataUnsortedEventTargetsSizeBytes, 
-      synapticEvents.dataUnsortedEventTargets);
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventDelaysBuffer, synapticEvents.dataUnsortedEventDelaysSizeBytes, 
-      synapticEvents.dataUnsortedEventDelays);
-    ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventWeightsBuffer, synapticEvents.dataUnsortedEventWeightsSizeBytes, 
-      synapticEvents.dataUnsortedEventWeights);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventTargets);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
+      (*synapticEvents).dataUnsortedEventDelays);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
+      (*synapticEvents).dataUnsortedEventWeights);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
       dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTikBuffer, 
-      dataHistogramGroupEventsTikSizeBytes, dataHistogramGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*operatorSort).dataHistogramGroupEventsTikBuffer, 
+      (*operatorSort).dataHistogramGroupEventsTikSizeBytes, (*operatorSort).dataHistogramGroupEventsTik);
 #elif SIMULATION_SNAPSHOT
     if(takeSimSnapshot)
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, synapticEvents.dataUnsortedEventWeightsBuffer, synapticEvents.dataUnsortedEventWeightsSizeBytes, 
-        synapticEvents.dataUnsortedEventWeights);
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
+        (*synapticEvents).dataUnsortedEventWeights);
     }
 #endif
 
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     SET_KERNEL_ARG(kernelGroupEventsV03, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV03++);
-#endif
     SET_KERNEL_ARG(kernelGroupEventsV03, dataGroupEventsTikBuffer, argNumGrupEventsV03);
     SET_KERNEL_ARG(kernelGroupEventsV03, dataGroupEventsTokBuffer, argNumGrupEventsV03+1);
-    SET_KERNEL_ARG(kernelGroupEventsV03, dataHistogramGroupEventsTikBuffer, argNumGrupEventsV03+2);
+    SET_KERNEL_ARG(kernelGroupEventsV03, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV03+2);
     SET_KERNEL_ARG(kernelGroupEventsV03, sortStep, argNumGrupEventsV03+3);
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     argNumGrupEventsV03--;
-#endif
 
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
-#endif
-
-    status = commandQueue.enqueueNDRangeKernel(kernelGroupEventsV03, cl::NullRange, 
-      globalThreadsGroupEventsV03, localThreadsGroupEventsV03, NULL, &ndrEvt);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
-    {
-      throw SimException("IntegrationTest::run: enqueueNDRangeKernel() failed for "
-        "kernelGroupEventsV03");
-    }
-    
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP)
-    {
-      status = ndrEvt.wait();
-      endAppTime = timeStampNs();
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-      {
-        throw SimException("IntegrationTest::run: cl:Event.wait() failed for "
-          "kernelGroupEventsV03");
-      }
-      REGISTER_TIME(kernelGroupEventsV03, (endAppTime-startAppTime), 1.0)
-    }
-#endif
+    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV03, 
+      globalThreadsGroupEventsV03, localThreadsGroupEventsV03, NULL, ndrEvt, 
+      "kernelGroupEventsV03");
 
 #if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
       dataDebugHostGroupEvents);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataDebugDeviceGroupEventsBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
       dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
 #endif
 
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
         dataErrorGroupEvents);
       if(dataErrorGroupEvents[0] != 0)
       {
         std::stringstream ss;
-        ss << "IntegrationTest::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, verifyKernelGroupEventsV03: "
+        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, verifyKernelGroupEventsV03: "
           << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
         throw SimException(ss.str());
       }
     }
 #endif
 
-#if GROUP_EVENTS_VERIFY_ENABLE
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
+#if DEVICE_HOST_DATA_COHERENCE
+    (*operatorSort).invalidateHistogram();
 #endif
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTokBuffer, 
+
+#if GROUP_EVENTS_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
+      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
       dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    if(verifyKernelGroupEventsV03(sortStep) != SDK_SUCCESS)
+    if(verifyKernelGroupEventsV03(sortStep) != 1)
     {
       std::stringstream ss;
-      ss << "IntegrationTest::run: Failed verifyKernelGroupEventsV03, sort step " << sortStep 
+      ss << "Neurosim::run: Failed verifyKernelGroupEventsV03, sort step " << sortStep 
       << std::endl; 
       throw SimException(ss.str());
     }
@@ -3944,7 +3653,7 @@ IntegrationTest::run()
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V03
     /*Swap buffers for next iteration*/
-    swap2(dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
+    swap2((*operatorSort).dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
     swap2(dataGroupEventsTikBuffer, dataGroupEventsTokBuffer);
 #endif
     }/*for*/
@@ -3955,29 +3664,30 @@ IntegrationTest::run()
 #if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02 &&\
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V01)
     /*Use milder mode if UPDATE_NEURONS_ENABLE_V00*/
-    cl_uint mode = (currentTimeStep!=0)*(1 + !UPDATE_NEURONS_ENABLE_V00);
-    if(initializeDataForKernelMakeEventPtrs(mode, currentTimeStep-1) != SDK_SUCCESS)
+    int mode = (currentTimeStep == 0) ? 0 : (UPDATE_NEURONS_ENABLE_V00 ? 1 : 2);
+    
+    if(initializeDataForKernelMakeEventPtrs(mode, currentTimeStep-1) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelMakeEventPtrs");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelMakeEventPtrs");
     }
     
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
 /*End unit test initialization*/
 
 #elif MAKE_EVENT_PTRS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataHistogramGroupEventsTokBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
       dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
 #endif
 
 #if (MAKE_EVENT_PTRS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataMakeEventPtrsDebugHostBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsDebugHostBuffer, 
       dataMakeEventPtrsDebugHostSizeBytes, dataMakeEventPtrsDebugHost);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataMakeEventPtrsDebugDeviceBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsDebugDeviceBuffer, 
       dataMakeEventPtrsDebugDeviceSizeBytes, dataMakeEventPtrsDebugDevice);
 #endif
 
@@ -3985,76 +3695,32 @@ IntegrationTest::run()
     SET_KERNEL_ARG(kernelMakeEventPtrs, dataGroupEventsTikBuffer, argNumMakeEventPtrs+1);
     SET_KERNEL_ARG(kernelMakeEventPtrs, dataMakeEventPtrsStructBuffer, argNumMakeEventPtrs+2); /*TODO: instead of a new buffer it could be a reuse*/
 
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
-#endif
-
-    status = commandQueue.enqueueNDRangeKernel(kernelMakeEventPtrs, cl::NullRange, 
-      globalThreadsMakeEventPtrs, localThreadsMakeEventPtrs, NULL, &ndrEvt);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
-    {
-      throw SimException("IntegrationTest::run: enqueueNDRangeKernel() failed for "
-        "kernelMakeEventPtrs");
-    }
-    
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP)
-    {
-      status = ndrEvt.wait();
-      endAppTime = timeStampNs();
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-      {
-        throw SimException("IntegrationTest::run: cl:Event.wait() failed for "
-          "kernelMakeEventPtrs");
-      }
-      REGISTER_TIME(kernelMakeEventPtrs, (endAppTime-startAppTime), 1.0)
-    }
-#endif
-
+    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelMakeEventPtrs, 
+      globalThreadsMakeEventPtrs, localThreadsMakeEventPtrs, NULL, ndrEvt, 
+      "kernelMakeEventPtrs");
+      
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
-#endif
-
-    status = commandQueue.enqueueNDRangeKernel(kernelGlueEventPtrs, cl::NullRange, 
-      globalThreadsGlueEventPtrs, localThreadsGlueEventPtrs, NULL, &ndrEvt);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
-    {
-      throw SimException("IntegrationTest::run: enqueueNDRangeKernel() failed for "
-        "kernelGlueEventPtrs");
-    }
-    
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP)
-    {
-      status = ndrEvt.wait();
-      endAppTime = timeStampNs();
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-      {
-        throw SimException("IntegrationTest::run: cl:Event.wait() failed for "
-          "kernelGlueEventPtrs");
-      }
-      REGISTER_TIME(kernelGlueEventPtrs, (endAppTime-startAppTime), 1.0)
-    }
-#endif
+    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGlueEventPtrs, 
+      globalThreadsGlueEventPtrs, localThreadsGlueEventPtrs, NULL, ndrEvt, 
+      "kernelGlueEventPtrs");
 #endif
 
 #if (MAKE_EVENT_PTRS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsDebugHostBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsDebugHostBuffer, 
       dataMakeEventPtrsDebugHostSizeBytes, dataMakeEventPtrsDebugHost);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsDebugDeviceBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsDebugDeviceBuffer, 
       dataMakeEventPtrsDebugDeviceSizeBytes, dataMakeEventPtrsDebugDevice);
 #endif
 
 #if (MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE)
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsErrorBuffer, dataMakeEventPtrsErrorSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsErrorBuffer, dataMakeEventPtrsErrorSizeBytes, 
         dataMakeEventPtrsError);
       if(dataMakeEventPtrsError[0] != 0)
       {
         std::stringstream ss;
-        ss << "IntegrationTest::run: MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE: Received error code "
+        ss << "Neurosim::run: MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE: Received error code "
           "from device: " << dataMakeEventPtrsError[0] << std::endl;
         throw SimException(ss.str());
       }
@@ -4062,11 +3728,11 @@ IntegrationTest::run()
 #endif
 
 #if MAKE_EVENT_PTRS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, 
       dataMakeEventPtrsStructSizeBytes, dataMakeEventPtrsStruct);
-    if(verifyKernelMakeEventPtrs() != SDK_SUCCESS)
+    if(verifyKernelMakeEventPtrs() != 1)
     {
-      throw SimException("IntegrationTest::run: Failed verifyKernelMakeEventPtrs");
+      throw SimException("Neurosim::run: Failed verifyKernelMakeEventPtrs");
     }
 #endif
     }
@@ -4075,20 +3741,20 @@ IntegrationTest::run()
 #if (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
      GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
 #if SORT_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
       dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, 
       dataMakeEventPtrsStructSizeBytes, dataMakeEventPtrsStruct);
-    if(verifySortedEvents(dataGroupEventsTik, dataMakeEventPtrsStruct, 2) != SDK_SUCCESS)
+    if(verifySortedEvents(dataGroupEventsTik, dataMakeEventPtrsStruct, 2) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed verifySortedEvents");
+      throw SimException("Neurosim::run: Failed verifySortedEvents");
     }
 #elif SIMULATION_SNAPSHOT
     if(takeSimSnapshot)
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
         dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, 
         dataMakeEventPtrsStructSizeBytes, dataMakeEventPtrsStruct);
     }
 #endif
@@ -4101,35 +3767,35 @@ IntegrationTest::run()
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && EXPAND_EVENTS_ENABLE)
     bool resetVarsAndParams = (currentTimeStep==0); /*TODO: fix, doesnt work with !(currentTimeStep%17);*/
 
-    spikeEvents.clearEvents(commandQueue, CL_TRUE);
+    (*spikeEvents).clearEvents(commandQueue, CL_TRUE);
 
     if(initializeDataForKernelUpdateNeurons(!(MAKE_EVENT_PTRS_ENABLE), 
-      resetVarsAndParams, resetVarsAndParams, 5.0*(!(currentTimeStep%3)), "") != SDK_SUCCESS)
+      resetVarsAndParams, resetVarsAndParams, 5.0*(!(currentTimeStep%3)), NULL) != 1)
     {
-      throw SimException("IntegrationTest::run: Failed initializeDataForKernelUpdateNeurons");
+      throw SimException("Neurosim::run: Failed initializeDataForKernelUpdateNeurons");
     }
     if(resetVarsAndParams)
     {
 #if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
-      ENQUEUE_WRITE_BUFFER(CL_TRUE, psToleranceBuffer, psToleranceSizeBytes, 
+      ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, psToleranceBuffer, psToleranceSizeBytes, 
         psTolerance);
 #endif
-      ENQUEUE_WRITE_BUFFER(CL_TRUE, constantCoefficientsBuffer, constantCoefficientsSizeBytes, 
+      ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, constantCoefficientsBuffer, constantCoefficientsSizeBytes, 
         constantCoefficients);
-      ENQUEUE_WRITE_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+      ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
         modelVariables);
-      ENQUEUE_WRITE_BUFFER(CL_TRUE, modelParametersBuffer, modelParametersSizeBytes, 
+      ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, modelParametersBuffer, modelParametersSizeBytes, 
         modelParameters);
     }
 #if !(MAKE_EVENT_PTRS_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
       dataGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
       dataMakeEventPtrsStruct);
 # else
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
       dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
       dataMakeEventPtrsStruct);
 #endif
 #endif
@@ -4137,9 +3803,9 @@ IntegrationTest::run()
 
 /*Debugging*/
 #if (UPDATE_NEURONS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsDebugHostBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataUpdateNeuronsDebugHostBuffer, 
       dataUpdateNeuronsDebugHostSizeBytes, dataUpdateNeuronsDebugHost);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsDebugDeviceBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataUpdateNeuronsDebugDeviceBuffer, 
       dataUpdateNeuronsDebugDeviceSizeBytes, dataUpdateNeuronsDebugDevice);
 #endif
 /*END debugging*/
@@ -4153,24 +3819,26 @@ device modifies it.*/
 #if (UPDATE_NEURONS_VERIFY_ENABLE || (KERNEL_ENDSTEP_VERIFY_EVERY_STEPS > 0)) ||\
     (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > -1) || SIMULATION_SNAPSHOT
 #if UPDATE_NEURONS_VERIFY_ENABLE || (KERNEL_ENDSTEP_VERIFY_EVERY_STEPS > 0)
-    if(!((currentTimeStep+1)%KERNEL_ENDSTEP_VERIFY_EVERY_STEPS) || (currentTimeStep == 0)
+    bool readPtrs = !((currentTimeStep+1)%KERNEL_ENDSTEP_VERIFY_EVERY_STEPS) || 
+      (currentTimeStep == 0);
 #else
-    if(false
+    bool readPtrs = false;
 #endif
 #if (PROFILING_MODE == 1 && START_PROFILING_AT_STEP > -1)
-    || (currentTimeStep < START_PROFILING_AT_STEP)
+    readPtrs |= (currentTimeStep < START_PROFILING_AT_STEP);
 #endif
 #if OVERWRITE_SPIKES_UNTILL_STEP > 0
-    || (currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
+    readPtrs |= (currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP);
 #endif
 #if INJECT_CURRENT_UNTILL_STEP > 0
-    || (currentTimeStep < INJECT_CURRENT_UNTILL_STEP)
+    readPtrs |= (currentTimeStep < INJECT_CURRENT_UNTILL_STEP);
 #endif
 #if SIMULATION_SNAPSHOT
-    || (takeSimSnapshot)
+    readPtrs |= (takeSimSnapshot);
 #endif
-    ){
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
+    if(readPtrs)
+    {
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
         dataMakeEventPtrsStruct);
     }
 #endif
@@ -4180,35 +3848,13 @@ device modifies it.*/
 /*Set loop-dependent arguments for update kernel and equeue it*/
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataGroupEventsTikBuffer, argNumUpdateNeuronsV00);
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, currentTimeStep, argNumUpdateNeuronsV00+1);
-    
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
-#endif
 
-    status = commandQueue.enqueueNDRangeKernel(kernelUpdateNeuronsV00, cl::NullRange, 
-      globalThreadsUpdateNeuronsV00, localThreadsUpdateNeuronsV00, NULL, &ndrEvt);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
-    {
-      throw SimException("IntegrationTest::run: enqueueNDRangeKernel() failed for "
-        "kernelUpdateNeuronsV00");
-    }
-
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP)
-    {
-      status = ndrEvt.wait();
-      endAppTime = timeStampNs();
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-      {
-        throw SimException("IntegrationTest::run: cl:Event.wait() failed for "
-          "kernelUpdateNeuronsV00");
-      }
-      REGISTER_TIME(kernelUpdateNeuronsV00, (endAppTime-startAppTime), 1.0)
-    }
-#endif
-
+    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelUpdateNeuronsV00, 
+      globalThreadsUpdateNeuronsV00, localThreadsUpdateNeuronsV00, NULL, ndrEvt, 
+      "kernelUpdateNeuronsV00");
+      
 #if DEVICE_HOST_DATA_COHERENCE
-    spikeEvents.invalidateEvents();
+    (*spikeEvents).invalidateEvents();
 #endif
 /*END enqueue update kernel*/
 
@@ -4217,42 +3863,21 @@ device modifies it.*/
       argNumUpdateSpikedNeuronsV00);
     SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, currentTimeStep, 
       argNumUpdateSpikedNeuronsV00+1);
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP){startAppTime = timeStampNs();}
-#endif
 
-    status = commandQueue.enqueueNDRangeKernel(kernelUpdateSpikedNeuronsV00, cl::NullRange, 
-      globalThreadsUpdateNeuronsV00, localThreadsUpdateNeuronsV00, NULL, &ndrEvt);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, "CommandQueue::enqueueNDRangeKernel() failed."))
-    {
-      throw SimException("IntegrationTest::run: enqueueNDRangeKernel() failed for "
-        "kernelUpdateSpikedNeuronsV00");
-    }
-    
-#if PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
-    if(currentTimeStep >= START_PROFILING_AT_STEP)
-    {
-      status = ndrEvt.wait();
-      endAppTime = timeStampNs();
-      if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-      {
-        throw SimException("IntegrationTest::run: cl:Event.wait() failed for "
-          "kernelUpdateSpikedNeuronsV00");
-      }
-      REGISTER_TIME(kernelUpdateSpikedNeuronsV00, (endAppTime-startAppTime), 1.0)
-    }
-#endif
-
+    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelUpdateSpikedNeuronsV00, 
+      globalThreadsUpdateNeuronsV00, localThreadsUpdateNeuronsV00, NULL, ndrEvt, 
+      "kernelUpdateSpikedNeuronsV00");
+      
 #if DEVICE_HOST_DATA_COHERENCE
-    spikeEvents.invalidateEvents();
+    (*spikeEvents).invalidateEvents();
 #endif
 /*END enqueue update kernel for spiked neurons*/
 
 /*Debugging: buffer exchange*/
 #if (UPDATE_NEURONS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsDebugHostBuffer, 
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataUpdateNeuronsDebugHostBuffer, 
       dataUpdateNeuronsDebugHostSizeBytes, dataUpdateNeuronsDebugHost);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataUpdateNeuronsDebugDeviceBuffer, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataUpdateNeuronsDebugDeviceBuffer, 
       dataUpdateNeuronsDebugDeviceSizeBytes, dataUpdateNeuronsDebugDevice);
 #endif
 /*END debugging*/
@@ -4262,7 +3887,7 @@ device modifies it.*/
     if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
     {
       bool ignoreSolverFailuresDevice = IGNORE_SOLVER_EXCEPTIONS;
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataUpdateNeuronsErrorBuffer, dataUpdateNeuronsErrorSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataUpdateNeuronsErrorBuffer, dataUpdateNeuronsErrorSizeBytes, 
         dataUpdateNeuronsError);
       if(dataUpdateNeuronsError[0] != 0)
       {
@@ -4273,13 +3898,13 @@ device modifies it.*/
            (ignoreSolverFailuresDevice && 
            ((UPDATE_NEURONS_ERROR_NON_SOLVER_FAILURE_MASK&dataUpdateNeuronsError[0]) != 0))
         ){
-          throw SimException("IntegrationTest::run: Failed ignoreSolverFailuresDevice condition");
+          throw SimException("Neurosim::run: Failed ignoreSolverFailuresDevice condition");
         }
         else
         {
           std::cout << "UPDATE_NEURONS_ERROR_TRACK_ENABLE: ignoring solver failures\n";
           memset(dataUpdateNeuronsError, 0, UPDATE_NEURONS_ERROR_BUFFER_SIZE_WORDS*sizeof(cl_uint));
-          ENQUEUE_WRITE_BUFFER(CL_TRUE, dataUpdateNeuronsErrorBuffer, 
+          ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataUpdateNeuronsErrorBuffer, 
             dataUpdateNeuronsErrorSizeBytes, dataUpdateNeuronsError);
         }
       }
@@ -4304,9 +3929,9 @@ device modifies it.*/
 #endif
     if(verify)
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
         modelVariables);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
     }
 #if OVERWRITE_SPIKES_UNTILL_STEP > 0
@@ -4324,13 +3949,13 @@ device modifies it.*/
           dataMakeEventPtrsStruct,
           dataGroupEventsTik,
           modelVariables,
-          spikeEvents,
-          connectome,
+          (*spikeEvents),
+          (*connectome),
           commandQueue
-        ) != SDK_SUCCESS
+        ) != 1
       )
       {
-        throw SimException("IntegrationTest::run: Failed verifyKernelUpdateNeurons");
+        throw SimException("Neurosim::run: Failed verifyKernelUpdateNeurons");
       }
     }
     else
@@ -4348,13 +3973,13 @@ device modifies it.*/
           dataMakeEventPtrsStruct,
           dataGroupEventsTik,
           modelVariables,
-          spikeEvents,
-          connectome,
+          (*spikeEvents),
+          (*connectome),
           commandQueue
-        ) != SDK_SUCCESS
+        ) != 1
       )
       {
-        throw SimException("IntegrationTest::run: Failed verifyKernelUpdateNeurons");
+        throw SimException("Neurosim::run: Failed verifyKernelUpdateNeurons");
       }
     }
     }
@@ -4366,9 +3991,9 @@ device modifies it.*/
 #if OVERWRITE_SPIKES_UNTILL_STEP > 0
     if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
         modelVariables);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
 
       if
@@ -4383,21 +4008,21 @@ device modifies it.*/
           dataMakeEventPtrsStruct,
           dataGroupEventsTik,
           modelVariables,
-          spikeEvents,
-          connectome,
+          (*spikeEvents),
+          (*connectome),
           commandQueue
-        ) != SDK_SUCCESS
+        ) != 1
       )
       {
-        throw SimException("IntegrationTest::run: Failed verifyKernelUpdateNeurons");
+        throw SimException("Neurosim::run: Failed verifyKernelUpdateNeurons");
       }
     }
 #elif INJECT_CURRENT_UNTILL_STEP > 0
     if(currentTimeStep < INJECT_CURRENT_UNTILL_STEP)
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
         modelVariables);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
 
       if
@@ -4412,21 +4037,21 @@ device modifies it.*/
           dataMakeEventPtrsStruct,
           dataGroupEventsTik,
           modelVariables,
-          spikeEvents,
-          connectome,
+          (*spikeEvents),
+          (*connectome),
           commandQueue
-        ) != SDK_SUCCESS
+        ) != 1
       )
       {
-        throw SimException("IntegrationTest::run: Failed verifyKernelUpdateNeurons");
+        throw SimException("Neurosim::run: Failed verifyKernelUpdateNeurons");
       }
     }
 #else
     if(currentTimeStep < START_PROFILING_AT_STEP)
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
         modelVariables);
-      ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
         dataGroupEventsTik);
         
       if
@@ -4441,13 +4066,13 @@ device modifies it.*/
           dataMakeEventPtrsStruct,
           dataGroupEventsTik,
           modelVariables,
-          spikeEvents,
-          connectome,
+          (*spikeEvents),
+          (*connectome),
           commandQueue
-        ) != SDK_SUCCESS
+        ) != 1
       )
       {
-        throw SimException("IntegrationTest::run: Failed verifyKernelUpdateNeurons");
+        throw SimException("Neurosim::run: Failed verifyKernelUpdateNeurons");
       }
     }
 #endif
@@ -4455,8 +4080,8 @@ device modifies it.*/
 /*END verification during inject of spikes or currents*/
 
 /*Unit test verification*/
-#else
-    ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+#elif UPDATE_NEURONS_VERIFY_ENABLE
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
       modelVariables);
       
     if
@@ -4471,13 +4096,13 @@ device modifies it.*/
         dataMakeEventPtrsStruct,
         dataGroupEventsTik,
         modelVariables,
-        spikeEvents,
-        connectome,
+        (*spikeEvents),
+        (*connectome),
         commandQueue
-      ) != SDK_SUCCESS
+      ) != 1
     )
     {
-      throw SimException("IntegrationTest::run: Failed verifyKernelUpdateNeurons");
+      throw SimException("Neurosim::run: Failed verifyKernelUpdateNeurons");
     }
 #endif
 /*END: verification*/
@@ -4490,9 +4115,9 @@ device modifies it.*/
     EXPAND_EVENTS_ENABLE && UPDATE_NEURONS_ENABLE_V00)
   if(takeSimSnapshot)
   {
-    ENQUEUE_READ_BUFFER(CL_TRUE, modelVariablesBuffer, modelVariablesSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
       modelVariables);
-    ENQUEUE_READ_BUFFER(CL_TRUE, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
       dataGroupEventsTik);
         
     takeSimulationSnapshot
@@ -4502,8 +4127,8 @@ device modifies it.*/
       dataMakeEventPtrsStruct,
       dataGroupEventsTik,
       modelVariables,
-      spikeEvents,
-      synapticEvents,
+      (*spikeEvents),
+      (*synapticEvents),
       commandQueue
     );
   }
@@ -4512,7 +4137,7 @@ device modifies it.*/
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V03
 #if ((GROUP_EVENTS_NEURON_ID_SORT_ITERATIONS%2) == 0)
     /*Restore original buffer pointer for the next step*/
-    swap2(dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
+    swap2((*operatorSort).dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
     swap2(dataGroupEventsTikBuffer, dataGroupEventsTokBuffer);
 #endif
 #endif
@@ -4521,37 +4146,25 @@ device modifies it.*/
   
   std::cout << "\nDispatched all kernels" << std::endl;
   status = commandQueue.flush();
-  if(!sampleCommon->checkVal(status, CL_SUCCESS, "cl::CommandQueue.flush failed."))
-  {
-    throw SimException("IntegrationTest::run: cl::CommandQueue.flush failed");
-  }
+  ASSERT_CL_SUCCESS(status, "Neurosim::run: cl::CommandQueue.flush failed")
+  
   std::cout << "\nEnqueued all kernels" << std::endl;
   std::cout << "\nWaiting for the command queue to complete..." << std::endl;
   eventStatus = CL_QUEUED;
   while(eventStatus != CL_COMPLETE)
   {
     status = ndrEvt.getInfo<cl_int>(CL_EVENT_COMMAND_EXECUTION_STATUS, &eventStatus);
-    if(!sampleCommon->checkVal(status, CL_SUCCESS, 
-      "commandQueue, cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS) failed."))
-    {  
-      throw SimException("IntegrationTest::run: cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS)"
-        " failed");
-    }
+    ASSERT_CL_SUCCESS(status, "Neurosim::run: cl:Event.getInfo(CL_EVENT_COMMAND_EXECUTION_STATUS)"
+      " failed")
   }
   
 #if PROFILING_MODE == 1 && START_PROFILING_AT_STEP > -1
   status = commandQueue.finish();
-  if(!sampleCommon->checkVal(status, CL_SUCCESS, "cl::CommandQueue.finish failed."))
-  {
-    throw SimException("IntegrationTest::run: cl::CommandQueue.finish failed.");
-  }
+  ASSERT_CL_SUCCESS(status, "Neurosim::run: cl::CommandQueue.finish failed.")
   
   status = ndrEvt.wait();
-  endAppTime = timeStampNs();
-  if(!sampleCommon->checkVal(status, CL_SUCCESS, "commandQueue, cl:Event.wait() failed."))
-  {
-    throw SimException("IntegrationTest::run: commandQueue, cl:Event.wait() failed.");
-  }
+  GET_TIME_NS(endAppTime);
+  ASSERT_CL_SUCCESS(status, "Neurosim::run: commandQueue, cl:Event.wait() failed.")
   
   cl_uint profiledSteps = SIMULATION_TIME_STEPS - START_PROFILING_AT_STEP;
   double appTimeSec = (endAppTime - startAppTime);
@@ -4567,7 +4180,7 @@ device modifies it.*/
     
     std::cout << "\nStarted host timing at step " << START_PROFILING_AT_STEP << std::endl;
     
-    startAppTime = timeStampNs();
+    GET_TIME_NS(startAppTime);
     for(cl_uint step = START_PROFILING_AT_STEP; step < SIMULATION_TIME_STEPS; step++)
     {
       int result = propagateSpikes
@@ -4577,12 +4190,11 @@ device modifies it.*/
         nrn_ps,
         ne,
         te_ps,
-        connectome,
-        commandQueue
+        (*connectome)
       );
-      if(result != SDK_SUCCESS)
+      if(result != 1)
       {
-        throw SimException("IntegrationTest::run: propagateSpikes failed.");
+        throw SimException("Neurosim::run: propagateSpikes failed.");
       }
 
       result = updateStep
@@ -4601,12 +4213,14 @@ device modifies it.*/
         UPDATE_NEURONS_NR_ZERO_TOLERANCE
 #endif
       );
-      if(result != SDK_SUCCESS && !IGNORE_SOLVER_EXCEPTIONS)
+#if !IGNORE_SOLVER_EXCEPTIONS
+      if(result != 1)
       {
-        throw SimException("IntegrationTest::run: updateStep failed.");
+        throw SimException("Neurosim::run: updateStep failed.");
       }
+#endif
     }
-    endAppTime = timeStampNs();
+    GET_TIME_NS(endAppTime);
     
     cl_uint profiledSteps = SIMULATION_TIME_STEPS - START_PROFILING_AT_STEP;
     double appTimeSec = (endAppTime - startAppTime);
@@ -4614,7 +4228,7 @@ device modifies it.*/
       << appTimeSec/profiledSteps << " sec/step" << std::endl;
   }
 #endif
-#elif PROFILING_MODE == 2 && START_PROFILING_AT_STEP > -1
+#elif KERNEL_LEVEL_PROFILING
   set<std::string>::iterator kernel_name;
   std::cout << "Kernel execution time profile" << std::endl;
   std::cout << "Kernel Name\t\t\tTotal Time (s)\tCount\tAverage Time (ms)" << std::endl 
@@ -4633,142 +4247,30 @@ device modifies it.*/
     std::cout << *kernel_name << "\t\t" << std::setprecision(3) << execTime["Time"] << "\t\t" 
       << (cl_uint)execTime["Count"] << "\t" << averageTime << std::endl;
     totalExecTime += execTime["Time"];
-    LOG("Kernel " << *kernel_name << " Total Time:" << execTime["Time"], 1);
-    LOG("Kernel " << *kernel_name << " Average Time:" << averageTime, 1);
-    LOG("Kernel " << *kernel_name << " Execution Count:" << (cl_uint)execTime["Count"], 1);
+    LOG_REP("Kernel " << *kernel_name << " Total Time:" << execTime["Time"]);
+    LOG_REP("Kernel " << *kernel_name << " Average Time:" << averageTime);
+    LOG_REP("Kernel " << *kernel_name << " Execution Count:" << (cl_uint)execTime["Count"]);
   }
   std::cout << "Total time: " << totalExecTime << std::endl;
-  LOG("Total Time:" << totalExecTime, 1);
+  LOG_REP("Total Time:" << totalExecTime);
   std::cout.setf(std::ios::scientific,std::ios::floatfield);
 #endif
 
-  return SDK_SUCCESS;
-}
-
-
-
-int 
-IntegrationTest::initialize()
-{
-  /*Call base class Initialize to get default configuration*/
-  if(!this->SDKSample::initialize())
-      return SDK_FAILURE;
-  
-  srandSeed = 1; srandCounter = 0;
-  SET_RANDOM_SEED_DIRECT(srandSeed);
-  
-  time_t rawtime; time ( &rawtime ); startTimeStamp = std::string(ctime (&rawtime));
-
 #if STATISTICS_ENABLE
-  averageEventsInNetwork = 0;
-  averageEventsInNetworkCounter = 0;
-  averageSpikesInNetwork = 0;
-  averageSpikesInNetworkCounter = 0;
+  GET_TIME_NS(this->runTime);
+  this->runTime -= startRunTime;
 #endif
-  
-  
-  
-#ifdef WIN32
-  QueryPerformanceFrequency((LARGE_INTEGER *)&performanceFrequency);
-#endif
-      
-#if (LOG_SIMULATION)
-  simulationLogFile = new std::ofstream(LOG_SIMULATION_FILE_NAME, 
-    std::ofstream::out | std::ofstream::app);
-  dataToSimulationLogFile = new std::stringstream("", std::ios::out | std::ios::app);
-
-  if(!(*simulationLogFile).is_open())
-  {
-    std::cerr << "ERROR, initialize: Unable to open log file";
-    return SDK_FAILURE;
-  }
-  
-  *dataToSimulationLogFile << "-------\n" << startTimeStamp;
-#endif
-
-#if (LOG_REPORT)
-    reportLogFile = new std::ofstream(LOG_REPORT_FILE_NAME);
-    dataToReportLogFile = new std::stringstream("", std::ios::out | std::ios::app);
-
-    if(!(*reportLogFile).is_open())
-    {
-      std::cerr << "ERROR, initialize: Unable to open report file";
-      return SDK_FAILURE;
-    }
-#endif
-
-#if (SIMULATION_SNAPSHOT)
-    snapshotLogFile = new std::ofstream(LOG_SNAPSHOT_FILE_NAME);
-    dataToSnapshotLogFile = new std::stringstream("", std::ios::out | std::ios::app);
-
-    if(!(*snapshotLogFile).is_open())
-    {
-      std::cerr << "ERROR, initialize: Unable to open snapshot log file";
-      return SDK_FAILURE;
-    }
-#endif
-
-  return SDK_SUCCESS;
 }
+/**************************************************************************************************/
 
 
 
 int 
-IntegrationTest::setup()
-{
-  /* create and initialize timers */
-  int timer = sampleCommon->createTimer();
-  sampleCommon->resetTimer(timer);
-  sampleCommon->startTimer(timer);
-
-  if(setupCL() != SDK_SUCCESS)
-      return SDK_FAILURE;
-
-  sampleCommon->stopTimer(timer);
-  /* Compute setup time */
-  setupTime = (double)(sampleCommon->readTimer(timer));
-
-  return SDK_SUCCESS;
-}
-
-
-
-#if 0
-int 
-IntegrationTest::run()
-{
-  /* create and initialize timers */
-  int timer = sampleCommon->createTimer();
-  sampleCommon->resetTimer(timer);
-  sampleCommon->startTimer(timer);
-
-  /* Set kernel arguments and run kernel */
-  if(runCLKernels() != SDK_SUCCESS)
-      return SDK_FAILURE;
-
-  sampleCommon->stopTimer(timer);    
-  /* Compute kernel time */
-  kernelTime = (double)(sampleCommon->readTimer(timer));
-  
-  return SDK_SUCCESS;
-}
-#endif
-
-
-
-int 
-IntegrationTest::verifyResults()
-{
-  return SDK_SUCCESS;
-}
-
-
-
-int 
-IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
+Neurosim::verifyKernelGroupEventsV00
+()
 /**************************************************************************************************/
 {
-  bool result = SDK_SUCCESS;
+  bool result = 1;
 #if GROUP_EVENTS_ENABLE_V00
   {
   cl_uint print = 0;
@@ -4781,17 +4283,16 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
   cl_uint size = GROUP_EVENTS_TIME_SLOTS*(GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE+1);
   cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
-  memcpy(dataOffsetGroupEventsCopy, synapticEvents.dataHistogram, synapticEvents.dataHistogramSizeBytes);
+  memcpy(dataOffsetGroupEventsCopy, (*synapticEvents).dataHistogram, (*synapticEvents).dataHistogramSizeBytes);
   
   /*Init data for verification*/
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
   for(cl_uint i = 0; i < dataHistogramGroupEventsVerifySize; i++)
   {
     dataHistogramGroupEventsVerify[i] = 0;
   }
   
   cl_uint total_synaptic_events = 
-    synapticEvents.dataHistogram[offset+GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
+    (*synapticEvents).dataHistogram[offset+GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
   
   print ? ss << "Total synaptic events: " << total_synaptic_events << std::endl,true : false;
   
@@ -4811,7 +4312,6 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
     wg_chunk_size++;
   }
   wg_chunk_size *= (GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI);
-#endif
 
   for(cl_uint i = 0; i < dataGroupEventsTikVerifySize; i++)
   {
@@ -4821,7 +4321,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
   /*Group events for verification*/
   for(cl_uint b = 0; b < GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS; b++)
   {
-    cl_uint event_total = synapticEvents.dataUnsortedEventCounts[GROUP_EVENTS_TIME_SLOTS*b + currentTimeSlot];
+    cl_uint event_total = (*synapticEvents).dataUnsortedEventCounts[GROUP_EVENTS_TIME_SLOTS*b + currentTimeSlot];
     
     for(cl_uint e = 0; e < event_total; e++)
     {
@@ -4835,7 +4335,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         e;
 
       /*Access event*/
-      cl_uint key = synapticEvents.dataUnsortedEventDelays[ptr];
+      cl_uint key = (*synapticEvents).dataUnsortedEventDelays[ptr];
       
       /*Compute offset key for target neuron*/
       cl_uint bin = (key >> GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00)&
@@ -4851,19 +4351,18 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
 
       /*Check for offset overlap*/
-      if(dataOffsetGroupEventsCopy[bin_offset] >= synapticEvents.dataHistogram[bin_offset+1])
+      if(dataOffsetGroupEventsCopy[bin_offset] >= (*synapticEvents).dataHistogram[bin_offset+1])
       {
         std::cout << "verifyKernelGroupEventsV00: Destination event bin pointer overlaps "
           << "with next pointer for bin " << 
           bin << ", time slot " << currentTimeSlot << ", buffer " << b << std::endl;
-        result = SDK_FAILURE; 
+        result = 0; 
         break;
       }
       
       /*Calculate offset in the grouped data space*/
       cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
         
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
       /*Compute histogram key for target neuron*/
       cl_uint hist_out_ptr = 
         /*WG offset*/
@@ -4880,12 +4379,11 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
       {
         std::cout << "verifyKernelGroupEventsV00: Pointer to an element in output histogram "
           << "is outside of its range" << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
       /*Increment counter for this bin.*/
       dataHistogramGroupEventsVerify[hist_out_ptr]++;
-#endif
       
       /*Store event at its group location (grouped by bins)*/
       dataGroupEventsTikVerify[dest_offset] = key;
@@ -4895,7 +4393,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
       /*Increment ptr for next data item*/
       dataOffsetGroupEventsCopy[bin_offset]++;
     }
-    if(result != SDK_SUCCESS){break;}
+    if(result != 1){break;}
   }
   
   free(dataOffsetGroupEventsCopy);
@@ -4914,8 +4412,8 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
     unsigned long long actual_error_count_target_neuron = 0;
     
     /*Start and end bin ptr*/
-    cl_uint start = synapticEvents.dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
-    cl_uint end = synapticEvents.dataHistogram[offset + (j+1)*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
+    cl_uint start = (*synapticEvents).dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
+    cl_uint end = (*synapticEvents).dataHistogram[offset + (j+1)*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
 
     print ? ss << "Start-End: " << start << "-" << end << std::endl, true : false;
 
@@ -4935,18 +4433,18 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         << "; ", true : false;
 
       CHECKSUM01(verify_checksum_target_neuron, dataGroupEventsTikVerify[p]);
-      //verify_checksum_target_neuron += dataGroupEventsTikVerify[p];
+      /* verify_checksum_target_neuron += dataGroupEventsTikVerify[p]; */
       CHECKSUM01(actual_checksum_target_neuron, dataGroupEventsTik[p]);
-      //actual_checksum_target_neuron += dataGroupEventsTik[p];
+      /*actual_checksum_target_neuron += dataGroupEventsTik[p]; */
 #if GROUP_EVENTS_VALUES_MODE_V00
       CHECKSUM01(verify_checksum_value_01, dataGroupEventsTikVerify[p + 
         GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]);
-      //verify_checksum_value_01 += dataGroupEventsTikVerify[p + 
-      //  GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE];
+      /*verify_checksum_value_01 += dataGroupEventsTikVerify[p + 
+        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]; */
       CHECKSUM01(actual_checksum_value_01, dataGroupEventsTik[p + 
         GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]);
-      //actual_checksum_value_01 += dataGroupEventsTik[p + 
-      //  GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE];
+      /*actual_checksum_value_01 += dataGroupEventsTik[p + 
+        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]; */
 #endif
     }
     
@@ -4958,7 +4456,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         << verify_error_count_target_neuron 
         << " keys out of " << (end-start) << " in verification data in bin " << j 
         << ", time slot " << currentTimeSlot << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
     
     if(actual_error_count_target_neuron)
@@ -4967,7 +4465,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
         << actual_error_count_target_neuron 
         << " keys out of " << (end-start) << " in actual data in bin " << j 
         << ", time slot " << currentTimeSlot << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
     
     if(verify_checksum_target_neuron != actual_checksum_target_neuron)
@@ -4975,7 +4473,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
       std::cout << "verifyKernelGroupEventsV00: Failed to match neuron checksum in bin " 
         << j << ", time slot " 
         << currentTimeSlot << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
 #if GROUP_EVENTS_VALUES_MODE_V00
     if(verify_checksum_value_01 != actual_checksum_value_01)
@@ -4983,18 +4481,18 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
       std::cout << "verifyKernelGroupEventsV00: Failed to match value 01 checksum in bin " 
         << j << ", time slot " 
         << currentTimeSlot << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
 #endif
-    if(print && (result != SDK_SUCCESS))
+    if(print && (result != 1))
     {
       ss << "WG Pointers for bin " << j 
         << "\nWG,Ptr Start,Ptr End,Index,Key Verified,Key Actual,F/P" << std::endl;
         
       for(cl_uint w = 0; w < GROUP_EVENTS_HISTOGRAM_BIN_SIZE; w++)
       {
-        cl_uint start = synapticEvents.dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + w];
-        cl_uint end = synapticEvents.dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + w + 1] - 1;
+        cl_uint start = (*synapticEvents).dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + w];
+        cl_uint end = (*synapticEvents).dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + w + 1] - 1;
           
         for(cl_uint p = start; p < end; p++)
         {
@@ -5009,13 +4507,12 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
       }
     }
     
-    if(result != SDK_SUCCESS){break;}
+    if(result != 1){break;}
   }
   
   print ? ss << std::endl, true : false;
   
   /*Verify event data*/
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
   for(cl_uint w = 0; w < (GROUP_EVENTS_GRID_SIZE_WG); w++)
   {
     for(cl_uint b = 0; b < (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT); b++)
@@ -5033,9 +4530,9 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
           /*bin*/
           b*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
         CHECKSUM01(verify_checksum_histogram_out, dataHistogramGroupEventsVerify[p]);
-        //verify_checksum_histogram_out += dataHistogramGroupEventsVerify[p];
-        CHECKSUM01(actual_checksum_histogram_out, dataHistogramGroupEventsTik[p]);
-        //actual_checksum_histogram_out += dataHistogramGroupEventsTik[p];
+        /*verify_checksum_histogram_out += dataHistogramGroupEventsVerify[p]; */
+        CHECKSUM01(actual_checksum_histogram_out, (*operatorSort).dataHistogramGroupEventsTik[p]);
+        /*actual_checksum_histogram_out += (*operatorSort).dataHistogramGroupEventsTik[p]; */
       }
       
       /*Verify*/
@@ -5043,7 +4540,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
       {
         std::cout << "verifyKernelGroupEventsV00: Failed to match output histogram checksum in bin " 
           << b << ", WG " << w << ", time slot " << currentTimeSlot << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         print ? ss << "Output histogram:" << std::endl, true : false;
         for(cl_uint j = 0; j < (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE); j++)
         {
@@ -5055,15 +4552,15 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
             /*bin*/
             b*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
           print ? ss << p << "," << dataHistogramGroupEventsVerify[p] << ","
-            << dataHistogramGroupEventsTik[p] << std::endl, true : false;
+            << (*operatorSort).dataHistogramGroupEventsTik[p] << std::endl, true : false;
         }
         break;
       }
     }
-    if(result != SDK_SUCCESS){break;}
+    if(result != 1){break;}
   }
-#endif
-  if(print){LOG(ss.str(), 0);}
+
+  if(print){LOG_SIM(ss.str());}
   }
 #endif
   return result;
@@ -5073,7 +4570,7 @@ IntegrationTest::verifyKernelGroupEventsV00(cl_uint keyOffset)
 
 
 int 
-IntegrationTest::verifyKernelGroupEvents
+Neurosim::verifyKernelGroupEvents
 (
   cl_uint verifyKeyBins,
   cl_uint timeSlot,
@@ -5081,7 +4578,6 @@ IntegrationTest::verifyKernelGroupEvents
   cl_uint value1CarryEnable,
   cl_uint value2CarryEnable,
   cl_uint stepShiftEnable,
-  cl_uint elementSizeWords,
   cl_uint destinationBufferSize,
   cl_uint histogramBinSize,
   cl_uint histogramTotalBins,
@@ -5098,7 +4594,7 @@ IntegrationTest::verifyKernelGroupEvents
 )
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
   bool print = false;
   
   print ? std::cout << "Time slot " << timeSlot << ": " << std::endl, true : false;
@@ -5148,22 +4644,22 @@ IntegrationTest::verifyKernelGroupEvents
         actual_error_count_target_neuron += (a_key != j);
       }
       CHECKSUM01(verify_checksum_target_neuron, dataGroupedEventsVerify[p]);
-      //verify_checksum_target_neuron += dataGroupedEventsVerify[p];
+      /*verify_checksum_target_neuron += dataGroupedEventsVerify[p]; */
       CHECKSUM01(actual_checksum_target_neuron, dataGroupedEvents[p]);
-      //actual_checksum_target_neuron += dataGroupedEvents[p];
+      /*actual_checksum_target_neuron += dataGroupedEvents[p]; */
       if(value1CarryEnable)
       {
         CHECKSUM01(verify_checksum_value_01, dataGroupedEventsVerify[destinationBufferSize + p]);
-        //verify_checksum_value_01 += dataGroupedEventsVerify[destinationBufferSize + p];
+        /*verify_checksum_value_01 += dataGroupedEventsVerify[destinationBufferSize + p]; */
         CHECKSUM01(actual_checksum_value_01, dataGroupedEvents[destinationBufferSize + p]);
-        //actual_checksum_value_01 += dataGroupedEvents[destinationBufferSize + p];
+        /*actual_checksum_value_01 += dataGroupedEvents[destinationBufferSize + p]; */
       }
       if(value2CarryEnable)
       {
         CHECKSUM01(verify_checksum_value_02, dataGroupedEventsVerify[2*destinationBufferSize + p]);
-        //verify_checksum_value_02 += dataGroupedEventsVerify[2*destinationBufferSize + p];
+        /*verify_checksum_value_02 += dataGroupedEventsVerify[2*destinationBufferSize + p]; */
         CHECKSUM01(actual_checksum_value_02, dataGroupedEvents[2*destinationBufferSize + p]);
-        //actual_checksum_value_02 += dataGroupedEvents[2*destinationBufferSize + p];
+        /*actual_checksum_value_02 += dataGroupedEvents[2*destinationBufferSize + p]; */
       }
     }
     
@@ -5175,7 +4671,7 @@ IntegrationTest::verifyKernelGroupEvents
         << verify_error_count_target_neuron 
         << " keys out of " << (end-start) << " in verification data in bin " << j 
         << ", time slot " << timeSlot << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     
@@ -5185,7 +4681,7 @@ IntegrationTest::verifyKernelGroupEvents
         << actual_error_count_target_neuron 
         << " keys out of " << (end-start) << " in actual data in bin " << j 
         << ", time slot " << timeSlot << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     }
@@ -5194,7 +4690,7 @@ IntegrationTest::verifyKernelGroupEvents
     {
       std::cout << "verifyKernelGroupEvents: Failed to match neuron checksum in bin " 
         << j << ", time slot " << timeSlot << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     if(value1CarryEnable && (verify_checksum_value_01 != actual_checksum_value_01))
@@ -5202,7 +4698,7 @@ IntegrationTest::verifyKernelGroupEvents
       std::cout << "verifyKernelGroupEvents: Failed to match value 01 checksum in bin " 
         << j << ", time slot " 
         << timeSlot << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     if(value2CarryEnable && (verify_checksum_value_02 != actual_checksum_value_02))
@@ -5210,7 +4706,7 @@ IntegrationTest::verifyKernelGroupEvents
       std::cout << "verifyKernelGroupEvents: Failed to match value 02 checksum in bin " 
         << j << ", time slot " 
         << timeSlot << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     /*
@@ -5218,12 +4714,11 @@ IntegrationTest::verifyKernelGroupEvents
     */
   }
   
-  if(result != SDK_SUCCESS){return result;}
+  if(result != 1){return result;}
   
   print ? std::cout << std::endl, true : false;
   
   /*Verify event data*/
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
   if(dataHistogramOutVerify != NULL)
   {
   for(cl_uint w = 0; w < (groupSize); w++)
@@ -5242,23 +4737,22 @@ IntegrationTest::verifyKernelGroupEvents
           /*bin*/
           b*histogramOutTotalGroups;
         CHECKSUM01(verify_checksum_histogram_out, dataHistogramOutVerify[p]);
-        //verify_checksum_histogram_out += dataHistogramOutVerify[p];
+        /*verify_checksum_histogram_out += dataHistogramOutVerify[p]; */
         CHECKSUM01(actual_checksum_histogram_out, dataHistogramOut[p]);
-        //actual_checksum_histogram_out += dataHistogramOut[p];
+        /*actual_checksum_histogram_out += dataHistogramOut[p]; */
       }
       /*Verify*/
       if(verify_checksum_histogram_out != actual_checksum_histogram_out)
       {
         std::cout << "verifyKernelGroupEvents: Failed to match output histogram checksum in bin "
           << b << ", WG " << w << ", time slot " << currentTimeSlot << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
     }
-    if(result != SDK_SUCCESS){break;}
+    if(result != 1){break;}
   }
   }
-#endif
 
   return result;
 }
@@ -5266,25 +4760,24 @@ IntegrationTest::verifyKernelGroupEvents
 
 
 
+#if GROUP_EVENTS_ENABLE_V01
 int 
-IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
+Neurosim::verifyKernelGroupEventsV01(cl_uint step)
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
   
-#if GROUP_EVENTS_ENABLE_V01
   /* allocate memory for offset copies used in verification data generation*/
   cl_uint size = GROUP_EVENTS_GRID_SIZE_WG*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
   cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
-  memcpy(dataOffsetGroupEventsCopy, dataHistogramGroupEventsTik, 
-    dataHistogramGroupEventsTikSizeBytes);
+  memcpy(dataOffsetGroupEventsCopy, (*operatorSort).dataHistogramGroupEventsTik, 
+    (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
   
-  cl_uint event_total = dataHistogramGroupEventsTik[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
+  cl_uint event_total = (*operatorSort).dataHistogramGroupEventsTik[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
     
   /*Init data for verification*/
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
   /*Compute total chunks for grid*/
   cl_uint total_synaptic_event_chunks = event_total/(GROUP_EVENTS_WG_SIZE_WI*
     GROUP_EVENTS_ELEMENTS_PER_WI);
@@ -5313,7 +4806,7 @@ IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
   {
     dataHistogramGroupEventsVerify[i] = 0;
   }
-#endif
+
   for(cl_uint i = 0; i < dataGroupEventsTikVerifySize; i++)
   {
     dataGroupEventsTikVerify[i] = 0;
@@ -5346,19 +4839,18 @@ IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
     bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
 
     /*Check for offset overlap*/
-    if(dataOffsetGroupEventsCopy[bin_offset] >= dataHistogramGroupEventsTik[bin_offset+1])
+    if(dataOffsetGroupEventsCopy[bin_offset] >= (*operatorSort).dataHistogramGroupEventsTik[bin_offset+1])
     {
       std::cout << "verifyKernelGroupEventsV01: Destination event bin pointer overlaps "
       << "with next pointer for bin " << bin << ", time slot " << currentTimeSlot << ", WG " 
       << wg_id << ", pointer " << e << ", sort step " << step << std::endl;
-      result = SDK_FAILURE; 
+      result = 0; 
       break;
     }
     
     /*Calculate offset in the grouped data space*/
     cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
-      
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
+
     /*Compute histogram key for target neuron*/
     cl_uint hist_out_ptr = 
       /*WG offset*/
@@ -5379,12 +4871,11 @@ IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
     {
       std::cout << "verifyKernelGroupEventsV01: Pointer to an element in output histogram is "
         << "outside of its range" << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     /*Increment counter for this bin.*/
     dataHistogramGroupEventsVerify[hist_out_ptr]++;
-#endif
     
     /*Store event at its group location (grouped by bins)*/
     dataGroupEventsTikVerify[dest_offset] = key;
@@ -5398,7 +4889,7 @@ IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
   }
   
   free(dataOffsetGroupEventsCopy);
-  if(result != SDK_SUCCESS){return result;}
+  if(result != 1){return result;}
 
   result = verifyKernelGroupEvents
   (
@@ -5408,7 +4899,6 @@ IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
     GROUP_EVENTS_VALUES_MODE_V01,
     0,
     GROUP_EVENTS_ENABLE_STEP_SHIFT_V01,
-    GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
     GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
@@ -5417,39 +4907,38 @@ IntegrationTest::verifyKernelGroupEventsV01(cl_uint step)
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT,
     GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
     GROUP_EVENTS_GRID_SIZE_WG,
-    dataHistogramGroupEventsTik,
+    (*operatorSort).dataHistogramGroupEventsTik,
     dataHistogramGroupEventsTok,
     dataHistogramGroupEventsVerify,
     dataGroupEventsTok,
     dataGroupEventsTikVerify
   );
   
-#endif
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
+#if GROUP_EVENTS_ENABLE_V02
 int 
-IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
+Neurosim::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
   
-#if GROUP_EVENTS_ENABLE_V02
   /* allocate memory for offset copies used in verification data generation*/
   cl_uint size = GROUP_EVENTS_GRID_SIZE_WG*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
   cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
-  memcpy(dataOffsetGroupEventsCopy, dataHistogramGroupEventsTik, 
-    dataHistogramGroupEventsTikSizeBytes);
+  memcpy(dataOffsetGroupEventsCopy, (*operatorSort).dataHistogramGroupEventsTik, 
+    (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
     
-  cl_uint event_total = dataHistogramGroupEventsTik[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
+  cl_uint event_total = (*operatorSort).dataHistogramGroupEventsTik[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
     
   /*Init data for verification*/
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
   /*Compute total chunks for grid*/
   cl_uint total_synaptic_event_chunks = event_total/(GROUP_EVENTS_WG_SIZE_WI*
     GROUP_EVENTS_ELEMENTS_PER_WI);
@@ -5478,7 +4967,7 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
   {
     dataHistogramGroupEventsVerify[i] = 0;
   }
-#endif
+
   for(cl_uint i = 0; i < dataGroupEventsTikVerifySize; i++)
   {
     dataGroupEventsTikVerify[i] = 0;
@@ -5490,7 +4979,7 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
     /*Access event*/
     cl_uint key = dataGroupEventsTik[e];
     cl_uint value = dataGroupEventsTik[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + e];
-    cl_uint new_key = synapticEvents.dataUnsortedEventTargets[value+keyOffset];
+    cl_uint new_key = (*synapticEvents).dataUnsortedEventTargets[value+keyOffset];
     
     /*Compute WG which is working on this element*/
     cl_uint wg_id = e/(total_wg_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI));
@@ -5512,19 +5001,18 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
     bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
 
     /*Check for offset overlap*/
-    if(dataOffsetGroupEventsCopy[bin_offset] >= dataHistogramGroupEventsTik[bin_offset+1])
+    if(dataOffsetGroupEventsCopy[bin_offset] >= (*operatorSort).dataHistogramGroupEventsTik[bin_offset+1])
     {
       std::cout << "verifyKernelGroupEventsV02: Destination event bin pointer overlaps "
       << "with next pointer for bin " << bin << ", time slot " << currentTimeSlot << ", WG " 
       << wg_id << ", pointer " << e << std::endl;
-      result = SDK_FAILURE; 
+      result = 0; 
       break;
     }
     
     /*Calculate offset in the grouped data space*/
     cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
       
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
     /*Compute histogram key for target neuron*/
     cl_uint hist_out_ptr = 
       /*WG offset*/
@@ -5545,12 +5033,11 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
     {
       std::cout << "verifyKernelGroupEventsV02: Pointer to an element in output histogram is "
         << "outside of its range" << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     /*Increment counter for this bin.*/
     dataHistogramGroupEventsVerify[hist_out_ptr]++;
-#endif
     
     /*Store event at its group location (grouped by bins)*/
     dataGroupEventsTikVerify[dest_offset] = new_key;
@@ -5561,7 +5048,7 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
   }
   
   free(dataOffsetGroupEventsCopy);
-  if(result != SDK_SUCCESS){return result;}
+  if(result != 1){return result;}
 
   result = verifyKernelGroupEvents
   (
@@ -5571,7 +5058,6 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
     GROUP_EVENTS_VALUES_MODE_V02,
     0,
     GROUP_EVENTS_ENABLE_STEP_SHIFT_V02,
-    GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
     GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
@@ -5580,36 +5066,35 @@ IntegrationTest::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT,
     GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
     GROUP_EVENTS_GRID_SIZE_WG,
-    dataHistogramGroupEventsTik,
+    (*operatorSort).dataHistogramGroupEventsTik,
     dataHistogramGroupEventsTok,
     dataHistogramGroupEventsVerify,
     dataGroupEventsTok,
     dataGroupEventsTikVerify
   );
-  
-#endif
 
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
+#if GROUP_EVENTS_ENABLE_V03
 int 
-IntegrationTest::verifyKernelGroupEventsV03(cl_uint step)
+Neurosim::verifyKernelGroupEventsV03(cl_uint step)
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
   
-#if GROUP_EVENTS_ENABLE_V03
   /* allocate memory for offset copies used in verification data generation*/
   cl_uint size = GROUP_EVENTS_GRID_SIZE_WG*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
   cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
-  memcpy(dataOffsetGroupEventsCopy, dataHistogramGroupEventsTik, 
-    dataHistogramGroupEventsTikSizeBytes);
+  memcpy(dataOffsetGroupEventsCopy, (*operatorSort).dataHistogramGroupEventsTik, 
+    (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
     
-  cl_uint event_total = dataHistogramGroupEventsTik[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
+  cl_uint event_total = (*operatorSort).dataHistogramGroupEventsTik[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
     
   /*Init data for verification*/
@@ -5661,12 +5146,12 @@ IntegrationTest::verifyKernelGroupEventsV03(cl_uint step)
     bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
 
     /*Check for offset overlap*/
-    if(dataOffsetGroupEventsCopy[bin_offset] >= dataHistogramGroupEventsTik[bin_offset+1])
+    if(dataOffsetGroupEventsCopy[bin_offset] >= (*operatorSort).dataHistogramGroupEventsTik[bin_offset+1])
     {
       std::cout << "verifyKernelGroupEventsV03: Destination event bin pointer overlaps "
       << "with next pointer for bin " << bin << ", time slot " << currentTimeSlot << ", WG " 
       << wg_id << ", pointer " << e << std::endl;
-      result = SDK_FAILURE; 
+      result = 0; 
       break;
     }
     
@@ -5676,16 +5161,16 @@ IntegrationTest::verifyKernelGroupEventsV03(cl_uint step)
     /*Store event at its group location (grouped by bins)*/
     dataGroupEventsTikVerify[dest_offset] = key;
     dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = 
-      synapticEvents.dataUnsortedEventDelays[valuePtr];
+      (*synapticEvents).dataUnsortedEventDelays[valuePtr];
     dataGroupEventsTikVerify[2*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = 
-      synapticEvents.dataUnsortedEventWeights[valuePtr];
+      (*synapticEvents).dataUnsortedEventWeights[valuePtr];
     
     /*Increment ptr for next data item*/
     dataOffsetGroupEventsCopy[bin_offset]++;
   }
   
   free(dataOffsetGroupEventsCopy);
-  if(result != SDK_SUCCESS){return result;}
+  if(result != 1){return result;}
 
   result = verifyKernelGroupEvents
   (
@@ -5695,7 +5180,6 @@ IntegrationTest::verifyKernelGroupEventsV03(cl_uint step)
     GROUP_EVENTS_VALUES_MODE_V03,
     1,
     GROUP_EVENTS_ENABLE_STEP_SHIFT_V03,
-    GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
     GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
     GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
@@ -5704,28 +5188,27 @@ IntegrationTest::verifyKernelGroupEventsV03(cl_uint step)
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT,
     GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
     GROUP_EVENTS_GRID_SIZE_WG,
-    dataHistogramGroupEventsTik,
+    (*operatorSort).dataHistogramGroupEventsTik,
     dataHistogramGroupEventsTok,
     NULL,
     dataGroupEventsTok,
     dataGroupEventsTikVerify
   );
-  
-#endif
 
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
+#if MAKE_EVENT_PTRS_ENABLE
 int 
-IntegrationTest::verifyKernelMakeEventPtrs()
+Neurosim::verifyKernelMakeEventPtrs()
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
   
-#if MAKE_EVENT_PTRS_ENABLE
   /*Load total event for the test*/
   cl_uint totalEvents = dataHistogramGroupEventsTok[MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET];
 
@@ -5746,7 +5229,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
 
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
 
-  if(result == SDK_SUCCESS)
+  if(result == 1)
   {
     if(!totalEvents)
     {
@@ -5758,7 +5241,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
         {
           std::cerr << "ERROR, verifyKernelMakeEventPtrs, found non-zero count for neuron ID " 
             << j << ": " << ptr << "->" << count << std::endl;
-          result = SDK_FAILURE;
+          result = 0;
           break;
         }
       }
@@ -5774,7 +5257,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
           std::cerr << "ERROR, verifyKernelMakeEventPtrs, found non-zero neuron ID or pointer " 
             << "in inter-WF boundary handler structure for element " << j << ": " << nrnId 
             << "->" << ptr << std::endl;
-          result = SDK_FAILURE;
+          result = 0;
           break;
         }
       }
@@ -5808,7 +5291,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
               << dataGroupEventsTik[j] << ": pointer (" << offsetVerify << " vs " << j 
               << "), count (" << countVerify << " vs " << j-previousElementOffset << ")"
               << std::endl;
-            result = SDK_FAILURE;
+            result = 0;
           }
           
           previousElement = dataGroupEventsTik[j];
@@ -5842,7 +5325,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
       std::cerr << "ERROR, verifyKernelMakeEventPtrs, stored limit address doesn't match actual: "
         << firstAddress << " vs " << limitAddress << " in struct # " << i << " with pointer count " 
         << count << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
   }
@@ -5857,7 +5340,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
   cl_uint error = (dataGroupEventsTik[j] != dataMakeEventPtrsStruct[1 + offsetPtr]) && count;
   error += (j != dataMakeEventPtrsStruct[1 + offsetPtr + 1]) && count;
   
-  if(!error && (result != SDK_FAILURE))
+  if(!error && (result != 0))
   {
     for(j = 1; j < totalEvents; j++)
     {
@@ -5875,7 +5358,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
             std::cerr << "ERROR, verifyKernelMakeEventPtrs, stored count doesn't match actual "
               << "count for WF " << wf << ": " << count << " != " << wfDataIter[wf]
               << std::endl;
-            result = SDK_FAILURE;
+            result = 0;
             break;
           }
           
@@ -5907,25 +5390,25 @@ IntegrationTest::verifyKernelMakeEventPtrs()
       << ", value " << j << " vs " 
       << dataMakeEventPtrsStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*wf + 1 + offsetPtr + 1] 
       << std::endl;
-    result = SDK_FAILURE;
+    result = 0;
   }
   
   /*Verify total count match*/
-  if(result != SDK_FAILURE && totalCountsVerifyStruct != totalCountsVerifyOriginal)
+  if(result != 0 && totalCountsVerifyStruct != totalCountsVerifyOriginal)
   {
     std::cerr << "ERROR, verifyKernelMakeEventPtrs, sum of pointer counters in all structs "
       << "doesn't match total in original data: " << totalCountsVerifyStruct << " vs " 
       << totalCountsVerifyOriginal << std::endl;
-    result = SDK_FAILURE;
+    result = 0;
   }
 
   free(wfDataIter);
-#endif
 #endif
 
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
@@ -5933,7 +5416,7 @@ IntegrationTest::verifyKernelMakeEventPtrs()
   Inject sorted synaptic events into event queue
 */
 int 
-IntegrationTest::injectSortedEvents
+Neurosim::injectSortedEvents
 (
   bool          verify,
   bool          resetEventBuffer,
@@ -5947,7 +5430,7 @@ IntegrationTest::injectSortedEvents
 )
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
 
   /*Clear input buffers*/
   if(resetEventBuffer)
@@ -5965,7 +5448,7 @@ IntegrationTest::injectSortedEvents
     {
       std::cerr << "ERROR, injectSortedEvents, detected event queue overflow for nID " 
         << nId << ": " << count << " >= " << eventQueueSize << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     
@@ -5973,7 +5456,7 @@ IntegrationTest::injectSortedEvents
     {
       std::cerr << "ERROR, injectSortedEvents, detected another entry for  " 
         << nId << " with count " << nrn[nId].n_in << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     
@@ -5988,7 +5471,7 @@ IntegrationTest::injectSortedEvents
         std::cerr 
           << "ERROR, injectSortedEvents, detected address violation in access to sortedEvents: " 
           << p << " > " << sortedEventsSize << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
 
@@ -6002,7 +5485,7 @@ IntegrationTest::injectSortedEvents
           std::cerr << "ERROR, injectSortedEvents, detected violation of time sort order for neuron ID " 
             << nId << ": " << t << " < " << *((cl_float *)(&sortedEvents[p-1 + sortedEventsSize])) 
             << std::endl;
-          result = SDK_FAILURE;
+          result = 0;
           break;
         }
         
@@ -6010,7 +5493,7 @@ IntegrationTest::injectSortedEvents
         {
           std::cerr << "ERROR, injectSortedEvents, detected event time outside of bounds for neuron "
             << nId << ": " << t << " is not within (0.0, 1.0)" << std::endl;
-          result = SDK_FAILURE;
+          result = 0;
           break;
         }
       }
@@ -6018,7 +5501,7 @@ IntegrationTest::injectSortedEvents
       nrn[nId].in_t[j] = t;
       nrn[nId].in_w[j] = w;
     }
-    if(result != SDK_SUCCESS){break;}
+    if(result != 1){break;}
   }
 
   return result;
@@ -6031,12 +5514,11 @@ IntegrationTest::injectSortedEvents
   Inject unsorted synaptic events into event queue
 */
 int 
-IntegrationTest::injectUnsortedEvents
+Neurosim::injectUnsortedEvents
 (
   cl_uint       timeSlots,
   cl_uint       buffers,
   cl_uint       bufferSize,
-  cl_uint       totalNeurons,
   cl_uint       eventQueueSize,
   cl_uint       *dataUnsortedEventCounts,
   cl_uint       *dataUnsortedEventTargets,
@@ -6046,13 +5528,13 @@ IntegrationTest::injectUnsortedEvents
 )
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
 
   for(cl_uint s = 0; s < timeSlots; s++)
   {
     for(cl_uint b = 0; b < buffers; b++)
     {
-      int total = dataUnsortedEventCounts[timeSlots*b + s];
+      cl_uint total = dataUnsortedEventCounts[timeSlots*b + s];
       
       cl_uint ptr = 
         /*Event data buffers*/
@@ -6061,7 +5543,7 @@ IntegrationTest::injectUnsortedEvents
         /*Current event data buffer*/
         s * bufferSize;
 
-      for(int e = 0; e < total; e++)
+      for(cl_uint e = 0; e < total; e++)
       {
         cl_float w = *((cl_float *)(&dataUnsortedEventWeights[ptr + e]));
         cl_float t = *((cl_float *)(&dataUnsortedEventDelays[ptr + e])) + s + 1;
@@ -6090,13 +5572,13 @@ IntegrationTest::injectUnsortedEvents
         {
           std::cerr << "ERROR, injectUnsortedEvents, detected event queue overflow for nID " 
             << k << ": " << n_in << " >= " << eventQueueSize << std::endl;
-          result = SDK_FAILURE;
+          result = 0;
           break;
         }
       }
-      if(result != SDK_SUCCESS){break;}
+      if(result != 1){break;}
     }
-    if(result != SDK_SUCCESS){break;}
+    if(result != 1){break;}
   }
   
   return result;
@@ -6109,22 +5591,19 @@ IntegrationTest::injectUnsortedEvents
   Propagation of spike events to synaptic events for PS method
 */
 int 
-IntegrationTest::propagateSpikes
+Neurosim::propagateSpikes
 (
   unsigned int      totalNeurons,
   unsigned int      eventQueueSize,
   neuron_iz_ps      *nrn,
   int               *ne,
   DATA_TYPE         *te,
-  Connectome        &connectome,
-  cl::CommandQueue  &queue
+  Data_Connectome   &connectome
 )
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
   
-  try
-  {
 #if !FLIXIBLE_DELAYS_ENABLE
   /*Clear input buffers*/
   for(unsigned int i = 0; i < totalNeurons; i++){nrn[i].n_in = 0;}
@@ -6136,14 +5615,14 @@ IntegrationTest::propagateSpikes
     /*Detect if source neuron spiked*/
     if(--ne[i] == 0)
     {
-      unsigned int ptrEnd = connectome.getSynapseCount(queue, i);
+      unsigned int ptrEnd = connectome.getSynapseCount(i);
 
       /*Iterate over target neurons of this source neuron*/
       for(unsigned int s = 0; s < ptrEnd; s++)
       {
         /*Get synapse data*/
         unsigned int n_event = 0; DATA_TYPE t_event = 0; DATA_TYPE w_event = 0;
-        connectome.getSynapse(queue, i, s, n_event, t_event, w_event);
+        connectome.getSynapse(i, s, n_event, t_event, w_event);
         
         unsigned int n_in = nrn[n_event].n_in;
         
@@ -6172,29 +5651,27 @@ IntegrationTest::propagateSpikes
         {
           std::cerr << "ERROR, propagateSpikes, detected event queue overflow for neuron ID " 
             << n_event << ": " << n_in << " >= " << eventQueueSize << std::endl;
-          result = SDK_FAILURE;
+          result = 0;
           break;
         }
       }
-      if(result != SDK_SUCCESS){break;}
+      if(result != 1){break;}
     }
   }
   
 #if FLIXIBLE_DELAYS_ENABLE
-  if(result == SDK_SUCCESS)
+  if(result == 1)
   {
     /*Decrement synaptic events: */
     for(unsigned int i = 0; i < totalNeurons; i++)
     {
-      for(int j = 0; j < nrn[i].n_in; j++)
+      for(unsigned int j = 0; j < nrn[i].n_in; j++)
       {
         nrn[i].in_t[j] = nrn[i].in_t[j] - 1.0f;
       }
     }
   }
 #endif
-  }
-  CATCH(std::cerr, propagateSpikes, return SDK_FAILURE;)
 
   return result;
 }
@@ -6206,7 +5683,7 @@ IntegrationTest::propagateSpikes
   Verification of synaptic event between host and device.
 */
 int 
-IntegrationTest::verifyEvents
+Neurosim::verifyEvents
 (
   bool          ignoreWarnings,
   bool          correctWeightPositionMismatch,
@@ -6219,7 +5696,7 @@ IntegrationTest::verifyEvents
 )
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
+  int result = 1;
 
   /*Iterate over neurons*/
   for(unsigned int nH = 0; nH < totalNeurons; nH++)
@@ -6243,7 +5720,7 @@ IntegrationTest::verifyEvents
       {
         std::cerr << "ERROR, verifyEvents, event count mismatch 1 for neuron " << nH << ": " 
           << e+1 << " != " << entryCount << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
       
@@ -6255,7 +5732,7 @@ IntegrationTest::verifyEvents
       if(nH != nD)
       {
         std::cerr << "ERROR, verifyEvents, neuron ID mismatch: " << nH << " != " << nD << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
       /*Verify event time*/
@@ -6264,10 +5741,10 @@ IntegrationTest::verifyEvents
         std::cerr << "ERROR, verifyEvents, event time mismatch for neuron " << nH << ": " 
           << tH << " != " << tD << " ("; PRINT_HEX(4, tH); std::cerr << " != "; PRINT_HEX(4, tD);
           std::cerr << ")" << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
-      if(result == SDK_FAILURE){break;}
+      if(result == 0){break;}
       /*Verify event weight*/
       if(wH != wD)
       {
@@ -6322,14 +5799,14 @@ IntegrationTest::verifyEvents
                 
               std::cerr << "ERROR, verifyEvents, unable to find matched weight for neuron " << nH 
                 << ": " << w << std::endl;
-              result = SDK_FAILURE;
+              result = 0;
               break;
             }
           }
 
           free(weightCheck);
           
-          if(result != SDK_FAILURE)
+          if(result != 0)
           {
             if(correctWeightPositionMismatch)
             {
@@ -6349,18 +5826,18 @@ IntegrationTest::verifyEvents
         {
           std::cerr << "ERROR, verifyEvents, event weight mismatch for neuron " << nH << ": " 
             << wH << " != " << wD << std::endl;
-          result = SDK_FAILURE;
+          result = 0;
           break;
         }
       }
     }
-    if(result == SDK_FAILURE){break;}
+    if(result == 0){break;}
     
-    if(result == SDK_SUCCESS && e != entryCount)
+    if(result == 1 && e != entryCount)
     {
       std::cerr << "ERROR, verifyEvents, event count mismatch 2 for neuron " << nH << ": " 
         << e << " != " << entryCount << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
   }
@@ -6375,7 +5852,7 @@ IntegrationTest::verifyEvents
   Main stepper routine for PS method on Izhikevich neuron - runs full step
 */
 int 
-IntegrationTest::stepIzPs
+Neurosim::stepIzPs
 (
   DATA_TYPE **yp, 
   DATA_TYPE **co, 
@@ -6400,7 +5877,7 @@ IntegrationTest::stepIzPs
 /**************************************************************************************************/
 {
 #define PRINT_stepIzPs                                                        (SIMULATION_MODE == 0)
-	int result = SDK_SUCCESS;
+	int result = 1;
   
   DATA_TYPE v,u,g_ampa,g_gaba,chi,E_ampa,E_gaba,t,start;
 	DATA_TYPE k,a,b,E,I,vnew,dv,dx,dx_old,dt_part,dt_full,dt; 
@@ -6460,7 +5937,7 @@ IntegrationTest::stepIzPs
 #if PRINT_stepIzPs
     std::cerr << "WARNING, stepIzPs, PS step diverged for neuron " << nrn_ind << std::endl;
 #endif
-    result = SDK_FAILURE;
+    result = 0;
   }
   
 	if(ps_order >= ps_order_limit)
@@ -6469,7 +5946,7 @@ IntegrationTest::stepIzPs
     std::cerr << "WARNING, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
 #endif
     ps_order = ps_order_limit-1;
-    result = SDK_FAILURE;
+    result = 0;
   }
 
 #if STATISTICS_ENABLE
@@ -6512,7 +5989,7 @@ IntegrationTest::stepIzPs
       std::cerr << "WARNING, stepIzPs, failed NR tolerance for neuron ID: " << nrn_ind 
         << std::endl;
 #endif
-      result = SDK_FAILURE;
+      result = 0;
     }
 
 		if(dt_part>dt_full || dt_part<0)
@@ -6522,7 +5999,7 @@ IntegrationTest::stepIzPs
       std::cerr << "WARNING, stepIzPs, detected NR divergence for neuron ID: " << nrn_ind 
         << std::endl;
 #endif
-      result = SDK_FAILURE;
+      result = 0;
     }
     
 #if STATISTICS_ENABLE
@@ -6580,7 +6057,7 @@ IntegrationTest::stepIzPs
 #if PRINT_stepIzPs
       std::cerr << "WARNING, stepIzPs, PS step diverged for neuron " << nrn_ind << std::endl;
 #endif
-      result = SDK_FAILURE;
+      result = 0;
     }
     
     if(ps_order >= ps_order_limit)
@@ -6589,7 +6066,7 @@ IntegrationTest::stepIzPs
       std::cerr << "WARNING, stepIzPs, PS order limit overflow: " << ps_order << std::endl;
 #endif
       ps_order = ps_order_limit-1;
-      result = SDK_FAILURE;
+      result = 0;
     }
 
 #if STATISTICS_ENABLE
@@ -6614,25 +6091,27 @@ IntegrationTest::stepIzPs
 
 
 
+#if UPDATE_NEURONS_ENABLE_V00
 int 
-IntegrationTest::updateStep
+Neurosim::updateStep
 (
   bool    ignoreFailures,
   int     injectCurrentUntilStep,
   cl_uint currentTimeStep,
   cl_uint totalNeurons,
-  cl_uint psOrderLimit,
-  cl_uint nrOrderLimit,
+  int     psOrderLimit,
+  int     nrOrderLimit,
   double  nrTolerance
 )
 /**************************************************************************************************/
 {
 #define PRINT_updateStep                                                           STATISTICS_ENABLE
-  int result = SDK_SUCCESS;
-  int nrn_ind, substep;
+  int result = 1;
+  int nrn_ind;
 
 #if STATISTICS_ENABLE
-  int totalSpikes = 0, max_order_ps = 0, max_events = 0;
+  int totalSpikes = 0, max_order_ps = 0;
+  unsigned int max_events = 0;
   unsigned long long psStepCount = 0, eventCount = 0;
   DATA_TYPE   mu_order_ps = 0.0;
 #endif
@@ -6659,9 +6138,9 @@ IntegrationTest::updateStep
 
   nrnx_ps = nrn_ps + totalNeurons;
   
-  if((injectCurrentUntilStep > 0) && (currentTimeStep == injectCurrentUntilStep))
+  if((injectCurrentUntilStep > 0) && (currentTimeStep == (cl_uint)injectCurrentUntilStep))
   {
-    for(nrnp_ps=nrn_ps;nrnp_ps<nrnx_ps;nrnp_ps++)nrnp_ps->I=0;
+    for(nrnp_ps=nrn_ps; nrnp_ps<nrnx_ps; nrnp_ps++)nrnp_ps->I=0;
 #if PRINT_updateStep
   std::cout << "Stopping current injection\n"; 
 #endif
@@ -6690,12 +6169,12 @@ IntegrationTest::updateStep
 #endif
       /*one substep per event*/
 #if(FLIXIBLE_DELAYS_ENABLE)
-      substep = 0;
+      unsigned int substep = 0;
       DATA_TYPE event = nrnp_ps->in_t[substep];
 
-      while((event <= 1.0f) && (substep<(nrnp_ps->n_in)))
+      while((event <= 1.0f) && (substep < (nrnp_ps->n_in)))
 #else
-      for(substep=0;substep<(nrnp_ps->n_in);substep++)
+      for(substep = 0; substep < (nrnp_ps->n_in); substep++)
 #endif
       {
 #if STATISTICS_ENABLE
@@ -6729,7 +6208,7 @@ IntegrationTest::updateStep
             (DATA_TYPE)nrTolerance,
             FLIXIBLE_DELAYS_ENABLE
           );
-          if(result != SDK_SUCCESS && !ignoreFailures){break;}
+          if(result != 1 && !ignoreFailures){break;}
 
           start_ps = nrnp_ps->in_t[substep]; 
           fp_ps[16] = start_ps; 
@@ -6751,7 +6230,7 @@ IntegrationTest::updateStep
         event = nrnp_ps->in_t[substep];
 #endif
       }
-      if(result != SDK_SUCCESS && !ignoreFailures){break;}
+      if(result != 1 && !ignoreFailures){break;}
       
 #if(FLIXIBLE_DELAYS_ENABLE)
       /*Shift future synaptic events: */
@@ -6759,7 +6238,7 @@ IntegrationTest::updateStep
       
       if(nrnp_ps->n_in > 0)
       {
-        int ptr1 = 0, ptr2 = substep; 
+        unsigned int ptr1 = 0, ptr2 = substep; 
         substep = nrnp_ps->n_in;
         
         while (substep > 0)
@@ -6768,13 +6247,6 @@ IntegrationTest::updateStep
           nrnp_ps->in_w[ptr1] = nrnp_ps->in_w[ptr2];
           ptr1++; ptr2++; substep--;
         }
-      }
-      else if(nrnp_ps->n_in < 0)
-      {
-        std::cerr << "ERROR updateStep: negative overflow in synaptic event number." << std::endl;
-        nrnp_ps->n_in = 0;
-        result = SDK_FAILURE;
-        if(!ignoreFailures){break;}
       }
 #endif
       fp_ps[13] = 1-start_ps; /*remainder of time step*/
@@ -6800,7 +6272,7 @@ IntegrationTest::updateStep
         (DATA_TYPE)nrTolerance,
         FLIXIBLE_DELAYS_ENABLE
       );
-      if(result != SDK_SUCCESS && !ignoreFailures){break;}
+      if(result != 1 && !ignoreFailures){break;}
     }
     else
     {
@@ -6827,7 +6299,7 @@ IntegrationTest::updateStep
         (DATA_TYPE)nrTolerance,
         FLIXIBLE_DELAYS_ENABLE
       );
-      if(result != SDK_SUCCESS && !ignoreFailures){break;}
+      if(result != 1 && !ignoreFailures){break;}
     }
   }/*For neurons*/
   
@@ -6860,11 +6332,13 @@ IntegrationTest::updateStep
 #undef PRINT_updateStep
 }
 /**************************************************************************************************/
+#endif
 
 
 
+#if UPDATE_NEURONS_ENABLE_V00
 int 
-IntegrationTest::verifyKernelUpdateNeurons
+Neurosim::verifyKernelUpdateNeurons
 (
   bool              verify,
   bool              injectSpikes,
@@ -6874,16 +6348,13 @@ IntegrationTest::verifyKernelUpdateNeurons
   unsigned int      *pointerStruct,
   unsigned int      *sortedEvents,
   DATA_TYPE         *modelVariables,
-  SpikeEvents       &spikeEvents,
-  Connectome        &connectome,
+  Data_SpikeEvents  &spikeEvents,
+  Data_Connectome   &connectome,
   cl::CommandQueue  &queue
 )
 /**************************************************************************************************/
 {
-  int result = SDK_SUCCESS;
-#if UPDATE_NEURONS_ENABLE_V00
-  try
-  {
+  int result = 1;
   bool breakOnFailure = 1;
   bool ignoreSolverFailuresHost = IGNORE_SOLVER_EXCEPTIONS;
 
@@ -6910,7 +6381,7 @@ IntegrationTest::verifyKernelUpdateNeurons
             std::cerr << "ERROR, verifyKernelUpdateNeurons, duplicate entry detected for neuron ID " 
               << spiked_neuron << " while injecting its spike: 1)" << spike_time << ", 2)" 
               << te_ps[spiked_neuron] << std::endl;
-            return SDK_FAILURE;
+            return 0;
           }
           ne[spiked_neuron] = 1;
           te_ps[spiked_neuron] = spike_time;
@@ -6925,13 +6396,12 @@ IntegrationTest::verifyKernelUpdateNeurons
       nrn_ps,
       ne,
       te_ps,
-      connectome,
-      queue
+      connectome
     );
-    if(result != SDK_SUCCESS){return result;}
+    if(result != 1){return result;}
     
-#if NETWORK_VERIFY_ENABLE
-    if((pointerStruct != NULL) && (sortedEvents != NULL) && FLIXIBLE_DELAYS_ENABLE && verify)
+#if FLIXIBLE_DELAYS_ENABLE
+    if((pointerStruct != NULL) && (sortedEvents != NULL) && verify)
     {
       result = verifyEvents
       (
@@ -6945,7 +6415,7 @@ IntegrationTest::verifyKernelUpdateNeurons
         nrn_ps
       );
       
-      if(result != SDK_SUCCESS){return result;}
+      if(result != 1){return result;}
     }
 #endif
   }
@@ -6963,7 +6433,7 @@ IntegrationTest::verifyKernelUpdateNeurons
       pointerStruct,
       nrn_ps
     );
-    if(result != SDK_SUCCESS){return result;}
+    if(result != 1){return result;}
   }
   
   memset(te_ps, 0, UPDATE_NEURONS_TOTAL_NEURONS*sizeof(DATA_TYPE));
@@ -6985,9 +6455,8 @@ IntegrationTest::verifyKernelUpdateNeurons
 #endif
   );
 
-  if(result != SDK_SUCCESS && !ignoreSolverFailuresHost){return result;}
+  if(result != 1 && !ignoreSolverFailuresHost){return result;}
 
-#if NETWORK_VERIFY_ENABLE
   if(verify)
   {
   for(cl_uint i=0; i<UPDATE_NEURONS_TOTAL_NEURONS; i++)
@@ -7002,7 +6471,7 @@ IntegrationTest::verifyKernelUpdateNeurons
         << ", mismatch of variable v for neuron " << i 
         << ": " << underTestType1 << " != " << reference << " ("; PRINT_HEX(4, underTestType1); 
         std::cerr << " != "; PRINT_HEX(4, reference); std::cerr << ")" << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
     
     underTestType1 = modelVariables[UPDATE_NEURONS_TOTAL_NEURONS+i];
@@ -7013,7 +6482,7 @@ IntegrationTest::verifyKernelUpdateNeurons
         << ", mismatch of variable u for neuron " << i 
         << ": " << underTestType1 << " != " << reference << " ("; PRINT_HEX(4, underTestType1); 
         std::cerr << " != "; PRINT_HEX(4, reference); std::cerr << ")" << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
     
     underTestType1 = modelVariables[2*UPDATE_NEURONS_TOTAL_NEURONS+i];
@@ -7024,7 +6493,7 @@ IntegrationTest::verifyKernelUpdateNeurons
         << ", mismatch of variable g_ampa for neuron " << i 
         << ": " << underTestType1 << " != " << reference << " ("; PRINT_HEX(4, underTestType1); 
         std::cerr << " != "; PRINT_HEX(4, reference); std::cerr << ")" << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
     
     underTestType1 = modelVariables[3*UPDATE_NEURONS_TOTAL_NEURONS+i];
@@ -7035,13 +6504,13 @@ IntegrationTest::verifyKernelUpdateNeurons
         << ", mismatch of variable g_gaba for neuron " << i 
         << ": " << underTestType1 << " != " << reference << " ("; PRINT_HEX(4, underTestType1); 
         std::cerr << " != "; PRINT_HEX(4, reference); std::cerr << ")" << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
     
 #if (LOG_MODEL_VARIABLES)
     if(i == LOG_MODEL_VARIABLES_NEURON_ID)
     {
-      *dataToTraceFile LOG_MODEL_VARIABLES_FILE_BODY(LOG_MODEL_VARIABLES_NEURON_ID);
+      dataToTraceFile LOG_MODEL_VARIABLES_FILE_BODY(LOG_MODEL_VARIABLES_NEURON_ID);
     }
 #endif
     /*
@@ -7050,10 +6519,10 @@ IntegrationTest::verifyKernelUpdateNeurons
     {
       std::cerr << "ERROR, verifyKernelUpdateNeurons, event count was not reset for neuron " << i
         << ": " << underTestType2 << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
     }
     */
-    if(result != SDK_SUCCESS && breakOnFailure){break;}
+    if(result != 1 && breakOnFailure){break;}
   }
 
   /*Verify spikes*/
@@ -7076,7 +6545,7 @@ IntegrationTest::verifyKernelUpdateNeurons
         std::cerr << "ERROR, verifyKernelUpdateNeurons, spike time mismatch for neuron " 
           << spiked_neuron << ", packet " << packet << ": " << te_ps[spiked_neuron] << "!=" 
           << spike_time << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         if(breakOnFailure){break;}
       }
       else
@@ -7084,11 +6553,11 @@ IntegrationTest::verifyKernelUpdateNeurons
         spikeCheck[spiked_neuron] = 1;
       }
     }
-    if(breakOnFailure && (result == SDK_FAILURE)){break;}
+    if(breakOnFailure && (result == 0)){break;}
   }
   
   /*There are no reference spikes, which are not present in the verified data*/
-  if(result != SDK_FAILURE)
+  if(result != 0)
   {
     for(cl_uint n = 0; n < UPDATE_NEURONS_TOTAL_NEURONS; n++)
     {
@@ -7096,7 +6565,7 @@ IntegrationTest::verifyKernelUpdateNeurons
       {
         std::cerr << "ERROR, verifyKernelUpdateNeurons, a spike from neuron " << n 
           << " and spike time " << te_ps[n] << " is absent"<< std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         if(breakOnFailure){break;}
       }
     }
@@ -7104,20 +6573,18 @@ IntegrationTest::verifyKernelUpdateNeurons
   
   free(spikeCheck);
   }
-#endif
-  }
-  CATCH(std::cerr, verifyKernelUpdateNeurons, return SDK_FAILURE;)
-#endif
 
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
-//TODO: it could be useful to replace kernel-specific defines with generic ones in this method:
+#if SORT_VERIFY_ENABLE
+#define PRINT_VERIFY_SORTED_EVENTS  0
 int 
-IntegrationTest::verifySortedEvents
+Neurosim::verifySortedEvents
 (
   cl_uint *sortedEvents, 
   cl_uint *pointerStruct, 
@@ -7125,13 +6592,11 @@ IntegrationTest::verifySortedEvents
 )
 /**************************************************************************************************/
 {
-#if SORT_VERIFY_ENABLE
-#define PRINT_VERIFY_SORTED_EVENTS  0
-  int result = SDK_SUCCESS;
+  int result = 1;
   cl_uint keyOffset = 0;
   cl_uint val1Offset = (keyOffset+1)%GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
   cl_uint val2Offset = (keyOffset+2)%GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-  char *sortedEventsCheck;
+  char *sortedEventsCheck = NULL;
   
   if(level > 0)
   {
@@ -7162,7 +6627,7 @@ IntegrationTest::verifySortedEvents
       std::cout << "verifySortedEvents " << currentTimeStep 
         << ": failed to verify sort order for key element " << i << ": " << v1 << "<" << v2 
         << std::endl;
-      result = SDK_FAILURE;
+      result = 0;
       break;
     }
     
@@ -7179,7 +6644,7 @@ IntegrationTest::verifySortedEvents
         std::cout << "verifySortedEvents: found an event in actual data with delay outside "
           << "of defined range: value " << time1 << ", range " << 0.0f << " - " 
           << (float)(GROUP_EVENTS_MAX_DELAY-GROUP_EVENTS_MIN_DELAY) << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
       
@@ -7188,7 +6653,7 @@ IntegrationTest::verifySortedEvents
         std::cout << "verifySortedEvents " << currentTimeStep 
           << ": failed to verify sort order for value element " << i << ": " << time1 << "<" 
           << time2 << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
     }
@@ -7200,13 +6665,13 @@ IntegrationTest::verifySortedEvents
   }
   
 #if PRINT_VERIFY_SORTED_EVENTS
-  if(result != SDK_FAILURE)
+  if(result != 0)
   {
     std::cout << "verifySortedEvents " << currentTimeStep << ": verified sort order" << std::endl;
   }
 #endif
 
-  if(result != SDK_FAILURE && level > 0)
+  if(result != 0 && level > 0)
   {
 #if PRINT_VERIFY_SORTED_EVENTS
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 1
@@ -7301,13 +6766,13 @@ IntegrationTest::verifySortedEvents
       {
         std::cout << "verifySortedEvents " << currentTimeStep << ": not able to find a struct for "
           << "element " << testedElementKey << " at pointer " << p << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
 #endif
 
       /*Find the entry*/
-      result = SDK_FAILURE;
+      result = 0;
       /*TODO: binary search on sorted array*/
       for
       (
@@ -7324,7 +6789,7 @@ IntegrationTest::verifySortedEvents
             if(dataUnsortedEventsSnapShot[val2Offset + p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS] 
                == sortedEvents[val2Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + a])
             {
-              result = SDK_SUCCESS;
+              result = 1;
               sortedEventsCheck[a] = 1;
               break;
             }
@@ -7332,7 +6797,7 @@ IntegrationTest::verifySortedEvents
         }
       }
 
-      if(result == SDK_FAILURE)
+      if(result == 0)
       {
         std::cout << "verifySortedEvents " << currentTimeStep << ": not able to find in "
           << "sorted data a combination of " << "key-value(s) for key " << p << "(" 
@@ -7348,7 +6813,7 @@ IntegrationTest::verifySortedEvents
 #endif
     }
 #if PRINT_VERIFY_SORTED_EVENTS
-    if(result != SDK_FAILURE)
+    if(result != 0)
     {
       std::cout 
         << "\nverifySortedEvents" << currentTimeStep << ": verified mapping of unsorted "
@@ -7358,7 +6823,7 @@ IntegrationTest::verifySortedEvents
   }
   
   /*Check for unrecognized keys*/
-  if(result != SDK_FAILURE && level > 1)
+  if(result != 0 && level > 1)
   {
     for(cl_uint i = 0; i < dataUnsortedEventsSnapShotSize/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS; 
       i++)
@@ -7370,12 +6835,12 @@ IntegrationTest::verifySortedEvents
         << ")->(" << sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i] 
         << "," << sortedEvents[val2Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i] << ")" 
         << std::endl;
-        //result = SDK_FAILURE;
-        //break;
+        /*result = 0;
+        break; */
       }
     }
 #if PRINT_VERIFY_SORTED_EVENTS
-    if(result != SDK_FAILURE)
+    if(result != 0)
     {
       std::cout << "verifySortedEvents " << currentTimeStep << ": checked for unrecognized keys" 
         << std::endl;
@@ -7387,24 +6852,23 @@ IntegrationTest::verifySortedEvents
   std::cout << "verifySortedEvents " << currentTimeStep << ": finished" << std::endl;
 #endif
 
-  free(dataUnsortedEventsSnapShot); dataUnsortedEventsSnapShot = NULL;
+  if(dataUnsortedEventsSnapShot){free(dataUnsortedEventsSnapShot);} 
+  dataUnsortedEventsSnapShot = NULL;
+  
   if(level > 0)
   {
     free(sortedEventsCheck);
   }
   return result;
-#else
-  std::cerr << "ERROR, verifySortedEvents: " 
-    << "(SORT_VERIFY_ENABLE is not true)" << std::endl;
-  return SDK_FAILURE;
-#endif
 }
 /**************************************************************************************************/
+#endif
 
 
 
+#if SORT_VERIFY_ENABLE
 int 
-IntegrationTest::captureUnsortedEvents
+Neurosim::captureUnsortedEvents
 (
   cl_uint *unsortedEventCounts,
   cl_uint *unsortedEventTargets,
@@ -7413,10 +6877,10 @@ IntegrationTest::captureUnsortedEvents
 )
 /**************************************************************************************************/
 {
-#if SORT_VERIFY_ENABLE
+
   cl_uint ptr_store = 0;
   cl_uint event_total = 0;
-  int result = SDK_SUCCESS;
+  int result = 1;
   
   /*Initialize syn events and neuron counters*/
   for(cl_uint b = 0; b < GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS; b++)
@@ -7456,7 +6920,7 @@ IntegrationTest::captureUnsortedEvents
         std::cout << "captureUnsortedEvents: found an event with delay outside of defined "
           << "range: value " << *((cl_float *)(&time)) << ", range " << 0.0f
           << " - " << (float)(GROUP_EVENTS_MAX_DELAY-GROUP_EVENTS_MIN_DELAY) << std::endl;
-        result = SDK_FAILURE;
+        result = 0;
         break;
       }
       
@@ -7467,49 +6931,43 @@ IntegrationTest::captureUnsortedEvents
     }
   }
   
-  if(result != SDK_SUCCESS)
+  if(result != 1)
   {
     free(dataUnsortedEventsSnapShot);
   }
   
   return result;
-#else
-  std::cerr << "ERROR, captureUnsortedEvents: " 
-    << "(SORT_VERIFY_ENABLE is not true)" << std::endl;
-  return SDK_FAILURE;
-#endif
 }
 /**************************************************************************************************/
+#endif
 
 
 
 #if SIMULATION_SNAPSHOT
 int 
-IntegrationTest::takeSimulationSnapshot
+Neurosim::takeSimulationSnapshot
 (
   cl_uint           step,
   cl_uint           sampleSizeNeurons,
   cl_uint           *dataMakeEventPtrsStruct,
   cl_uint           *dataGroupEventsTik,
   cl_float          *modelVariables,
-  SpikeEvents       &spikeEvents,
-  SynapticEvents    &synapticEvents,
+  Data_SpikeEvents       &spikeEvents,
+  Data_SynapticEvents    &synapticEvents,
   cl::CommandQueue  &queue
 )
 /**************************************************************************************************/
 {
-  try
-  {
   SET_RANDOM_SEED(srandSeed, srandCounter);
-  LOG("takeSimulationSnapshot: set srand seed to " << srandSeed, 0);
+  LOG_SIM("takeSimulationSnapshot: set srand seed to " << srandSeed);
   
-  (*dataToSnapshotLogFile).str("");
-  *dataToSnapshotLogFile << "\n\nSNAPSHOT AT STEP: " << step << "\n\n";
+  (dataToSnapshotLogFile).str("");
+  dataToSnapshotLogFile << "\n\nSNAPSHOT AT STEP: " << step << "\n\n";
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE && GROUP_EVENTS_ENABLE_V03
   {
-    *dataToSnapshotLogFile << "\n\nEVENT BUFFERS\n\n";
-    *dataToSnapshotLogFile << "Time Slot,Parameter Name,Parameter Value" << std::endl;
+    dataToSnapshotLogFile << "\n\nEVENT BUFFERS\n\n";
+    dataToSnapshotLogFile << "Time Slot,Parameter Name,Parameter Value" << std::endl;
       
     for(cl_uint s = 0; s < GROUP_EVENTS_TIME_SLOTS; s++)
     {
@@ -7519,7 +6977,7 @@ IntegrationTest::takeSimulationSnapshot
       
       for(cl_uint b = 0; b < GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS; b++)
       {
-        int total = synapticEvents.getEventCount(queue, b, s, SynapticEvents::RECENT);
+        int total = synapticEvents.getEventCount(queue, b, s, Data_SynapticEvents::RECENT);
         totalEvents += total;
         if(totalEventsMax < total){totalEventsMax = total;}
         if(totalEventsMin > total){totalEventsMin = total;}
@@ -7546,7 +7004,7 @@ IntegrationTest::takeSimulationSnapshot
       percentInh = 100.0*percentInh/totalEvents;
       percentExc = 100.0*percentExc/totalEvents;
       
-      *dataToSnapshotLogFile
+      dataToSnapshotLogFile
         << s << ",Mean," << totalEventsMean << std::endl
         << s << ",Sigma," << totalEventsVariance << std::endl
         << s << ",Max," << totalEventsMax << std::endl
@@ -7560,8 +7018,8 @@ IntegrationTest::takeSimulationSnapshot
 #if GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02 &&\
     GROUP_EVENTS_ENABLE_V03 && MAKE_EVENT_PTRS_ENABLE && UPDATE_NEURONS_ENABLE_V00
 
-  *dataToSnapshotLogFile << "\n\nEVENTS\n\n";
-  *dataToSnapshotLogFile << "Parameter Name,Parameter Value" << std::endl;
+  dataToSnapshotLogFile << "\n\nEVENTS\n\n";
+  dataToSnapshotLogFile << "Parameter Name,Parameter Value" << std::endl;
 
   cl_uint totalEventsExc = 0, totalEventsInh = 0, eventsPerNeuronMax = 0, 
     eventsPerNeuronMin = GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE*
@@ -7589,7 +7047,7 @@ IntegrationTest::takeSimulationSnapshot
     }
   }
   
-  *dataToSnapshotLogFile << "Total Neurons," << UPDATE_NEURONS_TOTAL_NEURONS << std::endl
+  dataToSnapshotLogFile << "Total Neurons," << UPDATE_NEURONS_TOTAL_NEURONS << std::endl
     << "Total Inhibitory Events," << totalEventsInh << std::endl
     << "Total Excitatory Events," << totalEventsExc << std::endl
     << "Events Per Neuron Max," << eventsPerNeuronMax << std::endl
@@ -7597,8 +7055,8 @@ IntegrationTest::takeSimulationSnapshot
 #endif
 /**************************************************************************************************/
 #if EXPAND_EVENTS_ENABLE && UPDATE_NEURONS_ENABLE_V00
-  *dataToSnapshotLogFile << "\n\nSPIKES\n\n";
-  *dataToSnapshotLogFile << "Parameter Name,Parameter Value" << std::endl;
+  dataToSnapshotLogFile << "\n\nSPIKES\n\n";
+  dataToSnapshotLogFile << "Parameter Name,Parameter Value" << std::endl;
   
   cl_uint totalSpikes = 0, spikesPerPacketMax = 0, 
     spikesPerPacketMin = UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE;
@@ -7625,7 +7083,7 @@ IntegrationTest::takeSimulationSnapshot
     }
   }
   
-  *dataToSnapshotLogFile << "Total Spikes," << totalSpikes << std::endl
+  dataToSnapshotLogFile << "Total Spikes," << totalSpikes << std::endl
     << "Packet Spikes Max," << spikesPerPacketMax << std::endl
     << "Packet Spikes Min," << spikesPerPacketMin << std::endl
     << "Spike Time Max," << spikeTimeMax << std::endl
@@ -7634,15 +7092,15 @@ IntegrationTest::takeSimulationSnapshot
 #endif
 /**************************************************************************************************/
 #if UPDATE_NEURONS_ENABLE_V00
-  *dataToSnapshotLogFile << "\n\nNEURON MODEL VARIABLES\n\n";
-  *dataToSnapshotLogFile << "Neuron ID,v,u,g_ampa,g_gaba" << std::endl;
+  dataToSnapshotLogFile << "\n\nNEURON MODEL VARIABLES\n\n";
+  dataToSnapshotLogFile << "Neuron ID,v,u,g_ampa,g_gaba" << std::endl;
   cl_uint window = UPDATE_NEURONS_TOTAL_NEURONS/sampleSizeNeurons;
   
   for(cl_uint i = 0; i < sampleSizeNeurons; i++)
   {
     cl_uint nId = i*window + cl_uint(abs((window-1)*((double)rand()/((double)RAND_MAX))));
           
-    *dataToSnapshotLogFile << nId << "," << modelVariables[nId] << "," 
+    dataToSnapshotLogFile << nId << "," << modelVariables[nId] << "," 
       << modelVariables[UPDATE_NEURONS_TOTAL_NEURONS+nId] << "," 
       << modelVariables[2*UPDATE_NEURONS_TOTAL_NEURONS+nId] << "," 
       << modelVariables[3*UPDATE_NEURONS_TOTAL_NEURONS+nId] << std::endl;
@@ -7650,227 +7108,74 @@ IntegrationTest::takeSimulationSnapshot
 #endif
 /**************************************************************************************************/
 
-  *snapshotLogFile << (*dataToSnapshotLogFile).str();
-  (*dataToSnapshotLogFile).str("");
-  }
-  CATCH(std::cerr, takeSimulationSnapshot, return SDK_FAILURE;)
+  snapshotLogFile << (dataToSnapshotLogFile).str();
+  (dataToSnapshotLogFile).str("");
   
-  return SDK_SUCCESS;
+  return 1;
 }
 #endif
 /**************************************************************************************************/
 
 
 
+#if UPDATE_NEURONS_ENABLE_V00
 void 
-IntegrationTest::psClean()
+Neurosim::psClean()
 /**************************************************************************************************/
 {
   for(int i=0;i<4;i++){free(co[i]);} free(co); free(nrn_ps); free(te_ps); free(ne);
 }
 /**************************************************************************************************/
+#endif
 
 
 
-int 
-IntegrationTest::cleanup()
-{
-/**************************************************************************************************/
-#if ((GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT) ||\
-     (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT))
-  if(dataHistogramGroupEventsTik)
-      free(dataHistogramGroupEventsTik);
-  if(dataHistogramGroupEventsVerify)
-      free(dataHistogramGroupEventsVerify);
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-  if(dataGroupEventsTik)
-      free(dataGroupEventsTik);
-  if(dataGroupEventsTikVerify)
-      free(dataGroupEventsTikVerify);
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  if(dataDebugHostGroupEvents)
-      free(dataDebugHostGroupEvents);
-  if(dataDebugDeviceGroupEvents)
-      free(dataDebugDeviceGroupEvents);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  if(dataErrorGroupEvents)
-      free(dataErrorGroupEvents);
-#endif
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
-    MAKE_EVENT_PTRS_ENABLE
-  if(dataHistogramGroupEventsTok)
-      free(dataHistogramGroupEventsTok);
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-  if(dataGroupEventsTok)
-      free(dataGroupEventsTok);
-  if(dataGroupEventsTokVerify)
-      free(dataGroupEventsTokVerify);
-#endif
-/**************************************************************************************************/
-#if SORT_VERIFY_ENABLE
-  if(dataUnsortedEventsSnapShot)
-      free(dataUnsortedEventsSnapShot);
-#endif
-/**************************************************************************************************/
-#if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-  if(dataMakeEventPtrsStruct)
-      free(dataMakeEventPtrsStruct);
-#endif
-/**************************************************************************************************/
-#if MAKE_EVENT_PTRS_ENABLE
-#if (MAKE_EVENT_PTRS_DEBUG_ENABLE)
-  if(dataMakeEventPtrsDebugHost)
-      free(dataMakeEventPtrsDebugHost);
-  if(dataMakeEventPtrsDebugDevice)
-      free(dataMakeEventPtrsDebugDevice);
-#endif
-#if (MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE)
-  if(dataMakeEventPtrsError)
-      free(dataMakeEventPtrsError);
-#endif
-#endif
-/**************************************************************************************************/
-#if UPDATE_NEURONS_ENABLE_V00
-#if (UPDATE_NEURONS_DEBUG_ENABLE)
-  if(dataUpdateNeuronsDebugHost)
-      free(dataUpdateNeuronsDebugHost);
-  if(dataUpdateNeuronsDebugDevice)
-      free(dataUpdateNeuronsDebugDevice);
-#endif
-#if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
-  if(dataUpdateNeuronsError)
-      free(dataUpdateNeuronsError);
-#endif
-#if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
-  if(psTolerance)
-      free(psTolerance);
-#endif
-  if(modelParameters)
-      free(modelParameters);
-  if(modelVariables)
-      free(modelVariables);
-  if(constantCoefficients)
-      free(constantCoefficients);
-#if (LOG_MODEL_VARIABLES)
-  *traceFile << (*dataToTraceFile).str();
-  (*traceFile).close();
-#endif
-  psClean();
-#endif
-#if (LOG_SIMULATION)
-  *simulationLogFile << (*dataToSimulationLogFile).str();
-  (*simulationLogFile).close();
-#endif
-#if (LOG_REPORT)
-  *reportLogFile << (*dataToReportLogFile).str();
-  (*reportLogFile).close();
-#endif
-#if (SIMULATION_SNAPSHOT)
-  (*snapshotLogFile).close();
-#endif
-/**************************************************************************************************/
-
-  return SDK_SUCCESS;
-}
-/**************************************************************************************************/
-
-
-
-void 
-IntegrationTest::printStats()
-{
 #if STATISTICS_ENABLE
-  LOG("Average Events/Iteration:" << averageEventsInNetwork, 1);
-  LOG("Average Spikes/Iteration:" << averageSpikesInNetwork, 1);
-#endif
-
-  std::string strArray[4] = 
-  {
-      "Time(sec)", 
-      "[Transfer+Kernel]Time(sec)"
-  };
-  std::string stats[2];
-
-  totalTime = setupTime + kernelTime;
-
-  stats[0] = sampleCommon->toString(totalTime, std::dec);
-  stats[1] = sampleCommon->toString(kernelTime, std::dec);
-
-  this->SDKSample::printStats(strArray, stats, 4);
+void 
+Neurosim::printStats()
+{
+  LOG_REP("Average Events/Iteration:" << this->averageEventsInNetwork);
+  LOG_REP("Average Spikes/Iteration:" << this->averageSpikesInNetwork);
+  LOG_REP("Total Setup Time:" << this->setupTime);
+  LOG_REP("Total Run Time:" << this->runTime);
 }
+#endif
 
 
 
 int 
-IntegrationTest::execute()
+Neurosim::execute()
 {
   std::stringstream excss;
   
   try
   {
-    if(this->initialize() !=  SDK_SUCCESS)
-    {
-      return 0;
-    }
-
-    try
-    {
-      if(this->getPlatformStats() !=  SDK_SUCCESS)
-      {
-        LOG("Result:FAIL:getPlatformStats", 1); 
-        this->cleanup(); 
-        return 0;
-      }
-        
-      if(this->setup() !=  SDK_SUCCESS)
-      {
-        LOG("Result:FAIL:setup", 1); 
-        this->cleanup(); 
-        return 0;
-      }
-        
-      if(this->run() !=  SDK_SUCCESS)
-      {
-        LOG("Result:FAIL:run", 1); 
-        this->cleanup();
-        return 0;
-      }
-    }
-    CATCH(excss, execute, LOG("Result:FAIL:" << excss.str(), 1);  this->cleanup(); 
-      std::cerr << excss.str(); return 0;)
+    std::cout << "---Getting platform stats------------------------------------------" << std::endl;
+    this->getPlatformStats();
       
-    LOG("Result:PASS", 1);
+    std::cout << "---Performing setup------------------------------------------------" << std::endl;
+    this->setup();
+      
+    std::cout << "---Starting execution----------------------------------------------" << std::endl;
+    this->run();
+    std::cout << "---Finished execution----------------------------------------------" << std::endl;
     
-    if(this->cleanup() !=  SDK_SUCCESS)
-    {
-      return 0;
-    }
-    
+#if (STATISTICS_ENABLE)
     this->printStats();
+#endif
+    
+    LOG_REP("Result:PASS");
   }
-  CATCH(excss, execute, std::cerr << excss.str(); return 0;)
-  
+  CATCH(excss, execute, LOG_REP("Result:FAIL:" << excss.str()); std::cerr << excss.str(); return 0;)
+
   return 1;
 }
 
 
 
 int 
-main(int argc, char *argv[])
+/*main(int argc, char *argv[])*/
+main()
 {
   std::stringstream excss;
   
@@ -7878,16 +7183,30 @@ main(int argc, char *argv[])
   {
     _putenv("GPU_DUMP_DEVICE_KERNEL=3");
   
-    IntegrationTest test("OpenCL Neurosim IntegrationTest");
+    Neurosim neuro;
   
-    if(!test.execute())
+    std::cout << "\n";
+    
+    if(!neuro.execute())
     {
-      std::cout << "\nRESULT:FAIL\n"; 
+      std::cout << "---RESULT: FAIL----------------------------------------------------\n\n";
+
       return 0;
     }
   }
-  CATCH(excss, main, std::cerr << excss.str(); std::cout << "\nRESULT:FAIL\n"; return 0;)
+  CATCH(excss, main, std::cerr << excss.str(); std::cout 
+    << "---RESULT: FAIL----------------------------------------------------\n\n"; return 0;)
   
-  std::cout << "\nRESULT:PASS\n";
+  std::cout << "---RESULT: PASS----------------------------------------------------\n\n";
   return 1;
 }
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
+/**************************************************************************************************/

@@ -178,8 +178,14 @@ scan_histogram
 #if (SCAN_ERROR_TRACK_ENABLE)
   __global      uint          *gm_error_code,
 #endif
+#if (SCAN_HISTOGRAM_IN_TYPE == 0)
   __global      uint          *gm_target_neuron_histogram,
                 uint          step
+#elif (SCAN_HISTOGRAM_IN_TYPE == 1)
+  __global      uint          *gm_target_neuron_histogram
+#else
+  #error (Unrecognized SCAN_HISTOGRAM_IN_TYPE)
+#endif
 ){
   __local uint cache[SCAN_CACHE_SIZE_WORDS];
   
@@ -227,8 +233,6 @@ scan_histogram
       data[i] += gm_target_neuron_histogram[offsetBacket + i];
     }
   }
-#else
-  #error (Unrecognized SCAN_HISTOGRAM_IN_TYPE)
 #endif
 
 	uint4 myData = (uint4)(0,0,0,0);
@@ -314,6 +318,7 @@ scan_histogram
 
   /*Store scan result to GM*/
   {
+#if SCAN_HISTOGRAM_IN_TYPE == 0
     uint offsetBase = 
       /*Time slot*/
       step*(SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE + 1);
@@ -335,5 +340,22 @@ scan_histogram
       gm_target_neuron_histogram[offsetBase + SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE] = 
         sumPacked;
     }
+#elif SCAN_HISTOGRAM_IN_TYPE == 1
+    uint offset = 
+      /*WI work size*/
+      SCAN_HISTOGRAM_ELEMENTS_PER_WI*wi_id;
+      
+    for(uint i=0; i<SCAN_HISTOGRAM_ELEMENTS_PER_WI; i++)
+    {
+      gm_target_neuron_histogram[offset + i] = data[i];
+    }
+    
+    /*Store total*/
+    if(wi_id == SCAN_WG_SIZE_WI-1)
+    {
+      gm_target_neuron_histogram[SCAN_HISTOGRAM_TOTAL_BINS*SCAN_HISTOGRAM_BIN_SIZE] = 
+        sumPacked;
+    }
+#endif
   }
 }

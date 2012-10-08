@@ -11,7 +11,17 @@
   Includes
 ***************************************************************************************************/
 
-#include "SynapticEvents.hpp"
+#include "Data_SynapticEvents.hpp"
+
+/**************************************************************************************************/
+
+
+
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_START
 
 /**************************************************************************************************/
 
@@ -23,118 +33,8 @@
 
 
 
-SynapticEvents::SynapticEvents()
-/**************************************************************************************************/
-{
-  this->reset(false);
-}
-/**************************************************************************************************/
-
-
-
-SynapticEvents::~SynapticEvents()
-/**************************************************************************************************/
-{
-  this->reset(true);
-}
-/**************************************************************************************************/
-
-
-
-void
-SynapticEvents::initialize
-(
-  cl::Context                         &context,
-  cl::Device                          &device,
-  cl::CommandQueue                    &queue,
-  cl_bool                             block,
-  cl_uint                             timeSlots,
-  cl_uint                             eventBufferCount,
-  cl_uint                             eventBufferSize,
-  cl_uint                             histogramBinCount,
-  cl_uint                             histogramBinSize,
-  struct kernelStatistics             *kernelStats,
-  std::stringstream                   *dataToSimulationLogFile,
-  std::stringstream                   *dataToReportLogFile
-)
-/**************************************************************************************************/
-{
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  if(!this->resetObject)
-  {
-    throw SimException("SynapticEvents::initialize: attemp to initialize without reset");
-  }
-#endif
-  
-  this->resetObject = false;
-  this->dataValid = 0;
-  this->timeSlots = timeSlots;
-  
-  this->eventBufferCount = eventBufferCount;
-  this->eventBufferSize = eventBufferSize;
-  
-  this->histogramBinCount = histogramBinCount;
-  this->histogramBinSize = histogramBinSize;
-  
-  this->dataToSimulationLogFile = dataToSimulationLogFile;
-  this->dataToReportLogFile = dataToReportLogFile;
-  
-  size_t size = (this->eventBufferCount)*(this->timeSlots);
-  
-  CALLOC_O(dataUnsortedEventCounts, cl_uint, (this->eventBufferCount)*(this->timeSlots));
-  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataUnsortedEventCounts, kernelStats);
-#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-  this->dataPastUnsortedEventCounts = (cl_uint *)calloc(size, sizeof(cl_uint));
-#endif
-  
-  size = (this->eventBufferCount)*(this->timeSlots)*(this->eventBufferSize);
-  
-  CALLOC_O(dataUnsortedEventTargets, cl_uint, size);
-  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataUnsortedEventTargets, kernelStats);
-#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-  this->dataPastUnsortedEventTargets = (cl_uint *)calloc(size, sizeof(cl_uint));
-#endif
-
-  CALLOC_O(dataUnsortedEventDelays, cl_uint, size);
-  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataUnsortedEventDelays, kernelStats);
-#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-  this->dataPastUnsortedEventDelays = (cl_uint *)calloc(size, sizeof(cl_uint));
-#endif
-  
-  CALLOC_O(dataUnsortedEventWeights, cl_uint, (this->eventBufferCount)*(this->timeSlots)*
-    (this->eventBufferSize));
-  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataUnsortedEventWeights, kernelStats);
-#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-  this->dataPastUnsortedEventWeights = (cl_uint *)calloc(size, sizeof(cl_uint));
-#endif
-  
-  size = (this->timeSlots)*((this->histogramBinCount)*(this->histogramBinSize) + 1);
-  
-  CALLOC_O(dataHistogram, cl_uint, size);
-  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataHistogram, kernelStats);
-#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-  this->dataPastHistogram = (cl_uint *)calloc(size, sizeof(cl_uint));
-#endif
-  
-  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataUnsortedEventCountsBuffer, 
-    this->dataUnsortedEventCountsSizeBytes);
-  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataUnsortedEventTargetsBuffer, 
-    this->dataUnsortedEventTargetsSizeBytes);
-  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataUnsortedEventDelaysBuffer, 
-    this->dataUnsortedEventDelaysSizeBytes);
-  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataUnsortedEventWeightsBuffer, 
-    this->dataUnsortedEventWeightsSizeBytes);
-  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataHistogramBuffer, 
-    this->dataHistogramSizeBytes);
-  
-  this->storeBuffers(queue, block, SYNAPTIC_EVENTS_VALID_ALL);
-}
-/**************************************************************************************************/
-
-
-
 void 
-SynapticEvents::clearUnsortedEvents
+Data_SynapticEvents::clearUnsortedEvents
 (
   cl::CommandQueue  &queue,
   cl_bool           block,
@@ -142,10 +42,6 @@ SynapticEvents::clearUnsortedEvents
 )
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-#endif
-  
   if(clearBitMask & 0x1)
   {
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
@@ -162,7 +58,7 @@ SynapticEvents::clearUnsortedEvents
     memset(this->dataUnsortedEventWeights, 0, this->dataUnsortedEventWeightsSizeBytes);
     memset(this->dataHistogram, 0, this->dataHistogramSizeBytes);
     
-    this->storeBuffers(queue, block, SYNAPTIC_EVENTS_VALID_ALL);
+    this->storeData(queue, block, SYNAPTIC_EVENTS_VALID_ALL);
   }
   
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
@@ -181,13 +77,16 @@ SynapticEvents::clearUnsortedEvents
 
 
 void 
-SynapticEvents::setUnsortedEvents
+Data_SynapticEvents::setUnsortedEvents
 (
+#if CLASS_VALIDATION_ENABLE
+  cl_uint             eventDestinationBufferSize,
+#endif
   cl::CommandQueue    &queue,
   cl_bool             block,
   cl_bool             initHistogram,
   cl_uint             unsortedEventTimeSlotDelta,
-  cl_uint             eventDestinationBufferSize,
+
   cl_uint             histogramBitShift,
   cl_uint             histogramBinMask,
   cl_uint             neuronCount,
@@ -198,10 +97,6 @@ SynapticEvents::setUnsortedEvents
 )
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-#endif
-  
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
   swap2(dataUnsortedEventCounts, dataPastUnsortedEventCounts);
   swap2(dataUnsortedEventTargets, dataPastUnsortedEventTargets);
@@ -232,18 +127,20 @@ SynapticEvents::setUnsortedEvents
   {
     this->initializeHistogram
     (
+#if CLASS_VALIDATION_ENABLE
       eventDestinationBufferSize
+#endif
     );
   }
 
-  this->storeBuffers(queue, block, SYNAPTIC_EVENTS_VALID_ALL);
+  this->storeData(queue, block, SYNAPTIC_EVENTS_VALID_ALL);
 }
 /**************************************************************************************************/
 
 
 
 cl_uint
-SynapticEvents::getEventCount
+Data_SynapticEvents::getEventCount
 (
   cl::CommandQueue  &queue,
   cl_uint           bufferID,
@@ -252,35 +149,33 @@ SynapticEvents::getEventCount
 )
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-  
+#if CLASS_VALIDATION_ENABLE
   if(bufferID >= this->eventBufferCount)
   {
-    throw SimException("SynapticEvents::getEventCount: buffer ID exceeds buffer count");
+    throw SimException("Data_SynapticEvents::getEventCount: buffer ID exceeds buffer count");
   }
   
   if(timeSlot >= this->timeSlots)
   {
-    throw SimException("SynapticEvents::getEventCount: time slot exceeds total time slots");
+    throw SimException("Data_SynapticEvents::getEventCount: time slot exceeds total time slots");
   }
 #endif
 
-  this->getEventBuffers(queue, CL_TRUE, SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS);
+  this->getData(queue, CL_TRUE, SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS);
   
-  if(type == SynapticEvents::RECENT)
+  if(type == Data_SynapticEvents::RECENT)
   {
     return this->dataUnsortedEventCounts[(this->timeSlots)*bufferID + timeSlot];
   }
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-  else if(type == SynapticEvents::PREVIOUS)
+  else if(type == Data_SynapticEvents::PREVIOUS)
   {
     return this->dataPastUnsortedEventCounts[(this->timeSlots)*bufferID + timeSlot];
   }
 #endif
   else
   {
-    throw SimException("SynapticEvents::getEventCount: incorrect event count type");
+    throw SimException("Data_SynapticEvents::getEventCount: incorrect event count type");
   }
 }
 /**************************************************************************************************/
@@ -288,7 +183,7 @@ SynapticEvents::getEventCount
 
 
 void
-SynapticEvents::getEvent
+Data_SynapticEvents::getEvent
 (
   cl::CommandQueue  &queue,
   cl_uint           bufferID,
@@ -301,23 +196,21 @@ SynapticEvents::getEvent
 )
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-  
+#if CLASS_VALIDATION_ENABLE
   if(bufferID >= this->eventBufferCount)
   {
-    throw SimException("SynapticEvents::getEvent: buffer ID exceeds buffer count");
+    throw SimException("Data_SynapticEvents::getEvent: buffer ID exceeds buffer count");
   }
   
   if(timeSlot >= this->timeSlots)
   {
-    throw SimException("SynapticEvents::getEvent: time slot exceeds total time slots");
+    throw SimException("Data_SynapticEvents::getEvent: time slot exceeds total time slots");
   }
 
-  this->getEventBuffers(queue, CL_TRUE, SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS | 
+  this->getData(queue, CL_TRUE, SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS | 
     SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS);
   
-  if(type == SynapticEvents::RECENT)
+  if(type == Data_SynapticEvents::RECENT)
   {
     if
     (
@@ -326,14 +219,13 @@ SynapticEvents::getEvent
       (this->dataUnsortedEventCounts[(this->timeSlots)*bufferID + timeSlot] != 0)
     )
     {
-      std::stringstream ss;
-      ss << "SynapticEvents::getEvent: event ID " << eventID << " exceeds RECENT event count " 
-        << this->dataUnsortedEventCounts[(this->timeSlots)*bufferID + timeSlot] << std::endl;
-      throw SimException(ss.str());
+      THROW_SIMEX("Data_SynapticEvents::getEvent: event ID " << eventID 
+        << " exceeds RECENT event count " 
+        << this->dataUnsortedEventCounts[(this->timeSlots)*bufferID + timeSlot]);
     }
   }
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-  else if(type == SynapticEvents::PREVIOUS)
+  else if(type == Data_SynapticEvents::PREVIOUS)
   {
     if
     (
@@ -342,19 +234,18 @@ SynapticEvents::getEvent
       (this->dataPastUnsortedEventCounts[(this->timeSlots)*bufferID + timeSlot] != 0)
     )
     {
-      std::stringstream ss;
-      ss << "SynapticEvents::getEvent: event ID " << eventID << " exceeds PREVIOUS event count " 
-        << this->dataPastUnsortedEventCounts[(this->timeSlots)*bufferID + timeSlot] << std::endl;
-      throw SimException(ss.str());
+      THROW_SIMEX("Data_SynapticEvents::getEvent: event ID " << eventID 
+        << " exceeds PREVIOUS event count " 
+        << this->dataPastUnsortedEventCounts[(this->timeSlots)*bufferID + timeSlot]);
     }
   }
 #endif
   else
   {
-    throw SimException("SynapticEvents::getEvent: incorrect event type");
+    throw SimException("Data_SynapticEvents::getEvent: incorrect event type");
   }
 #else
-  this->getEventBuffers(queue, CL_TRUE, SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS);
+  this->getData(queue, CL_TRUE, SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS);
 #endif
 
   cl_uint ptr = 
@@ -365,14 +256,14 @@ SynapticEvents::getEvent
     /*Current event*/
     eventID;
   
-  if(type == SynapticEvents::RECENT)
+  if(type == Data_SynapticEvents::RECENT)
   {
     targetNeuron = this->dataUnsortedEventTargets[ptr];
     eventTime = this->dataUnsortedEventDelays[ptr];
     weight = this->dataUnsortedEventWeights[ptr];
   }
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-  else if(type == SynapticEvents::PREVIOUS)
+  else if(type == Data_SynapticEvents::PREVIOUS)
   {
     targetNeuron = this->dataPastUnsortedEventTargets[ptr];
     eventTime = this->dataPastUnsortedEventDelays[ptr];
@@ -381,7 +272,7 @@ SynapticEvents::getEvent
 #endif
   else
   {
-    throw SimException("SynapticEvents::getEvent: incorrect event type");
+    throw SimException("Data_SynapticEvents::getEvent: incorrect event type");
   }
 }
 /**************************************************************************************************/
@@ -389,7 +280,7 @@ SynapticEvents::getEvent
 
 
 cl_uint
-SynapticEvents::getHistogramItem
+Data_SynapticEvents::getHistogramItem
 (
   cl::CommandQueue  &queue,
   cl_uint           timeSlot,
@@ -399,26 +290,24 @@ SynapticEvents::getHistogramItem
 )
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-
+#if CLASS_VALIDATION_ENABLE
   if(timeSlot >= this->timeSlots)
   {
-    throw SimException("SynapticEvents::getHistogramItem: time slot exceeds total time slots");
+    throw SimException("Data_SynapticEvents::getHistogramItem: time slot exceeds total time slots");
   }
   
   if(binID >= this->histogramBinCount)
   {
-    throw SimException("SynapticEvents::getHistogramItem: buffer ID exceeds buffer count");
+    throw SimException("Data_SynapticEvents::getHistogramItem: buffer ID exceeds buffer count");
   }
   
   if(bufferID >= this->histogramBinSize)
   {
-    throw SimException("SynapticEvents::getHistogramItem: buffer ID exceeds buffer count");
+    throw SimException("Data_SynapticEvents::getHistogramItem: buffer ID exceeds buffer count");
   }
 #endif
 
-  this->getEventBuffers(queue, CL_TRUE, SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM);
+  this->getData(queue, CL_TRUE, SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM);
 
   /*Pointer is based on time slot, bin, WG*/
   cl_uint ptr = 
@@ -427,19 +316,19 @@ SynapticEvents::getHistogramItem
   /*Bin totals are stored aligned in GM (bin 0 from all WGs, bin 1 from all WGs etc*/
   binID*(this->histogramBinSize) + bufferID;
   
-  if(type == SynapticEvents::RECENT)
+  if(type == Data_SynapticEvents::RECENT)
   {
     return this->dataHistogram[ptr];
   }
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-  else if(type == SynapticEvents::PREVIOUS)
+  else if(type == Data_SynapticEvents::PREVIOUS)
   {
     return this->dataPastHistogram[ptr];
   }
 #endif
   else
   {
-    throw SimException("SynapticEvents::getHistogramItem: incorrect item type");
+    throw SimException("Data_SynapticEvents::getHistogramItem: incorrect item type");
   }
 }
 /**************************************************************************************************/
@@ -447,7 +336,7 @@ SynapticEvents::getHistogramItem
 
 
 cl_uint
-SynapticEvents::getPreviousHistogramItem
+Data_SynapticEvents::getPreviousHistogramItem
 (
   cl::CommandQueue  &queue,
   cl_uint           timeSlot,
@@ -457,15 +346,15 @@ SynapticEvents::getPreviousHistogramItem
 )
 /**************************************************************************************************/
 {
-  SynapticEvents* mySelf = (SynapticEvents*)objectToCallThisFunction;
-  return mySelf->getHistogramItem(queue, timeSlot, binID, bufferID, SynapticEvents::PREVIOUS);
+  Data_SynapticEvents* mySelf = (Data_SynapticEvents*)objectToCallThisFunction;
+  return mySelf->getHistogramItem(queue, timeSlot, binID, bufferID, Data_SynapticEvents::PREVIOUS);
 }
 /**************************************************************************************************/
 
 
 
 cl_uint
-SynapticEvents::getRecentHistogramItem
+Data_SynapticEvents::getCurrentHistogramItem
 (
   cl::CommandQueue  &queue,
   cl_uint           timeSlot,
@@ -475,22 +364,18 @@ SynapticEvents::getRecentHistogramItem
 )
 /**************************************************************************************************/
 {
-  SynapticEvents* mySelf = (SynapticEvents*)objectToCallThisFunction;
-  return mySelf->getHistogramItem(queue, timeSlot, binID, bufferID, SynapticEvents::RECENT);
+  Data_SynapticEvents* mySelf = (Data_SynapticEvents*)objectToCallThisFunction;
+  return mySelf->getHistogramItem(queue, timeSlot, binID, bufferID, Data_SynapticEvents::RECENT);
 }
 /**************************************************************************************************/
 
 
 
 void 
-SynapticEvents::invalidateEvents
+Data_SynapticEvents::invalidateEvents
 ()
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-#endif
-
   this->dataValid &= 
     (
       (SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS  ^ 0xFFFFFFFF) & 
@@ -503,14 +388,10 @@ SynapticEvents::invalidateEvents
 
 
 void 
-SynapticEvents::invalidateHistogram
+Data_SynapticEvents::invalidateHistogram
 ()
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-#endif
-
   this->dataValid &= (SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM ^ 0xFFFFFFFF);
 }
 /**************************************************************************************************/
@@ -518,18 +399,14 @@ SynapticEvents::invalidateHistogram
 
 
 void 
-SynapticEvents::refresh
+Data_SynapticEvents::refresh
 (
   cl::CommandQueue    &queue,
   cl_bool             block
 )
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-#endif
-
-  this->getEventBuffers
+  this->getData
   (
     queue, 
     block, 
@@ -541,14 +418,10 @@ SynapticEvents::refresh
 
 
 cl_uint 
-SynapticEvents::getEventBufferCount
+Data_SynapticEvents::getEventBufferCount
 ()
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-#endif
-
   return eventBufferCount;
 }
 /**************************************************************************************************/
@@ -556,14 +429,10 @@ SynapticEvents::getEventBufferCount
 
 
 cl_uint 
-SynapticEvents::getEventTimeSlots
+Data_SynapticEvents::getEventTimeSlots
 ()
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-#endif
-
   return timeSlots;
 }
 /**************************************************************************************************/
@@ -571,14 +440,10 @@ SynapticEvents::getEventTimeSlots
 
 
 cl_uint 
-SynapticEvents::getEventBufferSize
+Data_SynapticEvents::getEventBufferSize
 ()
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-#endif
-
   return eventBufferSize;
 }
 /**************************************************************************************************/
@@ -586,14 +451,10 @@ SynapticEvents::getEventBufferSize
 
 
 cl_uint 
-SynapticEvents::getEventHistogramBinCount
+Data_SynapticEvents::getEventHistogramBinCount
 ()
 /**************************************************************************************************/
 {
-#if SYNAPTIC_EVENTS_VALIDATION_ENABLE
-  this->isInitialized();
-#endif
-
   return histogramBinCount;
 }
 /**************************************************************************************************/
@@ -606,8 +467,72 @@ SynapticEvents::getEventHistogramBinCount
 
 
 
+void
+Data_SynapticEvents::initialize
+(
+  cl::Context                         &context,
+  cl::Device                          &device,
+  cl::CommandQueue                    &queue,
+  cl_bool                             block,
+  struct kernelStatistics             &kernelStats
+)
+/**************************************************************************************************/
+{
+  size_t size = (this->eventBufferCount)*(this->timeSlots);
+  
+  CALLOC(dataUnsortedEventCounts, cl_uint, size);
+  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataUnsortedEventCounts, kernelStats);
+#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
+  this->dataPastUnsortedEventCounts = (cl_uint *)calloc(size, sizeof(cl_uint));
+#endif
+  
+  size = (this->eventBufferCount)*(this->timeSlots)*(this->eventBufferSize);
+  
+  CALLOC(dataUnsortedEventTargets, cl_uint, size);
+  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataUnsortedEventTargets, kernelStats);
+#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
+  this->dataPastUnsortedEventTargets = (cl_uint *)calloc(size, sizeof(cl_uint));
+#endif
+
+  CALLOC(dataUnsortedEventDelays, cl_uint, size);
+  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataUnsortedEventDelays, kernelStats);
+#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
+  this->dataPastUnsortedEventDelays = (cl_uint *)calloc(size, sizeof(cl_uint));
+#endif
+  
+  CALLOC(dataUnsortedEventWeights, cl_uint, size);
+  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataUnsortedEventWeights, kernelStats);
+#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
+  this->dataPastUnsortedEventWeights = (cl_uint *)calloc(size, sizeof(cl_uint));
+#endif
+  
+  size = (this->timeSlots)*((this->histogramBinCount)*(this->histogramBinSize) + 1);
+  
+  CALLOC(dataHistogram, cl_uint, size);
+  REGISTER_MEMORY_O(device, KERNEL_ALL, MEM_GLOBAL, dataHistogram, kernelStats);
+#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
+  this->dataPastHistogram = (cl_uint *)calloc(size, sizeof(cl_uint));
+#endif
+  
+  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataUnsortedEventCountsBuffer, 
+    this->dataUnsortedEventCountsSizeBytes);
+  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataUnsortedEventTargetsBuffer, 
+    this->dataUnsortedEventTargetsSizeBytes);
+  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataUnsortedEventDelaysBuffer, 
+    this->dataUnsortedEventDelaysSizeBytes);
+  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataUnsortedEventWeightsBuffer, 
+    this->dataUnsortedEventWeightsSizeBytes);
+  CREATE_BUFFER_O(context, CL_MEM_READ_WRITE, this->dataHistogramBuffer, 
+    this->dataHistogramSizeBytes);
+  
+  this->storeData(queue, block, SYNAPTIC_EVENTS_VALID_ALL);
+}
+/**************************************************************************************************/
+
+
+
 void 
-SynapticEvents::initializeEventBuffers
+Data_SynapticEvents::initializeEventBuffers
 (
   cl_uint   unsortedEventTimeSlotDelta,
   cl_uint   histogramBitShift,
@@ -621,7 +546,7 @@ SynapticEvents::initializeEventBuffers
 /**************************************************************************************************/
 {
   SET_RANDOM_SEED(this->srandSeed, this->srandCounter);
-  LOG("SynapticEvents::initializeEventBuffers: set srand seed to " << this->srandSeed, 0);
+  LOG_SIM("Data_SynapticEvents::initializeEventBuffers: set srand seed to " << this->srandSeed);
   
   std::stringstream ss;
 
@@ -713,16 +638,19 @@ SynapticEvents::initializeEventBuffers
     ss << s << "(" << timeSlotTotal << "), ";
   }
   
-  LOG("SynapticEvents::initializeEventBuffers: allocation of events to time slots " << ss.str(), 0);
+  LOG_SIM("Data_SynapticEvents::initializeEventBuffers: allocation of events to time slots " 
+    << ss.str());
 }
 /**************************************************************************************************/
 
 
 
 void 
-SynapticEvents::initializeHistogram
+Data_SynapticEvents::initializeHistogram
 (
+#if CLASS_VALIDATION_ENABLE
   cl_uint   eventDestinationBufferSize
+#endif
 )
 /**************************************************************************************************/
 {
@@ -731,7 +659,7 @@ SynapticEvents::initializeHistogram
   /*Compute offsets based on counters.*/
   cl_uint max_offset = 0;
   
-  print_bins ? std::cout << "SynapticEvents::initializeHistogram: " << 
+  print_bins ? std::cout << "Data_SynapticEvents::initializeHistogram: " << 
     "Number of synaptic events in bins: " << std::endl, true : false;
   
   for(cl_uint i = 0; i < this->timeSlots; i++)
@@ -740,7 +668,7 @@ SynapticEvents::initializeHistogram
     cl_uint runningSum = 0;
     cl_uint runningSize = 0;
     
-    print_bins ? std::cout << "SynapticEvents::initializeHistogram: Time slot " << i 
+    print_bins ? std::cout << "Data_SynapticEvents::initializeHistogram: Time slot " << i 
       << ": [", true : false;
     
     for(cl_uint j = 0; j < (this->histogramBinCount)*(this->histogramBinSize); j++)
@@ -764,22 +692,21 @@ SynapticEvents::initializeHistogram
     
     if(max_offset < runningSum){max_offset = runningSum;}
   }
-
+#if CLASS_VALIDATION_ENABLE
   if(max_offset > eventDestinationBufferSize)
   {
-    std::stringstream ss;
-    ss << "SynapticEvents::initializeHistogram: Destination event buffer overflow. " << 
-      "Need to increase eventDestinationBufferSize, which is currently " << 
-      eventDestinationBufferSize << " above " << max_offset << std::endl;
-    throw SimException(ss.str());
+    THROW_SIMEX("Data_SynapticEvents::initializeHistogram: Destination event buffer overflow. " 
+      << "Need to increase eventDestinationBufferSize, which is currently " 
+      << eventDestinationBufferSize << " above " << max_offset);
   }
+#endif
 }
 /**************************************************************************************************/
 
 
 
 void
-SynapticEvents::getEventBuffers
+Data_SynapticEvents::getData
 (
   cl::CommandQueue    &queue,
   cl_bool             block,
@@ -787,26 +714,19 @@ SynapticEvents::getEventBuffers
 )
 /**************************************************************************************************/
 {
-  if
-  (
-    (selectBitMask & SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS) && 
-    !((this->dataValid) & SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS)
-  )
+  IF_HIT_READ(selectBitMask, SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS, this->dataValid)
   {
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
     swap2(dataUnsortedEventCounts, dataPastUnsortedEventCounts);
 #endif
     
-    ENQUEUE_READ_BUFFER_O(block, queue, this->dataUnsortedEventCountsBuffer, 
+    ENQUEUE_READ_BUFFER(block, queue, this->dataUnsortedEventCountsBuffer, 
       this->dataUnsortedEventCountsSizeBytes, this->dataUnsortedEventCounts);
+      
     this->dataValid |= SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS;
   }
   
-  if
-  (
-    (selectBitMask & SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS) && 
-    !((this->dataValid) & SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS)
-  )
+  IF_HIT_READ(selectBitMask, SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS, this->dataValid)
   {
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
     swap2(dataUnsortedEventTargets, dataPastUnsortedEventTargets);
@@ -814,27 +734,24 @@ SynapticEvents::getEventBuffers
     swap2(dataUnsortedEventWeights, dataPastUnsortedEventWeights);
 #endif
 
-    ENQUEUE_READ_BUFFER_O(block, queue, this->dataUnsortedEventTargetsBuffer, 
+    ENQUEUE_READ_BUFFER(block, queue, this->dataUnsortedEventTargetsBuffer, 
       this->dataUnsortedEventTargetsSizeBytes, this->dataUnsortedEventTargets);
-    ENQUEUE_READ_BUFFER_O(block, queue, this->dataUnsortedEventDelaysBuffer, 
+    ENQUEUE_READ_BUFFER(block, queue, this->dataUnsortedEventDelaysBuffer, 
       this->dataUnsortedEventDelaysSizeBytes, this->dataUnsortedEventDelays);
-    ENQUEUE_READ_BUFFER_O(block, queue, this->dataUnsortedEventWeightsBuffer, 
+    ENQUEUE_READ_BUFFER(block, queue, this->dataUnsortedEventWeightsBuffer, 
       this->dataUnsortedEventWeightsSizeBytes, this->dataUnsortedEventWeights);
       
     this->dataValid |= SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS;
   }
   
-  if
-  (
-    (selectBitMask & SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM) && 
-    !((this->dataValid) & SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM)
-  )
+
+  IF_HIT_READ(selectBitMask, SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM, this->dataValid)
   {
 #if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
     swap2(dataHistogram, dataPastHistogram);
 #endif
 
-    ENQUEUE_READ_BUFFER_O(block, queue, this->dataHistogramBuffer, 
+    ENQUEUE_READ_BUFFER(block, queue, this->dataHistogramBuffer, 
       this->dataHistogramSizeBytes, this->dataHistogram);
       
     this->dataValid |= SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM;
@@ -845,120 +762,7 @@ SynapticEvents::getEventBuffers
 
 
 void
-SynapticEvents::reset
-(
-  bool checkForNull
-)
-/**************************************************************************************************/
-{
-  try
-  {
-  this->resetObject = true;
-  this->dataValid = 0;
-  this->srandSeed = 0;
-  this->srandCounter = 0;
-  this->dataToSimulationLogFile = NULL;
-  this->dataToReportLogFile = NULL;
-  this->eventBufferCount = 0;
-  this->eventBufferSize = 0;
-  this->timeSlots = 0;
-  this->histogramBinCount = 0;
-  this->histogramBinSize = 0;
-  
-  this->dataUnsortedEventTargetsSize = 0;
-  this->dataUnsortedEventTargetsSizeBytes = 0;
-  
-  this->dataUnsortedEventDelaysSize = 0;
-  this->dataUnsortedEventDelaysSizeBytes = 0;
-  
-  this->dataUnsortedEventWeightsSize = 0;
-  this->dataUnsortedEventWeightsSizeBytes = 0;
-  
-  this->dataUnsortedEventCountsSize = 0;
-  this->dataUnsortedEventCountsSizeBytes = 0;
-  
-  this->dataHistogramSize = 0;
-  this->dataHistogramSizeBytes = 0;
-  
-  if(checkForNull)
-  {
-    if(this->dataUnsortedEventCounts)
-    {
-      free(this->dataUnsortedEventCounts);
-      this->dataUnsortedEventCounts = NULL;
-    }
-    if(this->dataUnsortedEventWeights)
-    {
-      free(this->dataUnsortedEventWeights);
-      this->dataUnsortedEventWeights = NULL;
-    }
-    if(this->dataUnsortedEventDelays)
-    {
-      free(this->dataUnsortedEventDelays);
-      this->dataUnsortedEventDelays = NULL;
-    }
-    if(this->dataUnsortedEventTargets)
-    {
-      free(this->dataUnsortedEventTargets);
-      this->dataUnsortedEventTargets = NULL;
-    }
-    if(this->dataHistogram)
-    {
-      free(this->dataHistogram);
-      this->dataHistogram = NULL;
-    }
-#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-    if(this->dataPastUnsortedEventCounts)
-    {
-      free(this->dataPastUnsortedEventCounts);
-      this->dataPastUnsortedEventCounts = NULL;
-    }
-    if(this->dataPastUnsortedEventWeights)
-    {
-      free(this->dataPastUnsortedEventWeights);
-      this->dataPastUnsortedEventWeights = NULL;
-    }
-    if(this->dataPastUnsortedEventDelays)
-    {
-      free(this->dataPastUnsortedEventDelays);
-      this->dataPastUnsortedEventDelays = NULL;
-    }
-    if(this->dataPastUnsortedEventTargets)
-    {
-      free(this->dataPastUnsortedEventTargets);
-      this->dataPastUnsortedEventTargets = NULL;
-    }
-    if(this->dataPastHistogram)
-    {
-      free(this->dataPastHistogram);
-      this->dataPastHistogram = NULL;
-    }
-#endif
-  }
-  else
-  {
-    this->dataUnsortedEventCounts = NULL;
-    this->dataUnsortedEventWeights = NULL;
-    this->dataUnsortedEventDelays = NULL;
-    this->dataUnsortedEventTargets = NULL;
-    this->dataHistogram = NULL;
-#if SYNAPTIC_EVENTS_ENABLE_PAST_EVENTS
-    this->dataPastUnsortedEventCounts = NULL;
-    this->dataPastUnsortedEventWeights = NULL;
-    this->dataPastUnsortedEventDelays = NULL;
-    this->dataPastUnsortedEventTargets = NULL;
-    this->dataPastHistogram = NULL;
-#endif
-  }
-  }
-  CATCH(std::cerr, SynapticEvents::reset, throw SimException("SynapticEvents::reset: failed.");)
-}
-/**************************************************************************************************/
-
-
-
-void
-SynapticEvents::storeBuffers
+Data_SynapticEvents::storeData
 (
   cl::CommandQueue    &queue,
   cl_bool             block,
@@ -968,7 +772,7 @@ SynapticEvents::storeBuffers
 {
   if(selectBitMask & SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS)
   {
-    ENQUEUE_WRITE_BUFFER_O(block, queue, this->dataUnsortedEventCountsBuffer, 
+    ENQUEUE_WRITE_BUFFER(block, queue, this->dataUnsortedEventCountsBuffer, 
       this->dataUnsortedEventCountsSizeBytes, this->dataUnsortedEventCounts);
       
     this->dataValid |= SYNAPTIC_EVENTS_VALID_UNSORTED_EVENT_COUNTS;
@@ -976,11 +780,11 @@ SynapticEvents::storeBuffers
   
   if(selectBitMask & SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS)
   {
-    ENQUEUE_WRITE_BUFFER_O(block, queue, this->dataUnsortedEventTargetsBuffer, 
+    ENQUEUE_WRITE_BUFFER(block, queue, this->dataUnsortedEventTargetsBuffer, 
       this->dataUnsortedEventTargetsSizeBytes, this->dataUnsortedEventTargets);
-    ENQUEUE_WRITE_BUFFER_O(block, queue, this->dataUnsortedEventDelaysBuffer, 
+    ENQUEUE_WRITE_BUFFER(block, queue, this->dataUnsortedEventDelaysBuffer, 
       this->dataUnsortedEventDelaysSizeBytes, this->dataUnsortedEventDelays);
-    ENQUEUE_WRITE_BUFFER_O(block, queue, this->dataUnsortedEventWeightsBuffer, 
+    ENQUEUE_WRITE_BUFFER(block, queue, this->dataUnsortedEventWeightsBuffer, 
       this->dataUnsortedEventWeightsSizeBytes, this->dataUnsortedEventWeights);
       
     this->dataValid |= SYNAPTIC_EVENTS_VALID_UNSORTED_EVENTS;
@@ -988,7 +792,7 @@ SynapticEvents::storeBuffers
   
   if(selectBitMask & SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM)
   {
-    ENQUEUE_WRITE_BUFFER_O(block, queue, this->dataHistogramBuffer, 
+    ENQUEUE_WRITE_BUFFER(block, queue, this->dataHistogramBuffer, 
       this->dataHistogramSizeBytes, this->dataHistogram);
 
     this->dataValid |= SYNAPTIC_EVENTS_VALID_HISTOGRAM_ITEM;
@@ -998,14 +802,10 @@ SynapticEvents::storeBuffers
 
 
 
-void
-SynapticEvents::isInitialized
-()
-/**************************************************************************************************/
-{
-  if(this->resetObject)
-  {
-    throw SimException("SynapticEvents::isInitialized: the object was not initialized");
-  }
-}
+/***************************************************************************************************
+  Warning control
+***************************************************************************************************/
+
+WARNING_CONTROL_END
+
 /**************************************************************************************************/

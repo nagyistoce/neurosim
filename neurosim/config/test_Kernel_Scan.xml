@@ -28,6 +28,9 @@
       <id>SCAN_V00</id>
       <!-- Configuration -->
       <config>
+        <!-- COMPILER: 0x10000, 0x10001 -->
+        <param id="COMPILER">0x10000</param>
+      
         <!-- ENABLE_MASK: oct("0b0100000000000000") -->
         <param id="ENABLE_MASK">oct("0b0100000000000000")</param>                     
         <!-- SYNAPTIC_EVENT_BUFFERS: 32,64,128,256,512. Tahiti: 32 -->
@@ -79,6 +82,9 @@
       <id>SCAN_V01</id>
       <!-- Configuration -->
       <config>
+        <!-- COMPILER: 0x10000, 0x10001 -->
+        <param id="COMPILER">0x10000</param>
+      
         <!-- ENABLE_MASK: oct("0b0001000000000000") -->
         <param id="ENABLE_MASK">oct("0b0001000000000000")</param>                      
         <!-- SYNAPTIC_EVENT_BUFFERS: 32,64,128,256,512. Tahiti: 32-->
@@ -142,6 +148,8 @@
       <param id="Average Events/Iteration"></param>
       <param id="Average Spikes/Iteration"></param>
       <param id="Total Time"></param>
+      <param id="Total Setup Time"></param>
+      <param id="Total Run Time"></param>
       <param id="Result"></param>
       <param id="Kernel kernelExpandEvents Total Time"></param>
       <param id="Kernel kernelExpandEvents Average Time"></param>

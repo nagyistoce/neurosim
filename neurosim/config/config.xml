@@ -8,8 +8,6 @@
       <MSWin32>
         <!-- Target architecture. Options: x86_64 -->
         <param id="TARGET_ARCHITECTURE">"x86_64"</param>
-        <!-- Windows compiler. Options: vc, mingw -->
-        <param id="WIN_COMPILER">"vc"</param>
         <!-- Visual compiler directory (depends on target TARGET_ARCHITECTURE) -->
         <param id="WIN_VC_DIR">"C:/Program Files (x86)/Microsoft Visual Studio 10.0/VC/bin/x86_amd64"</param>
         <!-- Visual compiler directory (depends on target WIN_VC_DIR) -->

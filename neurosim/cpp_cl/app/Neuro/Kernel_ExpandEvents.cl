@@ -303,7 +303,7 @@ void expand_events
       /*Events with 0.0 time bounce back to the previous time slot*/
       /*TODO: get rid of it, possibly needs changes in update phase*/
       if(event_time_binned == 0.0f){event_time_binned = 1.0f;}
-      uint bin_correction = (int)event_time_binned;
+      int bin_correction = (int)event_time_binned;
       /*Calculate time slot*/
       uint time_slot = ((step + (int)event_time - bin_correction) % EXPAND_EVENTS_TIME_SLOTS);
       
