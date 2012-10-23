@@ -285,7 +285,7 @@ Operator_Expand::expandUnitTest
           CL_TRUE,
           0.0, 
           0.0, 
-          NULL
+          -1.0
         );
       }
       else if(relativeTimeStep == resetTimeSlot - 1)
@@ -296,7 +296,7 @@ Operator_Expand::expandUnitTest
           CL_TRUE,
           100.0, 
           100.0, 
-          NULL
+          -1.0
         );
       }
       else
@@ -307,7 +307,7 @@ Operator_Expand::expandUnitTest
           CL_TRUE,
           0.0, 
           (double)(100*relativeTimeStep/resetTimeSlot), 
-          NULL
+          -1.0
         );
       }
     }
@@ -491,7 +491,9 @@ Operator_Expand::verifyExpand
         /*Make it relative to its time slot*/
         cl_float event_time_binned = event_time - (int)event_time;
         /*Events with 0.0 time bounce back to the previous time slot*/
+        WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
         if(event_time_binned == 0.0f){event_time_binned = 1.0f;}
+        WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
         int bin_correction = (int)event_time_binned;
         /*Calculate time slot*/
         cl_uint time_slot = 

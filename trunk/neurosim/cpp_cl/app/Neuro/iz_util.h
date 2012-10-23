@@ -36,6 +36,10 @@ WARNING_CONTROL_START
 
 
 
+#if UPDATE_NEURONS_ENABLE_V00
+
+
+
 typedef struct 
 {
 	double E; 											/*Electrical elastance 1/C*/
@@ -115,6 +119,10 @@ typedef struct
 void iz_derivs(double *, double *, double *);
 void iz_first(DATA_TYPE **, DATA_TYPE *);
 void iz_iter(DATA_TYPE **, DATA_TYPE **, DATA_TYPE *, int);
+
+
+
+#endif  /*UPDATE_NEURONS_ENABLE_V00*/
 
 
 

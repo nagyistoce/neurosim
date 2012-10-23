@@ -134,7 +134,7 @@ replaceNewlineWithSpaces
 {
   size_t pos = string.find_first_of('\n', 0);
   
-  while(pos != -1)
+  while(pos != string::npos)
   {
       string.replace(pos, 1, " ");
       pos = string.find_first_of('\n', pos + 1);
@@ -142,7 +142,7 @@ replaceNewlineWithSpaces
   
   pos = string.find_first_of('\r', 0);
   
-  while(pos != -1)
+  while(pos != string::npos)
   {
       string.replace(pos, 1, " ");
       pos = string.find_first_of('\r', pos + 1);

@@ -85,8 +85,7 @@ Data_SynapticEvents::setUnsortedEvents
   cl::CommandQueue    &queue,
   cl_bool             block,
   cl_bool             initHistogram,
-  cl_uint             unsortedEventTimeSlotDelta,
-
+  int                 unsortedEventTimeSlotDelta,
   cl_uint             histogramBitShift,
   cl_uint             histogramBinMask,
   cl_uint             neuronCount,
@@ -534,7 +533,7 @@ Data_SynapticEvents::initialize
 void 
 Data_SynapticEvents::initializeEventBuffers
 (
-  cl_uint   unsortedEventTimeSlotDelta,
+  int       unsortedEventTimeSlotDelta,
   cl_uint   histogramBitShift,
   cl_uint   histogramBinMask,
   cl_uint   neuronCount,
@@ -559,7 +558,7 @@ Data_SynapticEvents::initializeEventBuffers
     {
       cl_uint event_total = this->eventBufferSize;
       
-      if(unsortedEventTimeSlotDelta != NULL)
+      if(unsortedEventTimeSlotDelta >= 0)
       {
         event_total = cl_uint(unsortedEventTimeSlotDelta*
           (this->timeSlots - s - 1)*(1 - percentTimeSlotDeltaDeviation/100.0) +

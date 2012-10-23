@@ -132,14 +132,14 @@ class Operator_Sort
     dataPastHistogramGroupEventsTik(NULL),
 #endif
     /* *** */
-    dataToSimulationLogFile(dataToSimulationLogFile),
-    dataToReportLogFile(dataToReportLogFile),
     dataValid(0),
-    srandSeed(1),
-    srandCounter(0),
     histogramBacketCount(histogramBacketCount),
     histogramBinSize(histogramBinSize),
-    histogramBinCount(histogramBinCount)
+    histogramBinCount(histogramBinCount),
+    srandSeed(1),
+    srandCounter(0),
+    dataToSimulationLogFile(dataToSimulationLogFile),
+    dataToReportLogFile(dataToReportLogFile)
 /**************************************************************************************************/
   {
     /* Must be called only from the constructor and only once*/

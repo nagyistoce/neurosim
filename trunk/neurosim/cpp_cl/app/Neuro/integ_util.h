@@ -33,13 +33,11 @@ WARNING_CONTROL_START
 
 /**************************************************************************************************/
 
-#if !defined (UPDATE_NEURONS_TOLERANCE_MODE)
-  #define UPDATE_NEURONS_TOLERANCE_MODE                       TOLERANCE_MODE
-#endif
 
-#if !defined (UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD)
-  #define UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD   1
-#endif
+
+#if UPDATE_NEURONS_ENABLE_V00
+
+
 
 extern void ps_update(DATA_TYPE **, int, int, DATA_TYPE, DATA_TYPE *);
 
@@ -93,6 +91,10 @@ extern void rzextr(int,double,double *,double *,double *,int,double *,
 
 extern int bs_step(double *, double *, double *, int, double, double *, 
   double *, void (*)(double *, double *, double *));
+
+  
+  
+#endif  /*UPDATE_NEURONS_ENABLE_V00*/
 
 
 

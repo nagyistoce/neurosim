@@ -14,6 +14,10 @@ WARNING_CONTROL_START
 
 
 
+#if UPDATE_NEURONS_ENABLE_V00
+
+
+
 /*Parker-Sochacki stepper - Solve and update in one function*/
 int ps_step
 (
@@ -36,18 +40,23 @@ int ps_step
 
   /*Calculate first order terms*/
 	first(y,fp); 
-	if(dt == 1)for(i=0;i<nv;i++)y1[i]=y[i][0]+y[i][1];
-  else{for(i=0;i<nv;i++)y1[i]=y[i][0]+dt*y[i][1]; dt_pow=dt*dt;}
   
+  WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+  if(dt == 1)for(i=0;i<nv;i++)y1[i]=y[i][0]+y[i][1];
+  else{for(i=0;i<nv;i++)y1[i]=y[i][0]+dt*y[i][1]; dt_pow=dt*dt;}
+  WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+
   /*Iterations*/
   for(p=1;p<(ps_limit-1);p++)
   {
     iter(y,co,fp,p);
     
 		/*Update*/
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
     if(dt == 1)for(i=0;i<nv;i++)ynew[i]=y1[i]+y[i][p+1]; 
     else{for(i=0;i<nv;i++)ynew[i]=y1[i]+y[i][p+1]*dt_pow; dt_pow*=dt;}
-    
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+
     /*Check for divergence*/
 #if (UPDATE_NEURONS_USE_VPEAK_FOR_DIVERGENCE_THRESHOLD)
     if((fabs(y[0][p+1])>fp[2] )){diverged = 1; break;}
@@ -79,14 +88,20 @@ int ps_step0(double **y,double **co,double *y1,double *ynew,double *fp,
 	void (*iter)(double **,double **,double *,int),int stop,int ps_limit, int nv, int err_nv){
   int i,p; double dt=fp[99], dt_pow=0;
   first(y,fp); /*Calculate first order terms*/
+  WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
 	if(dt == 1)for(i=0;i<nv;i++)y1[i]=y[i][0]+y[i][1];
   else{for(i=0;i<nv;i++)y1[i]=y[i][0]+dt*y[i][1]; dt_pow=dt*dt;}
+  WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END
   for(p=1;p<(ps_limit-1);p++){/*Iterations*/
     iter(y,co,fp,p);
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
 		if(dt == 1)for(i=0;i<nv;i++)ynew[i]=y1[i]+y[i][p+1]; /*Update*/
     else{for(i=0;i<nv;i++)ynew[i]=y1[i]+y[i][p+1]*dt_pow; dt_pow*=dt;}
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
     if((fabs(y[0][p+1])>10.0)){p=-1;break;} /*Check for divergence*/
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
     for(i=0;i<err_nv;i++){if(ynew[i]-y1[i]) break;} /*zero tolerance*/
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
     if(i==err_nv)break;
     for(i=0;i<nv;i++)y1[i]=ynew[i];
   } p++;
@@ -105,6 +120,7 @@ void ps_update
   DATA_TYPE *ynew
 ){
 	int i;
+  WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
 	if(dt == 1)
   {
     for(i=1,*ynew=y[var][0];i<=ps_order;i++)*ynew+=y[var][i];
@@ -115,6 +131,7 @@ void ps_update
 		*ynew=y[var][ps_order]*dt+y[var][ps_order-1];
 		for(i=ps_order-2;i>=0;i--){*ynew=y[var][i]+*ynew*dt;}
 	}
+  WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
 }
 
 
@@ -272,8 +289,10 @@ void rzextr(int iest,double xest,double *yest,double *yz,double *yerr,
   		v=d[j][0]; d[j][0]=yy=c=yest[j];
   		for(k=1;k<=iest;k++){
   			b1=fx[k]*v; b=b1-c;
+        WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
   			if(b){b=(c-v)/b;ddy=c*b;c=b1*b;}
   			else ddy=v;
+        WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
   			if(k != iest) v=d[j][k];
   			d[j][k]=ddy; yy+=ddy;
   		}
@@ -310,6 +329,10 @@ int bs_step(double *y,double *y0,double *dydt,int nv,double dt,
   for(i=0;i<nv;i++){free(d[i]);} free(d);free(yerr);free(yseq);free(y1);
   return k;
 }
+
+
+
+#endif  /*UPDATE_NEURONS_ENABLE_V00*/
 
 
 

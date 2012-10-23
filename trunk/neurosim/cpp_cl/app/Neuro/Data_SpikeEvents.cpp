@@ -78,7 +78,7 @@ Data_SpikeEvents::setEvents
   double targetPacketSpikes = 0;
   cl_uint totalNetworkSpikes = 0;
 
-  if(spikeNeuronsPermil != NULL)
+  if(spikeNeuronsPermil >= 0.0)
   {
     maxSpikesPerPacket = cl_uint(ceil(1.5*(double)maxSpikesPerPacket*(spikeNeuronsPermil/1000)));
     targetPacketSpikes = (double)neuronsPerPacket*(spikeNeuronsPermil/1000);
@@ -102,11 +102,12 @@ Data_SpikeEvents::setEvents
     
     cl_uint totalSpikes = this->spikePacketSize;
     
-    if(spikeNeuronsPermil != NULL)
+    if(spikeNeuronsPermil >= 0.0)
     {
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
       GET_RANDOM_INT(totalSpikes, maxSpikesPerPacket, spikeBufferMinPercentFill, 
         spikeBufferMaxPercentFill);
-        
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
       /* correct spikes if not achieving the target */
       int spikeDifference =  int(targetPacketSpikes*packet - (double)totalNetworkSpikes);
       
@@ -122,8 +123,10 @@ Data_SpikeEvents::setEvents
     }
     else
     {
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
       GET_RANDOM_INT(totalSpikes, this->spikePacketSize, 
         spikeBufferMinPercentFill, spikeBufferMaxPercentFill);
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
     }
     
     totalNetworkSpikes += totalSpikes;

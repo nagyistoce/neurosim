@@ -304,7 +304,7 @@ class Data_SynapticEvents
     cl::CommandQueue&,
     cl_bool,
     cl_bool,
-    cl_uint,
+    int,
     cl_uint,
     cl_uint,
     cl_uint,
@@ -514,7 +514,7 @@ class Data_SynapticEvents
   void 
   initializeEventBuffers
   (
-    cl_uint,
+    int,
     cl_uint,
     cl_uint,
     cl_uint,

@@ -22,6 +22,9 @@ use Switch;
 use XML::Simple;
 use XML::Parser;
 use Fcntl;
+use File::Path qw(make_path remove_tree);
+use File::Copy qw(copy);
+use Cwd;
 
 # Constants:
 use constant COMPILER_WIN_VC                                  => 0x10000;
@@ -32,8 +35,8 @@ use constant OS_LINUX                                         => "linux";
 use constant NODE_COMPILE                                     => "Node Compile";
 use constant NODE_EXECUTE                                     => "Node Execute";
 use constant PREPEND_CUE                                      => "PREPEND CUE";
-use constant STD_OUT                                          => "stdout.txt";
-use constant STD_ERR                                          => "stderr.txt";
+use constant STD_OUT                                          => "stdout.txt";  # stdout.txt
+use constant STD_ERR                                          => "stderr.txt";  # stderr.txt
 
 # Globals:
 our $CONFIG;
@@ -43,15 +46,9 @@ our $WIN_VC_DIR;
 our $WIN_VC_ENV_SCRIPT;
 our $WIN_MINGW_DIR;
 our $WIN_MSYS_DIR;
-our $MKDIR = "";
 our $COMP = "";
 our $LINK = "";
-our $RMDIR = "";
-our $RM = "";
-our $CP = "";
-our $CD = "cd";
 our $AR = "";
-our $INSTALL = "";
 our $I = "";
 our $D = "";
 our $CURRENT_DIR  = "";
@@ -171,42 +168,23 @@ our %APP_SPECIAL_CONFIG =
   (
     "COMPILER"  =>  ""
   );
+  
+# Determine current directory
+$CURRENT_DIR = cwd(); chomp( $CURRENT_DIR );
 
 # OS-specific builds
 if( $OS eq OS_WINDOWS )
 {
-  # Determine current directory
-  $CURRENT_DIR = `$CD`; chomp( $CURRENT_DIR );
-  
   # Define OCL root directory
   if( not(-d $OCL_DIR) ) 
   {
     die "Required software OpenCL SDK is not found in $OCL_DIR. ".
       "Install the software and/or modify OCL_DIR constant\n";
   }
-  
-  # Verify msys path
-  if( not(-d $WIN_MSYS_DIR) )
-  {
-    die "Required software msys is not found in $WIN_MSYS_DIR. ".
-      "Install the software and/or modify WIN_MSYS_DIR parameter in config.xml\n";
-  }
-  else
-  {
-=for
-  TODO:
-  Note: To use Msys under MinGW64-x64: 
-  a. Open the fstab file (available at msys/1.0/etc/) 
-  b. Modify according to your MinGW64-w64 path. For example, modify
-  C:\MinGW\ /mingw to C:\MinGW64\ /ming
-=cut
-  }
 
   # Set additional environment variables
   #
   print "Setting environment variables\n";
-  #
-  $ENV{"PATH"} = "$WIN_MSYS_DIR;".$ENV{"PATH"};
   #
   foreach my $p (keys %{$CONFIG->{config}->{environment}->{param}})
   {
@@ -217,16 +195,9 @@ if( $OS eq OS_WINDOWS )
   
   #foreach my $key (sort keys(%ENV)) {print "$key = $ENV{$key}\n";}
   
-  # Set compilation tool executable names
-  $MKDIR = "mkdir";
-  $RMDIR = "rm -dfr";
-  $RM = "rm";
-  $CP = "cp";
-  $INSTALL = "install -D";
-  
   if(not(-d $REPORT_LOG_DIR)) 
   {
-    system( "$MKDIR \"$REPORT_LOG_DIR\"" );
+    make_path($REPORT_LOG_DIR);
     
     if(not(-d $REPORT_LOG_DIR)) 
     {
@@ -238,6 +209,8 @@ else
 {
   die "ERROR: Unsupported OS: $OS\n";
 }
+
+our %ENV_ORIGINAL = %ENV;
 
 # $| is an abbreviation for $OUTPUT_AUTOFLUSH. Setting it to nonzero enables autoflush on the 
 # currently-selected file handle, which is STDOUT by default. So the effect is to ensure that 
@@ -572,10 +545,11 @@ sub configureCompiler
   {
     die "\nSpecial variable COMPILER is not set\n";
   }
+  
+  # Restore environment
+  %ENV = %ENV_ORIGINAL;
 
   # Set compilation environment based on compiler selection
-  my $COMPILER_DIR = "";
-  
   if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_MINGW64 ) 
   {
     if( not(-d $WIN_MINGW_DIR) )
@@ -584,25 +558,49 @@ sub configureCompiler
         "Install the software and/or modify WIN_MINGW_DIR parameter in config.xml\n";
     }
     
-    $COMPILER_DIR = $WIN_MINGW_DIR;
-    
-    $APP_LIB_CONFIG = "-L\"/usr/X11R6/lib\" -lSDKUtil -lOpenCL ".
-      "-L\"$SCRIPT_ROOT_DIR/lib/$TARGET_ARCHITECTURE\" ".
-      "-L\"$OCL_DIR/lib/$TARGET_ARCHITECTURE\"";
-      
-    $I = "-I";
-    $D = "-D";
+    my $compiler_dir = $WIN_MINGW_DIR;
+
+    $I    = "-I";
+    $D    = "-D";
+    $AR   = "ar -rsc";
     $COMP = "g++";
     $LINK = "g++";
-    $UTIL_COMPILER_OPS = "-m64 -Wpointer-arith -Wfloat-equal -g3 -ffor-scope";
-    $APP_COMPILER_OPS = "-m64 -Wpointer-arith -Wfloat-equal -g3 -ffor-scope";
-    #$APP_COMPILER_OPS = "-m32 -msse2 -Wpointer-arith   -Wfloat-equal -g3 -ffor-scope";
+    
+    my $commonCompilerOptions = "".
+      "-m64 ".            # Bitness: -m32,(32bit i386 code); -m64,(64bit x86-64 code)
+      #"-g3 ".             # Produce debugging information at level: 1, 2, or 3
+      "-ffor-scope ".     # Scope of variables declared in a for loop is limited to the loop itself
+      "-O3 ".             # Optimization level: g(for debug), 0, 1, 2, 3(highest optimization)
+      #"-Ofast ".          # Optimize for speed: -O3 + disregarding exact standards compliance
+      "-Wpointer-arith ". # Warn about function pointer arithmetic
+      "-mhard-float ".    # Use hardware fp
+      "-Wfloat-equal ".   # Warn if testing floating point numbers for equality
+      #"-Wall ".           # Enable most warning messages
+      #"-Wextra ".         # Print extra (possibly unwanted) warnings
+      "-Werror ".         # Make all warnings into errors
+      " ";
+      
+    my $commonUserOptions = "".
+      "$D WIN32 ".                    # 
+      "$D NDEBUG ".                   # 
+      "$D COMPILER=".COMPILER_WIN_MINGW64. # 
+      " ";
+    
+    # -mdll                       Generate code for a DLL
+    $UTIL_COMPILER_OPS = $commonCompilerOptions." ".$commonUserOptions;
+    
+    $APP_COMPILER_OPS = $commonCompilerOptions." ".$commonUserOptions;
+    
     $APP_LINK_OPS = "";
-    $AR = "ar -rsc";
+
+    $APP_LIB_CONFIG = "-L\"/usr/X11R6/lib\" ".
+      "-L\"$SCRIPT_ROOT_DIR/lib/$TARGET_ARCHITECTURE\" ".
+      "-L\"$OCL_DIR/lib/$TARGET_ARCHITECTURE\" ".
+      "-lOpenCL";
 
     # Add required entries to the PATH
-    print "Adding $COMPILER_DIR; to the PATH\n";
-    $ENV{"PATH"} = "$COMPILER_DIR;".$ENV{"PATH"};
+    #
+    $ENV{"PATH"} = "$compiler_dir;".$ENV{"PATH"};
   }
   
   if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_VC )
@@ -613,15 +611,15 @@ sub configureCompiler
         "Install the software and/or modify WIN_VC_DIR parameter in config.xml\n";
     }
     
-    $COMPILER_DIR = $WIN_VC_DIR;
+    my $compiler_dir = $WIN_VC_DIR;
     
-    $I = "/I";
-    $D = "/D";
-    $AR = "\"$COMPILER_DIR/lib.exe\"";
-    $COMP = "\"$COMPILER_DIR/cl.exe\"";
-    $LINK = "\"$COMPILER_DIR/link.exe\"";
+    $I    = "/I";
+    $D    = "/D";
+    $AR   = "\"$compiler_dir/lib.exe\"";
+    $COMP = "\"$compiler_dir/cl.exe\"";
+    $LINK = "\"$compiler_dir/link.exe\"";
     
-    my $commonOptions = "".
+    my $commonCompilerOptions = "".
       "/c ".                # Compile without linking
       "/EHa ".              # Exception handling: a,asynchronouse; s,sync (C++ only)
       "/errorReport:none ". # Error reports sent to MicroSoft
@@ -645,14 +643,19 @@ sub configureCompiler
       "/Zc:wchar_t  ".      # wchar_t is a native type: wchar_t,enable; wchar_t-,disable
       "/Zc:forScope  ".     # Create a separate scope for each "for" loop
       #"/Zi ".              # Generate complete debugging information
-      " ";
+      "";
       
-    $UTIL_COMPILER_OPS = $commonOptions.
-      "/D WIN32 /D NDEBUG /D _LIB /D COMPILER=".COMPILER_WIN_VC;
+    my $commonUserOptions = "".
+      "$D WIN32 ".                    # 
+      "$D NDEBUG ".                   # 
+      "$D COMPILER=".COMPILER_WIN_VC. # 
+      "";
       
-    $APP_COMPILER_OPS = $commonOptions.
-      "/D WIN32 /D NDEBUG /D _CONSOLE /D ATI_OS_WIN /D _CRT_SECURE_NO_DEPRECATE ".
-      "/D _CRT_NONSTDC_NO_DEPRECATE /D COMPILER=".COMPILER_WIN_VC;
+    $UTIL_COMPILER_OPS = $commonCompilerOptions." ".$commonUserOptions." $D _LIB";
+      
+    $APP_COMPILER_OPS = $commonCompilerOptions." ".$commonUserOptions.
+      " $D _CONSOLE $D ATI_OS_WIN $D _CRT_SECURE_NO_DEPRECATE ".
+      "$D _CRT_NONSTDC_NO_DEPRECATE";
       
     $APP_LINK_OPS = "".
       "/nologo ".       # Suppresses the display of the copyright banner informational messages.
@@ -676,8 +679,10 @@ sub configureCompiler
       "ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib";
     
     # Set script compilation environment based on $WIN_VC_ENV_SCRIPT
+    #
     my $e = `"$WIN_VC_DIR/$WIN_VC_ENV_SCRIPT" & set`; chomp( $e );
     my @env = split("\n", $e);
+    #
     foreach $e (@env)
     {
       my @ea = split("=", $e, 2);
@@ -694,13 +699,14 @@ sub configureCompiler
   {
     $UTIL_INCL_DIR .= " $I \"$SCRIPT_ROOT_DIR/$n\"";
   }
-  
-  # Create include directive to compiler
+  #
   $APP_INCL_DIR = "$I \"$OCL_DIR/include\"";
   for my $n (@APP_INCL_DIR) 
   {
     $APP_INCL_DIR .= " $I \"$SCRIPT_ROOT_DIR/$n\"";
   }
+  
+  #print Dumper(%ENV);
 }
 
 
@@ -714,20 +720,22 @@ sub compileAndRunApp
   my $config = $_[0];
   my $node = $_[1];
   my $ts = $_[2];
-  
+
   # Attempt to compile
-  my $compile_error = &compileApp($config);
+  my @data = &compileApp($config);
   #
-  if(not($compile_error eq ""))
+  if(not($data[0] eq ""))
   {
+    $data[1] =~ tr/,/;/; $data[1] =~ s/"/""/g;
     # mark as failed to compile
-    $APP_REPORT{NODE_COMPILE.' '.$node} = $compile_error;
+    $APP_REPORT{NODE_COMPILE.' '.$node} = $data[0].$data[1];
     return 0;
   }
   else
   {
+    $data[1] =~ tr/,/;/; $data[1] =~ s/"/""/g;
     # mark as passed to compile
-    $APP_REPORT{NODE_COMPILE.' '.$node} = "PASS";
+    $APP_REPORT{NODE_COMPILE.' '.$node} = "PASS".$data[1];
     &runApp;
     
     my $runResult = &parseResults;
@@ -772,109 +780,119 @@ sub compileApp
   my $config = shift;
   my $temp = "";
   my $result = "";
+  my $info = "";
   
   # Clean
   #
-  $temp = "del /Q \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/\"";
-  $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+  $temp = "$SCRIPT_ROOT_DIR/$APP_BIN_DIR";
+  if(-e $temp) 
+  {
+    remove_tree($temp,{verbose => 0}); make_path($temp);
+  }
   #
-  $temp = "del /Q \"$APP_INSTALL_DIR/\"";
-  $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+  if(-e $APP_INSTALL_DIR) 
+  {
+    remove_tree($APP_INSTALL_DIR,{verbose => 0}); make_path($APP_INSTALL_DIR);
+  }
+  
+  # Copy src files into build dir
   #
-  $temp = "$RMDIR \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR\"";
-  $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+  for my $n (@APP_SRC_C, @APP_SRC_H) 
+  {
+    copy "$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n", "$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n";
+  }
+  
+  # Insert configuration-specific defenitions at predetermined cue
   #
-  $temp = "$MKDIR \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR\"";
-  $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+  {
+    $temp = "";
+    
+    my @configArray = split("$D", $config);
+    
+    shift(@configArray); 
+    
+    for my $n (@configArray) 
+    {
+      replaceSubStr($n, "=", " ");
+      replaceSubStr($n, "\\\"", "\"");
+      
+      $temp .= "#define $n\n";
+    }
+    
+    $info .= "\n\nDefinitions:\n".$temp."\n";
+    
+    my $optionsFile = "$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_DEFINITION_FILE_NAME";
+    sysopen(MYINPUTFILE, $optionsFile, O_RDONLY) || 
+      die("compileApp: Cannot open file $optionsFile for read");
+    my @configFile = <MYINPUTFILE>; 
+    close(MYINPUTFILE);
+    
+    #&validateDefinitions(\@configFile);
+    
+    my $inserted = 0;
+    
+    foreach my $i (0..(scalar(@configFile)-1)) 
+    {
+      if (index($configFile[$i], PREPEND_CUE) != -1)
+      {
+        $configFile[$i] = "\n".$temp."\n"; $inserted = 1; last;
+      }
+    }
+    
+    if($inserted == 0)
+    {
+      die("compileApp: Cannot insert configuration-specific defenitions in ".
+        "$APP_DEFINITION_FILE_NAME");
+    }
+    
+    sysopen(MYOUTFILE, $optionsFile, O_WRONLY|O_TRUNC|O_CREAT) || 
+      die("compileApp: Cannot open file $optionsFile for write");
+    print MYOUTFILE @configFile;
+    close(MYOUTFILE);
+  }
+  
   
   # Option COMPILER_WIN_MINGW64
   #
   if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_MINGW64 )
   {
+    my $tempO = "";
+    
     # Build
+    #
+    print "Building application (COMPILER_WIN_MINGW64)\n";
     #
     for my $n (@APP_SRC_C) 
     {
-      $temp = "$COMP $APP_COMPILER_OPS $config $APP_INCL_DIR ".
-        "-o \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n.o\" ".
-        "-c \"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\"";
-      print "Building $n\n";
-      print "$temp\n";
-      $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+      my @pureName = split(/\./, $n);
+      my $output = "\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/".$pureName[0].".o\" ";
+      $temp = "$COMP $APP_COMPILER_OPS $APP_INCL_DIR ".
+        "-o ".$output.
+        "-c \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n\"";
+      $tempO .= $output;
+      
+      #print "Building $n\n"; print "$temp\n";
+      $result = &systemCall($temp, STD_OUT, STD_ERR); 
+      $info .= "Build:\n".$temp."\n\n";
+      return ($result, $info) unless($result eq "");
     }
 
     # Link
     #
-    $temp = "$LINK $APP_LINK_OPS -o \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME\"";
-    for my $n (@APP_SRC_C) 
-    {
-      $temp .= " \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n.o\"";
-    }
-    $temp .= " $APP_LIB_CONFIG";
-    print "Linking\n";
-    print "$temp\n";
-    $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+    $temp = "$LINK $APP_LINK_OPS -o \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME.exe\" ".$tempO.
+      "$APP_LIB_CONFIG";
+    #
+    print "Linking application\n";
+    #print "$temp\n";
+    $result = &systemCall($temp, STD_OUT, STD_ERR); 
+    $info .= "Link:\n".$temp."\n\n";
+    return ($result, $info) unless($result eq "");
   }
   
   # Option COMPILER_WIN_VC
   #
   if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_VC ) 
   {
-    # Copy src files into build dir
-    #
-    for my $n (@APP_SRC_C, @APP_SRC_H) 
-    {
-      $temp = "$CP \"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\" \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/\"";
-      $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
-    }
-    
-    # Insert configuration-specific defenitions at predetermined cue
-    #
-    {
-      $temp = "";
-      
-      my @configArray = split("/D", $config);
-      
-      shift(@configArray); 
-      
-      for my $n (@configArray) 
-      {
-        replaceSubStr($n, "=", " ");
-        replaceSubStr($n, "\\\"", "\"");
-        
-        $temp .= "#define $n\n";
-      }
-      
-      my $optionsFile = "$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_DEFINITION_FILE_NAME";
-      sysopen(MYINPUTFILE, $optionsFile, O_RDONLY) || 
-        die("compileApp: Cannot open file $optionsFile for read");
-      my @configFile = <MYINPUTFILE>; 
-      close(MYINPUTFILE);
-      
-      #&validateDefinitions(\@configFile);
-      
-      my $inserted = 0;
-      
-      foreach my $i (0..(scalar(@configFile)-1)) 
-      {
-        if (index($configFile[$i], PREPEND_CUE) != -1)
-        {
-          $configFile[$i] = "\n".$temp."\n"; $inserted = 1; last;
-        }
-      }
-      
-      if($inserted == 0)
-      {
-        die("compileApp: Cannot insert configuration-specific defenitions in ".
-          "$APP_DEFINITION_FILE_NAME");
-      }
-      
-      sysopen(MYOUTFILE, $optionsFile, O_WRONLY|O_TRUNC|O_CREAT) || 
-        die("compileApp: Cannot open file $optionsFile for write");
-      print MYOUTFILE @configFile;
-      close(MYOUTFILE);
-    }
-
     # Assemble src and obj file paths
     #
     my $tempS = ""; my $tempO = "";
@@ -893,9 +911,11 @@ sub compileApp
       "/Fd\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/vc100.pdb\" ".
       "$tempS";
     #
-    print "Building application\n";
+    print "Building application (COMPILER_WIN_VC)\n";
     #print "$temp\n";
-    $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+    $result = &systemCall($temp, STD_OUT, STD_ERR); 
+    $info .= "Build:\n".$temp."\n\n";
+    return ($result, $info) unless($result eq "");
     
     # Link
     #
@@ -907,7 +927,9 @@ sub compileApp
     #
     print "Linking application\n";
     #print "$temp\n";
-    $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+    $result = &systemCall($temp, STD_OUT, STD_ERR); 
+    $info .= "Link:\n".$temp."\n\n";
+    return ($result, $info) unless($result eq "");
   }
   
   # Install the app
@@ -915,53 +937,46 @@ sub compileApp
   {
     print "Installing application\n";
     
-    if( not(-e "$APP_INSTALL_DIR") ) 
+    if( not(-e $APP_INSTALL_DIR) ) 
     {
-      $temp = "$MKDIR \"$APP_INSTALL_DIR\"";
-      $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+      make_path($APP_INSTALL_DIR);
     }
     
     for my $n ("$APP_NAME.exe", $APP_DEFINITION_FILE_NAME)
     {
-      $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n\" \"$APP_INSTALL_DIR/$n\"";
-      #print "$temp\n";
-      $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+      copy "$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$n", "$APP_INSTALL_DIR/$n";
 
       if( not(-e "$APP_INSTALL_DIR/$n") ) 
       {
         print "The file $n was not installed in \"$APP_INSTALL_DIR/$n\"\n";
-        return "FAIL: Install 1";
+        return ("FAIL: Install 1", $info);
       }
     }
     
     for my $n (@APP_KERNEL_FILE_NAMES)
     {
-      $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n\" \"$APP_INSTALL_DIR/$n\"";
-      #print "$temp\n";
-      $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+      copy "$SCRIPT_ROOT_DIR/$APP_SRC_DIR/$n", "$APP_INSTALL_DIR/$n";
 
       if( not(-e "$APP_INSTALL_DIR/$n") ) 
       {
         print "The file $n was not installed in \"$APP_INSTALL_DIR/$n\"\n";
-        return "FAIL: Install 2";
+        return ("FAIL: Install 2", $info);
       }
     }
     
     for my $n (@APP_CONFIG_FILE_NAMES) 
     {
-      $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/config/$n\" \"$APP_INSTALL_DIR/$n\"";
-      #print "$temp\n";
-      $result = &systemCall($temp, STD_OUT, STD_ERR); return $result unless($result eq "");
+      copy "$SCRIPT_ROOT_DIR/config/$n", "$APP_INSTALL_DIR/$n";
 
       if( not(-e "$APP_INSTALL_DIR/$n") ) 
       {
         print "The file $n was not installed in \"$APP_INSTALL_DIR/$n\"\n";
-        return "FAIL: Install 3";
+        return ("FAIL: Install 3", $info);
       }
     }
   }
 
-  return $result;
+  return ($result, $info);
 }
 
 
@@ -975,7 +990,7 @@ sub runApp
   print "Giving execution control to $APP_NAME.exe\n";
   chdir("$APP_INSTALL_DIR");
   system("$APP_INSTALL_DIR/$APP_NAME.exe");
-  chdir("$APP_INSTALL_DIR");
+  chdir("$CURRENT_DIR");
 }
 
 
@@ -1040,8 +1055,11 @@ sub compileUtil
   my $temp = "";
   
   # Clean bin dir
-  system( "$RMDIR \"$SCRIPT_ROOT_DIR/$UTIL_BIN_DIR\"" );
-  system( "$MKDIR \"$SCRIPT_ROOT_DIR/$UTIL_BIN_DIR\"" );
+  $temp = "$SCRIPT_ROOT_DIR/$UTIL_BIN_DIR";
+  if(-e $temp) 
+  {
+    remove_tree($temp,{verbose => 0}); make_path($temp);
+  }
 
   if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_MINGW64 ) 
   {
@@ -1066,11 +1084,10 @@ sub compileUtil
     
     # Install the library
     print "Installing library lib$UTIL_NAME.a\n";
-    $temp = "$INSTALL \"$SCRIPT_ROOT_DIR/$UTIL_BIN_DIR/lib$UTIL_NAME.a\" ".
+    copy "$SCRIPT_ROOT_DIR/$UTIL_BIN_DIR/lib$UTIL_NAME.a",
       "\"$SCRIPT_ROOT_DIR/$UTIL_INSTALL_DIR/lib$UTIL_NAME.a\"";
-    print "$temp\n";
-    system( "$RM \"$SCRIPT_ROOT_DIR/$UTIL_INSTALL_DIR/lib$UTIL_NAME.a\"" );
-    system( $temp );
+
+    unlink( "$SCRIPT_ROOT_DIR/$UTIL_INSTALL_DIR/lib$UTIL_NAME.a" );
   }
   
   if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_VC ) 
@@ -1161,14 +1178,13 @@ sub systemCall
   
   if(not($stdout eq "") || not($stderr eq ""))
   {
-    if(not(-d $REPORT_LOG_DIR)) 
+    if(not(-d $REPORT_LOG_DIR))
     {
-      my $r = 0;
-      $r = system( "$MKDIR \"$REPORT_LOG_DIR\"" );
+      make_path($REPORT_LOG_DIR);
       
-      if(not(-d $REPORT_LOG_DIR) || ($r != 0)) 
+      if(not(-d $REPORT_LOG_DIR))
       {
-        die("systemCall: Cannot create directory $REPORT_LOG_DIR. Exit code $r");
+        die("systemCall: Cannot create directory $REPORT_LOG_DIR.");
       }
     }
   }
