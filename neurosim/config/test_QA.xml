@@ -19,16 +19,16 @@
   <!-- Test-specific config parameters. Refer to test_Generic.xml for usage -->
   <specific_config>
 
-  
+
     <!--  -->
-    
-    
+
+
     <exe name="0" tag="noskip">
       <id>QA_Tahiti_Unit_Tests</id>
       <!-- Configuration -->
       <config>
         <!-- COMPILER: 0x10000, 0x10001 -->
-        <param id="COMPILER">0x10000</param>
+        <param id="COMPILER">0x10000,0x10001</param>
       
         <param id="TARGET_DEVICE_NAME">'\\"Tahiti\\"'</param>
         
@@ -212,7 +212,7 @@
       <!-- Configuration -->
       <config>
         <!-- COMPILER: 0x10000, 0x10001 -->
-        <param id="COMPILER">0x10000</param>
+        <param id="COMPILER">0x10000,0x10001</param>
       
         <param id="TARGET_DEVICE_NAME">'\\"Tahiti\\"'</param>
         

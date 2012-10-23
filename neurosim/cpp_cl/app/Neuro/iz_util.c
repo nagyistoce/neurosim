@@ -15,6 +15,10 @@ WARNING_CONTROL_START
 
 
 
+#if UPDATE_NEURONS_ENABLE_V00
+
+
+
 /*Calculates the derivatives*/
 void iz_derivs(double *y, double *dydx, double *fp)
 {
@@ -55,6 +59,10 @@ void iz_iter(DATA_TYPE **y, DATA_TYPE **co, DATA_TYPE *fp, int p)
 	y[3][p+1] = co[3][p]*y[3][p];
 	y[4][p+1] = k*y[0][p+1] - y[2][p+1] - y[3][p+1];
 }
+
+
+
+#endif  /*UPDATE_NEURONS_ENABLE_V00*/
 
 
 

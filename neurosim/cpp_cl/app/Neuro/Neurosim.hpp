@@ -60,84 +60,8 @@ class Neurosim
   private:  /*private variables*/
 /**************************************************************************************************/
 
-  /*OpenCL definitions*/
-  cl::Context context;
-  vector<cl::Device> devices;
-  vector<cl::Platform> platforms;
-  cl::CommandQueue commandQueue;
-  
-  /*Simulation control*/
-  cl_uint currentTimeStep;
-  cl_uint currentTimeSlot;
-  
-  /*Control of random number generation*/
-  unsigned int srandSeed, srandCounter;
 
-  /*Statistics, timing, logging*/
-  std::string startTimeStamp;
-  kernelStatistics kernelStats;
-  /* *** */
-#ifdef WIN32
-  __int64 performanceCounter, performanceFrequency;
-#endif
-  /* *** */
-#if (LOG_MODEL_VARIABLES)
-  std::ofstream     traceFile;
-  std::stringstream dataToTraceFile;
-#endif
-  /* *** */
-  std::ofstream     simulationLogFile;
-  std::stringstream *dataToSimulationLogFile;
-  /* *** */
-  std::ofstream     reportLogFile;
-  std::stringstream *dataToReportLogFile;
-  /* *** */
-#if (SIMULATION_SNAPSHOT)
-  std::ofstream     snapshotLogFile;
-  std::stringstream dataToSnapshotLogFile;
-#endif
-  /* *** */
-#if STATISTICS_ENABLE
-  double averageEventsInNetwork;
-  double averageEventsInNetworkCounter;
-  double averageSpikesInNetwork;
-  double averageSpikesInNetworkCounter;
-  double setupTime;
-  double runTime;
-#endif
 
-  /*Model variables and parameters*/
-  neuron_iz_ps     *nrn_ps;
-  int              *ne;
-  DATA_TYPE        *te_ps;
-  DATA_TYPE        **co;
-  DATA_TYPE        tau_ampa_ps;
-  DATA_TYPE        tau_gaba_ps;
-  DATA_TYPE        co_g_ampa_ps;
-  DATA_TYPE        co_g_gaba_ps;
-  DATA_TYPE        E_ps;
-  DATA_TYPE        a_ps;
-  DATA_TYPE        dt_ps;
-  DATA_TYPE        tol_ps;
-  int              steps_ps;
-
-  /*Simulation objects*/
-#if ENABLE_OPERATOR_SCAN
-  Operator_Scan            *operatorScan;
-#endif
-  /* *** */
-#if ENABLE_OPERATOR_SORT
-  Operator_Sort            *operatorSort;
-#endif
-  /* *** */
-#if ENABLE_OPERATOR_EXPAND
-  Operator_Expand          *operatorExpand;
-#endif
-  /* *** */
-  Data_SpikeEvents         *spikeEvents;
-  Data_Connectome          *connectome;
-  Data_SynapticEvents      *synapticEvents;
-  
 /**************************************************************************************************/
 #if ((GROUP_EVENTS_ENABLE_V00) ||\
    (GROUP_EVENTS_ENABLE_V01) ||\
@@ -146,7 +70,6 @@ class Neurosim
   cl_uint dataHistogramGroupEventsVerifySize;
   cl_uint dataHistogramGroupEventsVerifySizeBytes;
   cl_uint* dataHistogramGroupEventsVerify;
-  cl_uint lmGroupEventsHistogramOutSizeBytes;
 #endif
 /**************************************************************************************************/
 #if SORT_VERIFY_ENABLE
@@ -159,20 +82,15 @@ class Neurosim
   GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   cl_uint dataGroupEventsTikSize;
   cl_uint dataGroupEventsTikVerifySize;
-  
   cl_uint dataGroupEventsTikSizeBytes;
   cl_uint dataGroupEventsTikVerifySizeBytes;
-
   cl_uint* dataGroupEventsTik;
   cl_uint* dataGroupEventsTikVerify;
-
   cl::Buffer dataGroupEventsTikBuffer;
 #endif
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
   GROUP_EVENTS_ENABLE_V03
-  cl_uint lmCacheGroupEventsSizeBytes;
-  cl_uint lmlocalHistogramReferenceSizeBytes;
 #if (GROUP_EVENTS_DEBUG_ENABLE)
   cl_uint dataDebugHostGroupEventsSize;
   cl_uint dataDebugHostGroupEventsSizeBytes;
@@ -183,7 +101,6 @@ class Neurosim
   cl_uint* dataDebugDeviceGroupEvents;
   cl::Buffer dataDebugDeviceGroupEventsBuffer;
 #endif
-
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
   cl_uint dataErrorGroupEventsSize;
   cl_uint dataErrorGroupEventsSizeBytes;
@@ -201,24 +118,18 @@ class Neurosim
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
   MAKE_EVENT_PTRS_ENABLE
   cl_uint dataHistogramGroupEventsTokSize;
-
   cl_uint dataHistogramGroupEventsTokSizeBytes;
-
   cl_uint* dataHistogramGroupEventsTok;
-
   cl::Buffer dataHistogramGroupEventsTokBuffer;
 #endif
 /**************************************************************************************************/
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
   cl_uint dataGroupEventsTokSize;
   cl_uint dataGroupEventsTokVerifySize;
-
   cl_uint dataGroupEventsTokSizeBytes;
   cl_uint dataGroupEventsTokVerifySizeBytes;
-
   cl_uint* dataGroupEventsTok;
   cl_uint* dataGroupEventsTokVerify;
-  
   cl::Buffer dataGroupEventsTokBuffer;
 #endif
 /**************************************************************************************************/
@@ -248,14 +159,10 @@ class Neurosim
 #endif
 /**************************************************************************************************/
 #if MAKE_EVENT_PTRS_ENABLE
-  cl_uint lmLastElementMakeEventPtrsSizeBytes;
-  cl_uint lmGenericMakeEventPtrsSizeBytes;
-
   cl::Kernel kernelMakeEventPtrs;
   size_t blockSizeX_kernelMakeEventPtrs;
   size_t blockSizeY_kernelMakeEventPtrs;
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
-  cl_uint lmGenericGlueEventPtrsSizeBytes;
   cl::Kernel kernelGlueEventPtrs;
   size_t blockSizeX_kernelGlueEventPtrs;
   size_t blockSizeY_kernelGlueEventPtrs;
@@ -279,24 +186,31 @@ class Neurosim
 #endif
 /**************************************************************************************************/
 #if UPDATE_NEURONS_ENABLE_V00
-  cl_uint lmGeneralPurposeSizeBytes;
-  cl_uint lmSpikePacketsSizeBytes;
-  
+  neuron_iz_ps     *nrn_ps;
+  int              *ne;
+  DATA_TYPE        *te_ps;
+  DATA_TYPE        **co;
+  DATA_TYPE        tau_ampa_ps;
+  DATA_TYPE        tau_gaba_ps;
+  DATA_TYPE        co_g_ampa_ps;
+  DATA_TYPE        co_g_gaba_ps;
+  DATA_TYPE        E_ps;
+  DATA_TYPE        a_ps;
+  DATA_TYPE        dt_ps;
+  DATA_TYPE        tol_ps;
+  int              steps_ps;
   cl_uint modelParametersSize;
   cl_uint modelParametersSizeBytes;
   cl_float *modelParameters;
   cl::Buffer modelParametersBuffer;
-  
   cl_uint modelVariablesSize;
   cl_uint modelVariablesSizeBytes;
   cl_float *modelVariables;
   cl::Buffer modelVariablesBuffer;
-  
   cl_uint constantCoefficientsSize;
   cl_uint constantCoefficientsSizeBytes;
   cl_float *constantCoefficients;
   cl::Buffer constantCoefficientsBuffer;
-
   cl::Kernel kernelUpdateNeuronsV00;
   cl::Kernel kernelUpdateSpikedNeuronsV00;
   size_t blockSizeX_kernelUpdateNeuronsV00;
@@ -325,6 +239,70 @@ class Neurosim
 #endif
 #endif
 /**************************************************************************************************/
+#if ENABLE_OPERATOR_SCAN
+  Operator_Scan *operatorScan;
+#endif
+/**************************************************************************************************/
+#if ENABLE_OPERATOR_SORT
+  Operator_Sort *operatorSort;
+#endif
+/**************************************************************************************************/
+#if ENABLE_OPERATOR_EXPAND
+  Operator_Expand *operatorExpand;
+#endif
+/**************************************************************************************************/
+#ifdef WIN32
+  __int64 performanceCounter, performanceFrequency;
+#endif
+/**************************************************************************************************/
+#if STATISTICS_ENABLE
+  double averageEventsInNetwork;
+  double averageEventsInNetworkCounter;
+  double averageSpikesInNetwork;
+  double averageSpikesInNetworkCounter;
+  double setupTime;
+  double runTime;
+#endif
+/**************************************************************************************************/
+#if (LOG_MODEL_VARIABLES)
+  std::ofstream     traceFile;
+  std::stringstream dataToTraceFile;
+#endif
+/**************************************************************************************************/
+#if (SIMULATION_SNAPSHOT)
+  std::ofstream     snapshotLogFile;
+  std::stringstream dataToSnapshotLogFile;
+#endif
+/**************************************************************************************************/
+#if (LOG_SIMULATION)
+  std::ofstream     simulationLogFile;
+  std::stringstream *dataToSimulationLogFile;
+#else
+  std::stringstream *dataToSimulationLogFile;
+#endif
+/**************************************************************************************************/
+#if (LOG_REPORT)
+  std::ofstream     reportLogFile;
+  std::stringstream *dataToReportLogFile;
+#else
+  std::stringstream *dataToReportLogFile;
+#endif
+/**************************************************************************************************/
+  Data_SpikeEvents         *spikeEvents;
+  Data_Connectome          *connectome;
+  Data_SynapticEvents      *synapticEvents;
+/**************************************************************************************************/
+  cl::Context context;
+  cl::CommandQueue commandQueue;
+  vector<cl::Device> devices;
+  vector<cl::Platform> platforms;
+/**************************************************************************************************/
+  cl_uint currentTimeStep;
+  cl_uint currentTimeSlot;
+  unsigned int srandSeed, srandCounter;
+  std::string startTimeStamp;
+  kernelStatistics kernelStats;
+/**************************************************************************************************/
 
 
 
@@ -343,68 +321,203 @@ class Neurosim
    (GROUP_EVENTS_ENABLE_V01) ||\
    (GROUP_EVENTS_ENABLE_V02) ||\
    (GROUP_EVENTS_ENABLE_V03))
+    dataHistogramGroupEventsVerifySize(0),
+    dataHistogramGroupEventsVerifySizeBytes(0),
     dataHistogramGroupEventsVerify(NULL),
 #endif
     /* *** */
 #if SORT_VERIFY_ENABLE
+    dataUnsortedEventsSnapShotSize(0),
+    dataUnsortedEventsSnapShotSizeBytes(0),
     dataUnsortedEventsSnapShot(NULL),
 #endif
     /* *** */
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
   GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+    dataGroupEventsTikSize(0),
+    dataGroupEventsTikVerifySize(0),
+    dataGroupEventsTikSizeBytes(0),
+    dataGroupEventsTikVerifySizeBytes(0),
     dataGroupEventsTik(NULL),
     dataGroupEventsTikVerify(NULL),
+    dataGroupEventsTikBuffer(),
 #endif
     /* *** */
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
   GROUP_EVENTS_ENABLE_V03
 #if (GROUP_EVENTS_DEBUG_ENABLE)
+    dataDebugHostGroupEventsSize(0),
+    dataDebugHostGroupEventsSizeBytes(0),
     dataDebugHostGroupEvents(NULL),
+    dataDebugHostGroupEventsBuffer(),
+    dataDebugDeviceGroupEventsSize(0),
+    dataDebugDeviceGroupEventsSizeBytes(0),
     dataDebugDeviceGroupEvents(NULL),
+    dataDebugDeviceGroupEventsBuffer(),
 #endif
 #if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
+    dataErrorGroupEventsSize(0),
+    dataErrorGroupEventsSizeBytes(0),
     dataErrorGroupEvents(NULL),
+    dataErrorGroupEventsBuffer(),
 #endif
+#endif
+    /* *** */
+#if GROUP_EVENTS_ENABLE_V00
+    kernelGroupEventsV00(),
+    blockSizeX_kernelGroupEventsV00(GROUP_EVENTS_WG_SIZE_WI),
+    blockSizeY_kernelGroupEventsV00(1),
 #endif
     /* *** */
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
 MAKE_EVENT_PTRS_ENABLE
+    dataHistogramGroupEventsTokSize(0),
+    dataHistogramGroupEventsTokSizeBytes(0),
     dataHistogramGroupEventsTok(NULL),
+    dataHistogramGroupEventsTokBuffer(),
 #endif
     /* *** */
 #if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
+    dataGroupEventsTokSize(0),
+    dataGroupEventsTokVerifySize(0),
+    dataGroupEventsTokSizeBytes(0),
+    dataGroupEventsTokVerifySizeBytes(0),
     dataGroupEventsTok(NULL),
     dataGroupEventsTokVerify(NULL),
+    dataGroupEventsTokBuffer(),
+#endif
+    /* *** */
+#if GROUP_EVENTS_ENABLE_V01
+    kernelGroupEventsV01(),
+    blockSizeX_kernelGroupEventsV01(GROUP_EVENTS_WG_SIZE_WI),
+    blockSizeY_kernelGroupEventsV01(1),
+#endif
+    /* *** */
+#if GROUP_EVENTS_ENABLE_V02
+    kernelGroupEventsV02(),
+    blockSizeX_kernelGroupEventsV02(GROUP_EVENTS_WG_SIZE_WI),
+    blockSizeY_kernelGroupEventsV02(1),
+#endif
+    /* *** */
+#if GROUP_EVENTS_ENABLE_V03
+    kernelGroupEventsV03(),
+    blockSizeX_kernelGroupEventsV03(GROUP_EVENTS_WG_SIZE_WI),
+    blockSizeY_kernelGroupEventsV03(1),
 #endif
     /* *** */
 #if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+    dataMakeEventPtrsStructSize(0),
+    dataMakeEventPtrsStructSizeBytes(0),
     dataMakeEventPtrsStruct(NULL),
+    dataMakeEventPtrsStructBuffer(),
 #endif
     /* *** */
 #if MAKE_EVENT_PTRS_ENABLE
+    kernelMakeEventPtrs(),
+    blockSizeX_kernelMakeEventPtrs(MAKE_EVENT_PTRS_WG_SIZE_WI),
+    blockSizeY_kernelMakeEventPtrs(1),
+#if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
+    kernelGlueEventPtrs(),
+    blockSizeX_kernelGlueEventPtrs(GLUE_EVENT_PTRS_WG_SIZE_WI),
+    blockSizeY_kernelGlueEventPtrs(1),
+#endif
 #if (MAKE_EVENT_PTRS_DEBUG_ENABLE)
+    dataMakeEventPtrsDebugHostSize(0),
+    dataMakeEventPtrsDebugHostSizeBytes(0),
     dataMakeEventPtrsDebugHost(NULL),
+    dataMakeEventPtrsDebugHostBuffer(),
+    dataMakeEventPtrsDebugDeviceSize(0),
+    dataMakeEventPtrsDebugDeviceSizeBytes(0),
     dataMakeEventPtrsDebugDevice(NULL),
+    dataMakeEventPtrsDebugDeviceBuffer(),
 #endif
 #if (MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE)
+    dataMakeEventPtrsErrorSize(0),
+    dataMakeEventPtrsErrorSizeBytes(0),
     dataMakeEventPtrsError(NULL),
+    dataMakeEventPtrsErrorBuffer(),
 #endif
 #endif
     /* *** */
 #if UPDATE_NEURONS_ENABLE_V00
+  /*Model variables and parameters*/
+    nrn_ps(NULL),
+    ne(NULL),
+    te_ps(NULL),
+    co(NULL),
+    tau_ampa_ps(0),
+    tau_gaba_ps(0),
+    co_g_ampa_ps(0),
+    co_g_gaba_ps(0),
+    E_ps(0),
+    a_ps(0),
+    dt_ps(0),
+    tol_ps(0),
+    steps_ps(0),
+    modelParametersSize(0),
+    modelParametersSizeBytes(0),
     modelParameters(NULL),
+    modelParametersBuffer(),
+    modelVariablesSize(0),
+    modelVariablesSizeBytes(0),
     modelVariables(NULL),
+    modelVariablesBuffer(),
+    constantCoefficientsSize(0),
+    constantCoefficientsSizeBytes(0),
     constantCoefficients(NULL),
+    constantCoefficientsBuffer(),
+    kernelUpdateNeuronsV00(),
+    kernelUpdateSpikedNeuronsV00(),
+    blockSizeX_kernelUpdateNeuronsV00(UPDATE_NEURONS_WG_SIZE_WI_V00),
+    blockSizeY_kernelUpdateNeuronsV00(1),
 #if (UPDATE_NEURONS_TOLERANCE_MODE > 1)
+    psToleranceSize(0),
+    psToleranceSizeBytes(0),
     psTolerance(NULL),
+    psToleranceBuffer(),
 #endif
 #if (UPDATE_NEURONS_DEBUG_ENABLE)
+    dataUpdateNeuronsDebugHostSize(0),
+    dataUpdateNeuronsDebugHostSizeBytes(0),
     dataUpdateNeuronsDebugHost(NULL),
+    dataUpdateNeuronsDebugHostBuffer(),
+    dataUpdateNeuronsDebugDeviceSize(0),
+    dataUpdateNeuronsDebugDeviceSizeBytes(0),
     dataUpdateNeuronsDebugDevice(NULL),
+    dataUpdateNeuronsDebugDeviceBuffer(),
 #endif
 #if (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+    dataUpdateNeuronsErrorSize(0),
+    dataUpdateNeuronsErrorSizeBytes(0),
     dataUpdateNeuronsError(NULL),
+    dataUpdateNeuronsErrorBuffer(),
 #endif
+#endif
+    /* *** */
+#if ENABLE_OPERATOR_SCAN
+    operatorScan(NULL),
+#endif
+    /* *** */
+#if ENABLE_OPERATOR_SORT
+    operatorSort(NULL),
+#endif
+    /* *** */
+#if ENABLE_OPERATOR_EXPAND
+    operatorExpand(NULL),
+#endif
+    /* *** */
+#ifdef WIN32
+    performanceCounter(0),
+    performanceFrequency(0),
+#endif
+    /* *** */
+#if STATISTICS_ENABLE
+    averageEventsInNetwork(0),
+    averageEventsInNetworkCounter(0),
+    averageSpikesInNetwork(0),
+    averageSpikesInNetworkCounter(0),
+    setupTime(0),
+    runTime(0),
 #endif
     /* *** */
 #if (LOG_MODEL_VARIABLES)
@@ -431,79 +544,21 @@ MAKE_EVENT_PTRS_ENABLE
     dataToReportLogFile(NULL),
 #endif
     /* *** */
-    nrn_ps(NULL),
-    ne(NULL),
-    te_ps(NULL),
-    co(NULL),
+    spikeEvents(NULL),
+    connectome(NULL),
+    synapticEvents(NULL),
     /* *** */
-#if GROUP_EVENTS_ENABLE_V00
-    blockSizeX_kernelGroupEventsV00(GROUP_EVENTS_WG_SIZE_WI),
-    blockSizeY_kernelGroupEventsV00(1),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V01
-    blockSizeX_kernelGroupEventsV01(GROUP_EVENTS_WG_SIZE_WI),
-    blockSizeY_kernelGroupEventsV01(1),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V02
-    blockSizeX_kernelGroupEventsV02(GROUP_EVENTS_WG_SIZE_WI),
-    blockSizeY_kernelGroupEventsV02(1),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V03
-    blockSizeX_kernelGroupEventsV03(GROUP_EVENTS_WG_SIZE_WI),
-    blockSizeY_kernelGroupEventsV03(1),
-#endif
-    /* *** */
-#if MAKE_EVENT_PTRS_ENABLE
-    blockSizeX_kernelMakeEventPtrs(MAKE_EVENT_PTRS_WG_SIZE_WI),
-    blockSizeY_kernelMakeEventPtrs(1),
-#if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
-    blockSizeX_kernelGlueEventPtrs(GLUE_EVENT_PTRS_WG_SIZE_WI),
-    blockSizeY_kernelGlueEventPtrs(1),
-#endif
-#endif
-    /* *** */
-#if UPDATE_NEURONS_ENABLE_V00
-    blockSizeX_kernelUpdateNeuronsV00(UPDATE_NEURONS_WG_SIZE_WI_V00),
-    blockSizeY_kernelUpdateNeuronsV00(1),
-#endif
-    /* *** */
-#if STATISTICS_ENABLE
-    averageEventsInNetwork(0),
-    averageEventsInNetworkCounter(0),
-    averageSpikesInNetwork(0),
-    averageSpikesInNetworkCounter(0),
-    setupTime(0),
-    runTime(0),
-#endif
-    /* *** */
-#ifdef WIN32
-    performanceCounter(0),
-    performanceFrequency(0),
-#endif
-    /* *** */
-#if ENABLE_OPERATOR_SCAN
-    operatorScan(NULL),
-#endif
-    /* *** */
-#if ENABLE_OPERATOR_SORT
-    operatorSort(NULL),
-#endif
-    /* *** */
-#if ENABLE_OPERATOR_EXPAND
-    operatorExpand(NULL),
-#endif
+    context(),
+    commandQueue(),
+    devices(),
+    platforms(),
     /* *** */
     currentTimeStep(0),
     currentTimeSlot(0),
     srandSeed(1),
     srandCounter(0),
-    kernelStats(),
-    spikeEvents(NULL),
-    connectome(NULL),
-    synapticEvents(NULL)
+    startTimeStamp(std::string("")),
+    kernelStats()
 /**************************************************************************************************/
   {
     time_t rawtime; 
@@ -1044,6 +1099,7 @@ MAKE_EVENT_PTRS_ENABLE
   );
 #endif
 
+#if UPDATE_NEURONS_ENABLE_V00
   int 
   propagateSpikes
   (
@@ -1054,7 +1110,9 @@ MAKE_EVENT_PTRS_ENABLE
     DATA_TYPE*,
     Data_Connectome&
   );
-  
+#endif
+
+#if UPDATE_NEURONS_ENABLE_V00
   int 
   injectSortedEvents
   (
@@ -1068,7 +1126,9 @@ MAKE_EVENT_PTRS_ENABLE
     cl_uint       *pointersToEvents,
     neuron_iz_ps  *nrn
   );
-  
+#endif
+
+#if UPDATE_NEURONS_ENABLE_V00
   int 
   injectUnsortedEvents
   (
@@ -1082,7 +1142,9 @@ MAKE_EVENT_PTRS_ENABLE
     cl_uint       *dataUnsortedEventDelays,
     neuron_iz_ps  *nrn
   );
-  
+#endif
+
+#if UPDATE_NEURONS_ENABLE_V00
   int 
   stepIzPs
   (
@@ -1106,7 +1168,8 @@ MAKE_EVENT_PTRS_ENABLE
     DATA_TYPE nrTolerance,
     bool variableDelaysEnalbe
   );
-  
+#endif
+
 #if UPDATE_NEURONS_ENABLE_V00
   int 
   updateStep
@@ -1138,7 +1201,8 @@ MAKE_EVENT_PTRS_ENABLE
     cl::CommandQueue&
   );
 #endif
-  
+
+#if UPDATE_NEURONS_ENABLE_V00
   int 
   verifyEvents
   (
@@ -1151,6 +1215,7 @@ MAKE_EVENT_PTRS_ENABLE
     unsigned int  *sortedEvents,
     neuron_iz_ps  *nrn
   );
+#endif
 
 #if SIMULATION_SNAPSHOT
   int 

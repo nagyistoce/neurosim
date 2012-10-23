@@ -81,8 +81,8 @@ Data_Connectome::resetConnections
 
     cl_uint synapseCount = ptrEnd - ptrStart;
     
-    maxSynapsePerNeuron = max(maxSynapsePerNeuron,synapseCount);
-    minSynapsePerNeuron = min(minSynapsePerNeuron,synapseCount);
+    maxSynapsePerNeuron = (maxSynapsePerNeuron > synapseCount) ? maxSynapsePerNeuron : synapseCount;
+    minSynapsePerNeuron = (minSynapsePerNeuron < synapseCount) ? minSynapsePerNeuron : synapseCount;
     averageSynapsePerNeuron = averageSynapsePerNeuron + 
       (synapseCount - averageSynapsePerNeuron)/(i+1);
 

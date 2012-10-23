@@ -21,11 +21,12 @@
 ***************************************************************************************************/
 
 #include <stdio.h>
-#include <time.h>
 #include <stdlib.h>
+#include <time.h>
 #include <assert.h>
 #include <string.h>
 #include <malloc.h>
+#include <math.h>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -136,8 +137,23 @@ struct kernelStatistics
 struct SimException : public std::exception
 {
   std::string s;
-  SimException(std::string ss) : s(ss) {}
-  const char* what() const throw() { return s.c_str(); }
+  
+  /*Constructor*/
+  SimException
+  (
+    std::string ss
+  ) : 
+    s(ss) 
+  {};
+  
+  /*Destructor*/
+  ~SimException()  throw ()
+  {};
+  
+  const char* what() const throw()
+  { 
+    return s.c_str(); 
+  }
 };
 
 /**************************************************************************************************/

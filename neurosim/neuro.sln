@@ -6,7 +6,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "app", "app", "{BBB657AF-74A
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Neuro", "Neuro", "{394E5F36-4F5F-4DDA-89C4-FF19323D3B78}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IntegrationTest", "cpp_cl\app\Neuro\IntegrationTest.vcxproj", "{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Neurosim", "cpp_cl\app\Neuro\IntegrationTest.vcxproj", "{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "util", "util", "{2BBD7067-383E-4644-9236-D20AFE79A90C}"
 EndProject
@@ -88,7 +88,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "doc", "doc", "{04013E7A-8B0
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "log", "log", "{8D7E34B9-397E-4E81-901A-1F185CF5D0B3}"
 	ProjectSection(SolutionItems) = preProject
-		log\report_test_Generic_2012_01_23_22_39_53.csv = log\report_test_Generic_2012_01_23_22_39_53.csv
+		log\stderr.txt = log\stderr.txt
+		log\stdout.txt = log\stdout.txt
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{15D7EE65-6162-4261-BFAF-6DD4A1F281E5}"

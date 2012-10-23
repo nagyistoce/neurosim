@@ -99,14 +99,32 @@
     __pragma(warning( pop ))  /*\
     __pragma(warning(disable : 4710 4711 4820)) */
     
+  #define WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START
+  #define WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END
+  
 #elif COMPILER == COMPILER_WIN_MINGW64
-  #error (Unsupported COMPILER type)
-  /*TODO: 
-  see http://stackoverflow.com/questions/3030099/c-c-pragma-in-define-macro
-  #define WARN _Pragma("argument")*/
+
+  #define WARNING_CONTROL_START \
+    _Pragma("GCC diagnostic push")  \
+    _Pragma("GCC diagnostic error \"-Wall\"") \
+    _Pragma("GCC diagnostic error \"-Wextra\"") \
+    _Pragma("GCC diagnostic error \"-Wtraditional\"") \
+    _Pragma("GCC diagnostic error \"-Wunreachable-code\"")
+
+  #define WARNING_CONTROL_END \
+    _Pragma("GCC diagnostic pop")  
+    
+  #define WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START \
+    _Pragma("GCC diagnostic ignored \"-Wfloat-equal\"")  
+    
+  #define WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END \
+    _Pragma("GCC diagnostic error \"-Wfloat-equal\"")  
+    
 #elif (COMPILER & COMPILER_CONTROL_OFF) == COMPILER_CONTROL_OFF
   #define WARNING_CONTROL_START
   #define WARNING_CONTROL_END
+  #define WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START
+  #define WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END
 #else
   #error (Unsupported COMPILER type)
 #endif
@@ -815,7 +833,7 @@ WARNING_CONTROL_START
 #endif
 /*Spike buffer occupancy bounds during overwriting spike packet data*/
 #if !(defined(INITIALIZE_SPIKES_MIN_MAX_PERCENT))
-  #define INITIALIZE_SPIKES_MIN_MAX_PERCENT                    10.0, 20.0, NULL
+  #define INITIALIZE_SPIKES_MIN_MAX_PERCENT                    10.0, 20.0, -1.0
 #endif
 /*Enable injecting current until defined simulation step. Disabled if -1.
   (useful for initiating abruptly increasin spiking activity during initial steps) */
@@ -1229,6 +1247,7 @@ WARNING_CONTROL_START
 #endif
 
 #if CLASS_VALIDATION_ENABLE
+
 #define GET_RANDOM_INT(setValue, max, minPercent, maxPercent)\
   {\
     if(minPercent > maxPercent)\
@@ -1268,6 +1287,7 @@ WARNING_CONTROL_START
         abs(((maxPercent-minPercent)/100.0)*((double)rand()/((double)RAND_MAX)))));\
     }\
   }
+  
 #endif
 
 /**************************************************************************************************/
@@ -2127,7 +2147,7 @@ WARNING_CONTROL_START
 #endif
 /* *** */
 #if GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2 > GROUP_EVENTS_WF_SIZE_WI
-  #error GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2 can't be more than GROUP_EVENTS_WF_SIZE_WI
+  #error GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*2 cannot be more than GROUP_EVENTS_WF_SIZE_WI
 #endif
 /* *** */
 #if GROUP_EVENTS_OPTIMIZATION_LOCAL_SORT && (GROUP_EVENTS_WIs_PER_BIN_COUNTER_BUFFER != 16)

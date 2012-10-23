@@ -1486,18 +1486,18 @@ Neurosim::registerLocalMemory
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03
   {
-  cl_uint lmCacheGroupEvents = sizeof(cl_uint)*(GROUP_EVENTS_CACHE_SIZE_WORDS); 
-  lmCacheGroupEventsSizeBytes = lmCacheGroupEvents;
+  size_t lmCacheGroupEvents = sizeof(cl_uint)*(GROUP_EVENTS_CACHE_SIZE_WORDS); 
+  size_t lmCacheGroupEventsSizeBytes = lmCacheGroupEvents;
   REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmCacheGroupEvents);
 
-  cl_uint lmlocalHistogramReference = sizeof(cl_uint)*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS; 
-  lmlocalHistogramReferenceSizeBytes = lmlocalHistogramReference;
+  size_t lmlocalHistogramReference = sizeof(cl_uint)*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS; 
+  size_t lmlocalHistogramReferenceSizeBytes = lmlocalHistogramReference;
   REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmlocalHistogramReference);
 
 #if (GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT)
-  cl_uint lmGroupEventsHistogramOut = sizeof(cl_uint)*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
+  size_t lmGroupEventsHistogramOut = sizeof(cl_uint)*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT);
-  lmGroupEventsHistogramOutSizeBytes = lmGroupEventsHistogramOut;
+  size_t lmGroupEventsHistogramOutSizeBytes = lmGroupEventsHistogramOut;
   REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmGroupEventsHistogramOut);
 #endif
   }
@@ -1505,18 +1505,18 @@ Neurosim::registerLocalMemory
 /**************************************************************************************************/
 #if MAKE_EVENT_PTRS_ENABLE
   {
-  cl_uint lmGenericMakeEventPtrs = sizeof(cl_uint)*MAKE_EVENT_PTRS_WF_LM_SHARE_SIZE; 
-  lmGenericMakeEventPtrsSizeBytes = lmGenericMakeEventPtrs;
+  size_t lmGenericMakeEventPtrs = sizeof(cl_uint)*MAKE_EVENT_PTRS_WF_LM_SHARE_SIZE; 
+  size_t lmGenericMakeEventPtrsSizeBytes = lmGenericMakeEventPtrs;
   REGISTER_MEMORY(MAKE_EVENT_PTRS_KERNEL_NAME, MEM_LOCAL, lmGenericMakeEventPtrs);
   
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
-  cl_uint lmLastElementMakeEventPtrs = sizeof(cl_uint)*
+  size_t lmLastElementMakeEventPtrs = sizeof(cl_uint)*
     (MAKE_EVENT_PTRS_WG_SIZE_WF*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE); 
-  lmLastElementMakeEventPtrsSizeBytes = lmLastElementMakeEventPtrs;
+  size_t lmLastElementMakeEventPtrsSizeBytes = lmLastElementMakeEventPtrs;
   REGISTER_MEMORY(MAKE_EVENT_PTRS_KERNEL_NAME, MEM_LOCAL, lmLastElementMakeEventPtrs);
   
-  cl_uint lmGenericGlueEventPtrs = sizeof(cl_uint)*GLUE_EVENT_WF_LM_SHARE_SIZE; 
-  lmGenericGlueEventPtrsSizeBytes = lmGenericGlueEventPtrs;
+  size_t lmGenericGlueEventPtrs = sizeof(cl_uint)*GLUE_EVENT_WF_LM_SHARE_SIZE; 
+  size_t lmGenericGlueEventPtrsSizeBytes = lmGenericGlueEventPtrs;
   REGISTER_MEMORY(GLUE_EVENT_PTRS_KERNEL_NAME, MEM_LOCAL, lmGenericGlueEventPtrs);
 #endif
   }
@@ -1526,9 +1526,9 @@ Neurosim::registerLocalMemory
   {
   std::string kernelTag = std::string(UPDATE_NEURONS_KERNEL_NAME) + std::string("_V00");
 
-  cl_uint lmSpikePackets = sizeof(cl_uint)*UPDATE_NEURONS_WG_SIZE_WF_V00*
+  size_t lmSpikePackets = sizeof(cl_uint)*UPDATE_NEURONS_WG_SIZE_WF_V00*
     UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS; 
-  lmSpikePacketsSizeBytes = lmSpikePackets;
+  size_t lmSpikePacketsSizeBytes = lmSpikePackets;
   REGISTER_MEMORY(kernelTag, MEM_LOCAL, lmSpikePackets);
   
   kernelTag = std::string(UPDATE_NEURONS_SPIKED_KERNEL_NAME) + std::string("_V00");
@@ -2426,7 +2426,7 @@ Neurosim::run()
       CL_FALSE,
       PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT,
       PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT,
-      NULL
+      -1.0
     );
 #else
     (*spikeEvents).setEvents
@@ -2973,12 +2973,12 @@ Neurosim::run()
 #if GROUP_EVENTS_TEST_MODE == -1
     double perecentInh = 5.0;
     double deltaDev = 50.0; 
-    cl_uint detla = cl_uint(((GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE*deltaDev)/100)/
+    int detla = int(((GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE*deltaDev)/100)/
       GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS);
 #elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
     double perecentInh = 5.0;
     double deltaDev = GROUP_EVENTS_TEST_MODE; 
-    cl_uint detla = NULL;
+    int detla = -1;
 #endif
 
     (*synapticEvents).setUnsortedEvents
@@ -4000,7 +4000,7 @@ device modifies it.*/
       (
         verifyKernelUpdateNeurons
         (
-          true,
+          !COMPILER_FLAGS_OPTIMIZE_ENABLE,
           true,
           true,
           currentTimeStep,
@@ -4029,7 +4029,7 @@ device modifies it.*/
       (
         verifyKernelUpdateNeurons
         (
-          true,
+          !COMPILER_FLAGS_OPTIMIZE_ENABLE,
           false,
           true,
           currentTimeStep,
@@ -4058,7 +4058,7 @@ device modifies it.*/
       (
         verifyKernelUpdateNeurons
         (
-          true,
+          !COMPILER_FLAGS_OPTIMIZE_ENABLE,
           false,
           true,
           currentTimeStep,
@@ -5415,6 +5415,7 @@ Neurosim::verifyKernelMakeEventPtrs()
 /*
   Inject sorted synaptic events into event queue
 */
+#if UPDATE_NEURONS_ENABLE_V00
 int 
 Neurosim::injectSortedEvents
 (
@@ -5507,12 +5508,14 @@ Neurosim::injectSortedEvents
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
 /*
   Inject unsorted synaptic events into event queue
 */
+#if UPDATE_NEURONS_ENABLE_V00
 int 
 Neurosim::injectUnsortedEvents
 (
@@ -5584,12 +5587,14 @@ Neurosim::injectUnsortedEvents
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
 /*
   Propagation of spike events to synaptic events for PS method
 */
+#if UPDATE_NEURONS_ENABLE_V00
 int 
 Neurosim::propagateSpikes
 (
@@ -5676,12 +5681,14 @@ Neurosim::propagateSpikes
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
 /*
   Verification of synaptic event between host and device.
 */
+#if UPDATE_NEURONS_ENABLE_V00
 int 
 Neurosim::verifyEvents
 (
@@ -5735,8 +5742,12 @@ Neurosim::verifyEvents
         result = 0;
         break;
       }
+      
       /*Verify event time*/
-      if(tH != tD)
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+      bool test = (tH != tD);
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+      if(test)
       {
         std::cerr << "ERROR, verifyEvents, event time mismatch for neuron " << nH << ": " 
           << tH << " != " << tD << " ("; PRINT_HEX(4, tH); std::cerr << " != "; PRINT_HEX(4, tD);
@@ -5744,9 +5755,14 @@ Neurosim::verifyEvents
         result = 0;
         break;
       }
+      
       if(result == 0){break;}
+      
       /*Verify event weight*/
-      if(wH != wD)
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+      test = (wH != wD);
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+      if(test)
       {
         /*Count events with equal time*/
         unsigned int timeCount = 0;
@@ -5755,9 +5771,11 @@ Neurosim::verifyEvents
           unsigned int nD1 = sortedEvents[entryAddress + i];
           DATA_TYPE tH1 = nrn[nH].in_t[i];
           DATA_TYPE tD1 = *((DATA_TYPE *)(&sortedEvents[entryAddress + i + sortedEventsSize]));
-            
+          
+          WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
           if((nD1 == nH) && (tD1 == tD) && (tH1 == tH)){timeCount++;}
           else{break;}
+          WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
         }
         
         /*Verify all weights within the range of event count for the events with equal time*/
@@ -5776,8 +5794,10 @@ Neurosim::verifyEvents
               unsigned int p2 = e+j;
               DATA_TYPE wD1 = *((DATA_TYPE *)(&sortedEvents[entryAddress + p2 + 
                 2*sortedEventsSize]));
-                
-              if((wH1 == wD1) && !weightCheck[j])
+              WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+              test = ((wH1 == wD1) && !weightCheck[j]);
+              WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+              if(test)
               {
                 weightCheck[j] = 1;
                 if(!ignoreWarnings)
@@ -5845,12 +5865,14 @@ Neurosim::verifyEvents
   return result;
 }
 /**************************************************************************************************/
+#endif
 
 
 
 /*
   Main stepper routine for PS method on Izhikevich neuron - runs full step
 */
+#if UPDATE_NEURONS_ENABLE_V00
 int 
 Neurosim::stepIzPs
 (
@@ -5901,7 +5923,9 @@ Neurosim::stepIzPs
   eta[0] = tol; eta[1] = tol; eta[2] = tol; eta[3] = tol;
 #endif
 #if(UPDATE_NEURONS_TOLERANCE_MODE > 1)
+  WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
   if(tol != 0){nrTolerance = tol;}
+  WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
 #endif
 
 	yp[0][0] = v;yp[1][0] = u;yp[2][0] = g_ampa;yp[3][0] = g_gaba;yp[4][0] = chi;
@@ -6088,6 +6112,7 @@ Neurosim::stepIzPs
 #undef PRINT_stepIzPs
 }
 /**************************************************************************************************/
+#endif
 
 
 
@@ -6465,7 +6490,11 @@ Neurosim::verifyKernelUpdateNeurons
     underTestType1 = modelVariables[i];
     reference = nrn_ps[i].v;
     
-    if(underTestType1 != reference)
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+    bool test = (underTestType1 != reference);
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+    
+    if(test)
     {
       std::cerr << "ERROR, verifyKernelUpdateNeurons, step " << step 
         << ", mismatch of variable v for neuron " << i 
@@ -6476,7 +6505,12 @@ Neurosim::verifyKernelUpdateNeurons
     
     underTestType1 = modelVariables[UPDATE_NEURONS_TOTAL_NEURONS+i];
     reference = nrn_ps[i].u;
-    if(underTestType1 != reference)
+    
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+    test = (underTestType1 != reference);
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+    
+    if(test)
     {
       std::cerr << "ERROR, verifyKernelUpdateNeurons, step " << step 
         << ", mismatch of variable u for neuron " << i 
@@ -6487,7 +6521,12 @@ Neurosim::verifyKernelUpdateNeurons
     
     underTestType1 = modelVariables[2*UPDATE_NEURONS_TOTAL_NEURONS+i];
     reference = nrn_ps[i].g_ampa;
-    if(underTestType1 != reference)
+    
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+    test = (underTestType1 != reference);
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+    
+    if(test)
     {
       std::cerr << "ERROR, verifyKernelUpdateNeurons, step " << step 
         << ", mismatch of variable g_ampa for neuron " << i 
@@ -6498,7 +6537,12 @@ Neurosim::verifyKernelUpdateNeurons
     
     underTestType1 = modelVariables[3*UPDATE_NEURONS_TOTAL_NEURONS+i];
     reference = nrn_ps[i].g_gaba;
-    if(underTestType1 != reference)
+    
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+    test = (underTestType1 != reference);
+    WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+    
+    if(test)
     {
       std::cerr << "ERROR, verifyKernelUpdateNeurons, step " << step 
         << ", mismatch of variable g_gaba for neuron " << i 
@@ -6540,7 +6584,11 @@ Neurosim::verifyKernelUpdateNeurons
       cl_float spike_time = 0;
       spikeEvents.getSpike(queue, packet, i, spiked_neuron, spike_time);  
         
-      if(te_ps[spiked_neuron] != spike_time)
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+      bool test = (te_ps[spiked_neuron] != spike_time);
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+      
+      if(test)
       {
         std::cerr << "ERROR, verifyKernelUpdateNeurons, spike time mismatch for neuron " 
           << spiked_neuron << ", packet " << packet << ": " << te_ps[spiked_neuron] << "!=" 
@@ -6561,7 +6609,12 @@ Neurosim::verifyKernelUpdateNeurons
   {
     for(cl_uint n = 0; n < UPDATE_NEURONS_TOTAL_NEURONS; n++)
     {
-      if(te_ps[n] != 0.0 && spikeCheck[n] == 0)
+    
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_START;
+      bool test = (te_ps[n] != 0.0 && spikeCheck[n] == 0);
+      WARNING_CONTROL_IGNORE_FLOAT_EQUAL_END;
+      
+      if(test)
       {
         std::cerr << "ERROR, verifyKernelUpdateNeurons, a spike from neuron " << n 
           << " and spike time " << te_ps[n] << " is absent"<< std::endl;
