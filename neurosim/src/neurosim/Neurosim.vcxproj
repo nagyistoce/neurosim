@@ -1,0 +1,293 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Common.hpp" />
+    <ClInclude Include="Data_Connectome.hpp" />
+    <ClInclude Include="Data_SpikeEvents.hpp" />
+    <ClInclude Include="Data_SynapticEvents.hpp" />
+    <ClInclude Include="Definitions.h" />
+    <ClInclude Include="integ_util.h" />
+    <ClInclude Include="iz_util.h" />
+    <ClInclude Include="Kernel_Primitives.h" />
+    <ClInclude Include="Neurosim.hpp" />
+    <ClInclude Include="Operator_Expand.hpp" />
+    <ClInclude Include="Operator_Scan.hpp" />
+    <ClInclude Include="Operator_Sort.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Common.cpp" />
+    <ClCompile Include="Data_Connectome.cpp" />
+    <ClCompile Include="Data_SpikeEvents.cpp" />
+    <ClCompile Include="Data_SynapticEvents.cpp" />
+    <ClCompile Include="integ_util.c" />
+    <ClCompile Include="iz_util.c" />
+    <ClCompile Include="Neurosim.cpp" />
+    <ClCompile Include="Operator_Expand.cpp" />
+    <ClCompile Include="Operator_Scan.cpp" />
+    <ClCompile Include="Operator_Sort.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Neurosim.vcxproj.user" />
+    <None Include="Kernel_ExpandEvents.cl" />
+    <None Include="Kernel_GroupEvents.cl" />
+    <None Include="Kernel_MakeEventPointers.cl" />
+    <None Include="Kernel_Primitives.cl" />
+    <None Include="Kernel_ScanHistogram.cl" />
+    <None Include="Kernel_UpdateNeurons.cl" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{856C9154-94A7-48F8-B695-8559707BB774}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>UnitTest_Sort</RootNamespace>
+    <ProjectName>Neurosim</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)\bin\x86_64_dbg\</OutDir>
+    <IntDir>bin\x86_64_dbg\</IntDir>
+    <ExtensionsToDeleteOnClean>$(ExtensionsToDeleteOnClean)</ExtensionsToDeleteOnClean>
+    <GenerateManifest>true</GenerateManifest>
+    <LinkDelaySign>
+    </LinkDelaySign>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)\bin\x86_64_rel\</OutDir>
+    <IntDir>bin\x86_64_rel\</IntDir>
+    <ExtensionsToDeleteOnClean>$(ExtensionsToDeleteOnClean)</ExtensionsToDeleteOnClean>
+    <LinkDelaySign>
+    </LinkDelaySign>
+    <EmbedManifest>false</EmbedManifest>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisIgnoreGeneratedCode>true</CodeAnalysisIgnoreGeneratedCode>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Disabled</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;SYSTEM=0x10000;ATI_OS_WIN;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_UNICODE;UNICODE</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(AMDAPPSDKROOT)\include;$(SolutionDir)\inc</AdditionalIncludeDirectories>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <OpenMPSupport>false</OpenMPSupport>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ErrorReporting>None</ErrorReporting>
+      <SmallerTypeCheck>true</SmallerTypeCheck>
+      <ExpandAttributedSource>true</ExpandAttributedSource>
+      <AssemblerOutput>All</AssemblerOutput>
+      <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
+      <BrowseInformation>true</BrowseInformation>
+      <ShowIncludes>false</ShowIncludes>
+      <UseFullPaths>true</UseFullPaths>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <OmitFramePointers>false</OmitFramePointers>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Strict</FloatingPointModel>
+      <CallingConvention>FastCall</CallingConvention>
+      <EnablePREfast>false</EnablePREfast>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalLibraryDirectories>$(AMDAPPSDKROOT)/lib/x86_64;$(SolutionDir)/lib/x86_64</AdditionalLibraryDirectories>
+      <AdditionalDependencies>OpenCL.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <AssemblyDebug>true</AssemblyDebug>
+      <HeapReserveSize>0</HeapReserveSize>
+      <HeapCommitSize>0</HeapCommitSize>
+      <StackReserveSize>0</StackReserveSize>
+      <StackCommitSize>0</StackCommitSize>
+      <LargeAddressAware>true</LargeAddressAware>
+      <LinkErrorReporting>NoErrorReport</LinkErrorReporting>
+      <LinkStatus>
+      </LinkStatus>
+      <PreventDllBinding>true</PreventDllBinding>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+      <GenerateMapFile>true</GenerateMapFile>
+      <MapFileName>$(TargetDir)$(TargetName).map</MapFileName>
+      <MapExports>true</MapExports>
+      <TerminalServerAware>true</TerminalServerAware>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>
+      </LinkTimeCodeGeneration>
+      <FixedBaseAddress>false</FixedBaseAddress>
+      <Profile>true</Profile>
+      <ImageHasSafeExceptionHandlers>
+      </ImageHasSafeExceptionHandlers>
+    </Link>
+    <PostBuildEvent>
+      <Command>copy Kernel_ExpandEvents.cl "$(OUTDIR)"\Kernel_ExpandEvents.cl
+copy Kernel_ScanHistogram.cl "$(OUTDIR)"\Kernel_ScanHistogram.cl
+copy Kernel_GroupEvents.cl "$(OUTDIR)"\Kernel_GroupEvents.cl
+copy Kernel_MakeEventPointers.cl "$(OUTDIR)"\Kernel_MakeEventPointers.cl
+copy Kernel_UpdateNeurons.cl "$(OUTDIR)"\Kernel_UpdateNeurons.cl
+copy Kernel_Primitives.cl "$(OUTDIR)"\Kernel_Primitives.cl
+copy Kernel_Primitives.h "$(OUTDIR)"\Kernel_Primitives.h
+copy Definitions.h "$(OUTDIR)"\Definitions.h
+copy "$(SolutionDir)"\cfg\oclCompilerOptions.txt "$(OUTDIR)"\oclCompilerOptions.txt
+copy "$(SolutionDir)"\cfg\oclCompilerOptions.txt oclCompilerOptions.txt
+copy "$(SolutionDir)"\cfg\neuron_variables_sample.csv "$(OUTDIR)"\neuron_variables_sample.csv
+copy "$(SolutionDir)"\cfg\neuron_variables_sample.csv neuron_variables_sample.csv</Command>
+    </PostBuildEvent>
+    <Manifest>
+      <VerboseOutput>false</VerboseOutput>
+      <OutputManifestFile>$(OUTDIR)$(TargetFileName).embed.manifest</OutputManifestFile>
+      <GenerateCatalogFiles>true</GenerateCatalogFiles>
+    </Manifest>
+    <ManifestResourceCompile>
+      <ResourceOutputFileName>$(OUTDIR)$(TargetFileName).embed.manifest.res</ResourceOutputFileName>
+    </ManifestResourceCompile>
+    <Xdcmake>
+      <OutputFile>$(OUTDIR)$(TargetName).xml</OutputFile>
+    </Xdcmake>
+    <Xdcmake>
+      <DocumentLibraryDependencies>false</DocumentLibraryDependencies>
+    </Xdcmake>
+    <Bscmake>
+      <OutputFile>$(OUTDIR)$(TargetName).bsc</OutputFile>
+    </Bscmake>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;SYSTEM=0x10000;ATI_OS_WIN;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_UNICODE;UNICODE</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(AMDAPPSDKROOT)\include;$(SolutionDir)\inc</AdditionalIncludeDirectories>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <SmallerTypeCheck>false</SmallerTypeCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
+      <DisableLanguageExtensions>false</DisableLanguageExtensions>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <OpenMPSupport>false</OpenMPSupport>
+      <CallingConvention>FastCall</CallingConvention>
+      <ErrorReporting>None</ErrorReporting>
+      <UseFullPaths>true</UseFullPaths>
+      <StringPooling>true</StringPooling>
+      <EnablePREfast>false</EnablePREfast>
+      <BasicRuntimeChecks>
+      </BasicRuntimeChecks>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(AMDAPPSDKROOT)/lib/x86_64;$(SolutionDir)/lib/x86_64</AdditionalLibraryDirectories>
+      <AdditionalDependencies>OpenCL.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib</AdditionalDependencies>
+      <LinkStatus>false</LinkStatus>
+      <PreventDllBinding>true</PreventDllBinding>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <ProgramDatabaseFile>
+      </ProgramDatabaseFile>
+      <AssemblyDebug>
+      </AssemblyDebug>
+      <LargeAddressAware>true</LargeAddressAware>
+      <TerminalServerAware>true</TerminalServerAware>
+      <SetChecksum>true</SetChecksum>
+      <FixedBaseAddress>false</FixedBaseAddress>
+      <LinkErrorReporting>NoErrorReport</LinkErrorReporting>
+      <ImageHasSafeExceptionHandlers>
+      </ImageHasSafeExceptionHandlers>
+    </Link>
+    <PostBuildEvent>
+      <Command>copy Kernel_ExpandEvents.cl "$(OUTDIR)"\Kernel_ExpandEvents.cl
+copy Kernel_ScanHistogram.cl "$(OUTDIR)"\Kernel_ScanHistogram.cl
+copy Kernel_GroupEvents.cl "$(OUTDIR)"\Kernel_GroupEvents.cl
+copy Kernel_MakeEventPointers.cl "$(OUTDIR)"\Kernel_MakeEventPointers.cl
+copy Kernel_UpdateNeurons.cl "$(OUTDIR)"\Kernel_UpdateNeurons.cl
+copy Kernel_Primitives.cl "$(OUTDIR)"\Kernel_Primitives.cl
+copy Kernel_Primitives.h "$(OUTDIR)"\Kernel_Primitives.h
+copy Definitions.h "$(OUTDIR)"\Definitions.h
+copy "$(SolutionDir)"\cfg\oclCompilerOptions.txt "$(OUTDIR)"\oclCompilerOptions.txt
+copy "$(SolutionDir)"\cfg\oclCompilerOptions.txt oclCompilerOptions.txt
+copy "$(SolutionDir)"\cfg\neuron_variables_sample.csv "$(OUTDIR)"\neuron_variables_sample.csv
+copy "$(SolutionDir)"\cfg\neuron_variables_sample.csv neuron_variables_sample.csv</Command>
+    </PostBuildEvent>
+    <Manifest>
+      <VerboseOutput>false</VerboseOutput>
+      <OutputManifestFile>$(OUTDIR)$(TargetFileName).embed.manifest</OutputManifestFile>
+    </Manifest>
+    <ManifestResourceCompile>
+      <ResourceOutputFileName>$(OUTDIR)$(TargetFileName).embed.manifest.res</ResourceOutputFileName>
+    </ManifestResourceCompile>
+    <Xdcmake>
+      <OutputFile>$(OUTDIR)$(TargetName).xml</OutputFile>
+    </Xdcmake>
+    <Xdcmake>
+      <DocumentLibraryDependencies>false</DocumentLibraryDependencies>
+    </Xdcmake>
+    <Bscmake>
+      <OutputFile>$(OUTDIR)$(TargetName).bsc</OutputFile>
+    </Bscmake>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

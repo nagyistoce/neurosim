@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+<all>
+
+  <!-- Config parameters common to all tests in this file -->
+  <common_config>
+    <!--  -->
+    <param id="LOG_REPORT">1</param>
+    <param id="TARGET_DEVICE_NAME">'\\"Tahiti;Cayman\\"'</param>
+    <param id="PREINITIALIZE_NETWORK_TIME_SLOT_DELTA">50</param>
+    <param id="PREINITIALIZE_NETWORK_TIME_SLOT_DELTA_DEVIATION">25.0</param>
+    <param id="PREINITIALIZE_NETWORK_PERCENT_INHIBITORY">10.0</param>
+    <param id="PREINITIALIZE_NETWORK_MIN_SPIKE_PERCENT">0.0</param>
+    <param id="PREINITIALIZE_NETWORK_MAX_SPIKE_PERCENT">5.0</param>
+    <param id="PREINITIALIZE_NETWORK_NEURON_VARIABLES_SAMPLE_FILE">'\\"neuron_variables_sample.csv\\"'</param>
+    <param id="OVERWRITE_SPIKES_UNTILL_STEP">(2*16)</param>
+    <param id="INJECT_CURRENT_UNTILL_STEP">0</param>
+    <!--  -->
+  </common_config>
+  
+  <!-- Test-specific config parameters. Refer to test_Generic.xml for usage -->
+  <specific_config>
+
+    
+    <!--  -->
+    
+    
+    <exe name="1" tag="skip">
+      <id>UPDATE_NEURONS_SMALL</id>
+      <!-- Configuration -->
+      <config>
+        <!-- SYSTEM: 0x10000, 0x10001 -->
+        <param id="SYSTEM">0x10000</param>
+      
+        <!-- ENABLE_MASK: oct("0b0000000010000000") -->
+        <param id="ENABLE_MASK">oct("0b0000000010000000")</param>
+        
+        <!-- TOTAL_NEURON_BITS: 14,17,20 -->
+        <param id="TOTAL_NEURON_BITS">14</param>
+        
+        <!-- PREINITIALIZE_NETWORK_STATE: 1 -->
+        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+        
+        <!-- UPDATE_NEURONS_ELEMENTS_PER_WI: 1 -->
+        <param id="UPDATE_NEURONS_ELEMENTS_PER_WI">1</param>
+        
+        <!-- TOLERANCE_MODE: 0,1,2 -->
+        <param id="TOLERANCE_MODE">0</param>
+        
+        <!-- SPIKE_PACKET_SIZE: 4,8,16,32,64,128,256 -->
+        <param id="SPIKE_PACKET_SIZE">4,8,16,32,64,128,256</param>
+        
+        <!-- SPIKE_PACKETS: 64,128,256,512,1024 -->
+        <param id="SPIKE_PACKETS">64,128,256,512,1024</param>
+        
+        <!-- UPDATE_NEURONS_WG_SIZE_WF_V00: 1,2,4 -->
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">1,2,4</param>
+        
+        <!-- UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE: (2**15),(2**16),(2**17) -->
+        <param id="UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE">(2**15),(2**16),(2**17)</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Verify</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Verify">
+          <param id="SIMULATION_MODE">0</param>
+          <param id="SIMULATION_TIME_STEPS">1200</param>
+          <result id="PASS">Profile</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Profile">
+          <param id="SIMULATION_MODE">4</param>
+          <param id="SIMULATION_TIME_STEPS">1200</param>
+          <param id="START_PROFILING_AT_STEP">200</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    
+    
+    <!--  -->
+    
+    
+    <exe name="2" tag="noskip">
+      <id>UPDATE_NEURONS_MEDIUM</id>
+      <!-- Configuration -->
+      <config>
+        <!-- SYSTEM: 0x10000, 0x10001 -->
+        <param id="SYSTEM">0x10000</param>
+      
+        <!-- ENABLE_MASK: oct("0b0000000010000000") -->
+        <param id="ENABLE_MASK">oct("0b0000000010000000")</param>
+        
+        <!-- TOTAL_NEURON_BITS: 14,17,20 -->
+        <param id="TOTAL_NEURON_BITS">17</param>
+        
+        <!-- PREINITIALIZE_NETWORK_STATE: 1 -->
+        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+        
+        <!-- UPDATE_NEURONS_ELEMENTS_PER_WI: 1 -->
+        <param id="UPDATE_NEURONS_ELEMENTS_PER_WI">1</param>
+        
+        <!-- TOLERANCE_MODE: 0,1,2 -->
+        <param id="TOLERANCE_MODE">0</param>
+        
+        <!-- SPIKE_PACKET_SIZE: 4,8,16,32,64,128,256 -->
+        <param id="SPIKE_PACKET_SIZE">256</param>
+        
+        <!-- SPIKE_PACKETS: 64,128,256,512,1024,2048 -->
+        <param id="SPIKE_PACKETS">1024</param>
+        
+        <!-- UPDATE_NEURONS_WG_SIZE_WF_V00: 1,2,4 -->
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">1</param>
+        
+        <!-- UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE: (2**18),(2**19),(2**20) -->
+        <param id="UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE">(2**18),(2**19),(2**20)</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Verify</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Verify">
+          <param id="SIMULATION_MODE">0</param>
+          <param id="SIMULATION_TIME_STEPS">200</param>
+          <result id="PASS">Profile</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Profile">
+          <param id="SIMULATION_MODE">4</param>
+          <param id="SIMULATION_TIME_STEPS">300</param>
+          <param id="START_PROFILING_AT_STEP">200</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    
+    
+    <!--  -->
+    
+    
+    <exe name="3" tag="skip">
+      <id>UPDATE_NEURONS_LARGE</id>
+      <!-- Configuration -->
+      <config>
+        <!-- SYSTEM: 0x10000, 0x10001 -->
+        <param id="SYSTEM">0x10000</param>
+      
+        <!-- ENABLE_MASK: oct("0b0000000010000000") -->
+        <param id="ENABLE_MASK">oct("0b0000000010000000")</param>
+        
+        <!-- TOTAL_NEURON_BITS: 14,17,20 -->
+        <param id="TOTAL_NEURON_BITS">20</param>
+        
+        <!-- PREINITIALIZE_NETWORK_STATE: 1 -->
+        <param id="PREINITIALIZE_NETWORK_STATE">1</param>
+        
+        <!-- UPDATE_NEURONS_ELEMENTS_PER_WI: 1 -->
+        <param id="UPDATE_NEURONS_ELEMENTS_PER_WI">1</param>
+        
+        <!-- TOLERANCE_MODE: 0,1,2 -->
+        <param id="TOLERANCE_MODE">0</param>
+        
+        <!-- SPIKE_PACKET_SIZE: 128,256,512,1024,2048 -->
+        <param id="SPIKE_PACKET_SIZE">128,256,512,1024,2048</param>
+        
+        <!-- SPIKE_PACKETS: 128,256,512,1024,2048,4096 -->
+        <param id="SPIKE_PACKETS">128,256,512,1024,2048,4096</param>
+        
+        <!-- UPDATE_NEURONS_WG_SIZE_WF_V00: 1,2,4 -->
+        <param id="UPDATE_NEURONS_WG_SIZE_WF_V00">1,2,4</param>
+        
+        <!-- UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE: (2**17),(2**18),(2**19) -->
+        <param id="UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE">(2**17),(2**18),(2**19)</param>
+      </config>
+      <!-- Execution flow -->
+      <flow>
+        <!-- Start node is alwasy the first -->
+        <node name="Start">
+          <result id="PASS">Verify</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Verify">
+          <param id="SIMULATION_MODE">0</param>
+          <param id="SIMULATION_TIME_STEPS">300</param>
+          <result id="PASS">Profile</result>
+          <result id="FAIL">Exit</result>
+        </node>
+        <node name="Profile">
+          <param id="SIMULATION_MODE">4</param>
+          <param id="SIMULATION_TIME_STEPS">300</param>
+          <param id="START_PROFILING_AT_STEP">200</param>
+          <result id="PASS">Exit</result>
+          <result id="FAIL">Exit</result>
+        </node>
+      </flow>
+    </exe>
+    
+    
+    <!--  -->
+    
+
+  </specific_config>
+  
+  <report_config>
+    <!-- Report data keys for tagging data passed from reports generated by executable -->
+    <report_tags>
+      <param id="Total GM"></param>
+      <param id="Max GM"></param>
+      <param id="Gaba Synapse Count"></param>
+      <param id="Ampa Synapse Count"></param>
+      <param id="Total Synapse Count"></param>
+      <param id="Max Synapses/Neuron"></param>
+      <param id="Min Synapses/Neuron"></param>
+      <param id="Average Synapses/Neuron"></param>
+      <param id="Average Events/Iteration"></param>
+      <param id="Average Spikes/Iteration"></param>
+      <param id="Total Time"></param>
+      <param id="Total Setup Time"></param>
+      <param id="Total Run Time"></param>
+      <param id="Result"></param>
+      <param id="Kernel kernelExpandEvents Total Time"></param>
+      <param id="Kernel kernelExpandEvents Average Time"></param>
+      <param id="Kernel kernelExpandEvents Execution Count"></param>
+      <param id="Kernel kernelGlueEventPtrs Total Time"></param>
+      <param id="Kernel kernelGlueEventPtrs Average Time"></param>
+      <param id="Kernel kernelGlueEventPtrs Execution Count"></param>
+      <param id="Kernel kernelGroupEventsV00 Total Time"></param>
+      <param id="Kernel kernelGroupEventsV00 Average Time"></param>
+      <param id="Kernel kernelGroupEventsV00 Execution Count"></param>
+      <param id="Kernel kernelGroupEventsV01 Total Time"></param>
+      <param id="Kernel kernelGroupEventsV01 Average Time"></param>
+      <param id="Kernel kernelGroupEventsV01 Execution Count"></param>
+      <param id="Kernel kernelGroupEventsV02 Total Time"></param>
+      <param id="Kernel kernelGroupEventsV02 Average Time"></param>
+      <param id="Kernel kernelGroupEventsV02 Execution Count"></param>
+      <param id="Kernel kernelGroupEventsV03 Total Time"></param>
+      <param id="Kernel kernelGroupEventsV03 Average Time"></param>
+      <param id="Kernel kernelGroupEventsV03 Execution Count"></param>
+      <param id="Kernel kernelMakeEventPtrs Total Time"></param>
+      <param id="Kernel kernelMakeEventPtrs Average Time"></param>
+      <param id="Kernel kernelMakeEventPtrs Execution Count"></param>
+      <param id="Kernel kernelScanHistogramV00 Total Time"></param>
+      <param id="Kernel kernelScanHistogramV00 Average Time"></param>
+      <param id="Kernel kernelScanHistogramV00 Execution Count"></param>
+      <param id="Kernel kernelScanHistogramV01 Total Time"></param>
+      <param id="Kernel kernelScanHistogramV01 Average Time"></param>
+      <param id="Kernel kernelScanHistogramV01 Execution Count"></param>
+      <param id="Kernel kernelUpdateNeuronsV00 Total Time"></param>
+      <param id="Kernel kernelUpdateNeuronsV00 Average Time"></param>
+      <param id="Kernel kernelUpdateNeuronsV00 Execution Count"></param>
+      <param id="Kernel kernelUpdateSpikedNeuronsV00 Total Time"></param>
+      <param id="Kernel kernelUpdateSpikedNeuronsV00 Average Time"></param>
+      <param id="Kernel kernelUpdateSpikedNeuronsV00 Execution Count"></param>
+    </report_tags>
+    <!--  -->
+  </report_config>
+
+</all>
