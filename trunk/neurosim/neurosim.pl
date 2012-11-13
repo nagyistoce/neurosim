@@ -27,8 +27,8 @@ use File::Copy qw(copy);
 use Cwd;
 
 # Constants:
-use constant COMPILER_WIN_VC                                  => 0x10000;
-use constant COMPILER_WIN_MINGW64                             => 0x10001;
+use constant SYSTEM_WIN_VC                                  => 0x10000;
+use constant SYSTEM_WIN_MINGW64                             => 0x10001;
 use constant TARGET_ARC_X86_64                                => "x86_64";
 use constant OS_WINDOWS                                       => "MSWin32";
 use constant OS_LINUX                                         => "linux";
@@ -58,7 +58,7 @@ our $SCRIPT_ROOT_DIR = $FindBin::Bin; chomp( $SCRIPT_ROOT_DIR );
 # Log directory
 our $REPORT_LOG_DIR = "$SCRIPT_ROOT_DIR/log";
 # Configuration definitions file
-our $CONFIG_FILE = "$SCRIPT_ROOT_DIR/config/config.xml";
+our $CONFIG_FILE = "$SCRIPT_ROOT_DIR/cfg/config.xml";
 # Detect OS
 our $OS = "$^O\n"; chomp( $OS );
 
@@ -93,12 +93,11 @@ if(not($TARGET_ARCHITECTURE eq TARGET_ARC_X86_64))
 }
 
 # Library build parameters
-our $UTIL_NAME = "SDKUtil";
-our $UTIL_SRC_DIR = "cpp_cl/util/$UTIL_NAME";
+our $UTIL_NAME = "Neuro";
+our $UTIL_SRC_DIR = "src/neurosim";
 our $UTIL_BIN_DIR = "$UTIL_SRC_DIR/build/$TARGET_ARCHITECTURE";
-our @UTIL_NAMES = ("SDKApplication", "SDKBitMap", "SDKCommandArgs", "SDKCommon", "SDKFile", 
-  "SDKThread");
-our @UTIL_INCL_DIR = ("include", "include/$UTIL_NAME", "include/GL");
+our @UTIL_NAMES = ("Neurosim");
+our @UTIL_INCL_DIR = ("inc");
 our $UTIL_INCL_DIR = "";
 our $UTIL_COMPILER_OPS = "";
 our $UTIL_INSTALL_DIR = "lib/$TARGET_ARCHITECTURE";
@@ -106,9 +105,9 @@ our $UTIL_INSTALL_DIR = "lib/$TARGET_ARCHITECTURE";
 # Application build parameters
 our $OCL_COMPILER_OPTIONS_FILE = "oclCompilerOptions.txt";
 our $APP_NAME = "Neuro";
-our $APP_SRC_DIR = "cpp_cl/app/$APP_NAME";
+our $APP_SRC_DIR = "src/neurosim";
 our $APP_BIN_DIR = "$APP_SRC_DIR/bin/$TARGET_ARCHITECTURE";
-our @APP_INCL_DIR = ("include", "include/$UTIL_NAME", "include/GL");
+our @APP_INCL_DIR = ("inc");
 our $APP_INCL_DIR = "";
 our @APP_SRC_C = 
   (
@@ -166,7 +165,7 @@ our %APP_CURRENT_INFO =
   );
 our %APP_SPECIAL_CONFIG = 
   (
-    "COMPILER"  =>  ""
+    "SYSTEM"  =>  ""
   );
   
 # Determine current directory
@@ -227,7 +226,7 @@ main();
 ####################################################################################################
 sub main 
 {
-  my $test_file_path = "$SCRIPT_ROOT_DIR/config/test.xml";
+  my $test_file_path = "$SCRIPT_ROOT_DIR/cfg/test.xml";
   my $tests;
   
   # verify existence of test.xml file
@@ -247,8 +246,6 @@ sub main
   {
     die "\nError while opening $test_file_path\n";
   }
-  
-  #&compileUtil;
 
   # sort tests numerically and iterate:
   foreach my $test_id (sort {$a<=>$b} keys %{$tests->{tests}->{test}})
@@ -541,16 +538,16 @@ sub executeFlow
 ####################################################################################################
 sub configureCompiler
 {
-  if(!defined($APP_SPECIAL_CONFIG{"COMPILER"}) || ($APP_SPECIAL_CONFIG{"COMPILER"} eq ""))
+  if(!defined($APP_SPECIAL_CONFIG{"SYSTEM"}) || ($APP_SPECIAL_CONFIG{"SYSTEM"} eq ""))
   {
-    die "\nSpecial variable COMPILER is not set\n";
+    die "\nSpecial variable SYSTEM is not set\n";
   }
   
   # Restore environment
   %ENV = %ENV_ORIGINAL;
 
   # Set compilation environment based on compiler selection
-  if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_MINGW64 ) 
+  if( $APP_SPECIAL_CONFIG{"SYSTEM"} eq SYSTEM_WIN_MINGW64 ) 
   {
     if( not(-d $WIN_MINGW_DIR) )
     {
@@ -583,7 +580,7 @@ sub configureCompiler
     my $commonUserOptions = "".
       "$D WIN32 ".                    # 
       "$D NDEBUG ".                   # 
-      "$D COMPILER=".COMPILER_WIN_MINGW64. # 
+      "$D SYSTEM=".SYSTEM_WIN_MINGW64. # 
       " ";
     
     # -mdll                       Generate code for a DLL
@@ -603,7 +600,7 @@ sub configureCompiler
     $ENV{"PATH"} = "$compiler_dir;".$ENV{"PATH"};
   }
   
-  if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_VC )
+  if( $APP_SPECIAL_CONFIG{"SYSTEM"} eq SYSTEM_WIN_VC )
   {
     if( not(-d $WIN_VC_DIR) )
     {
@@ -620,26 +617,36 @@ sub configureCompiler
     $LINK = "\"$compiler_dir/link.exe\"";
     
     my $commonCompilerOptions = "".
+      "/arch:SSE2 ".        # Minimum CPU Architecture: SSE, SSE2, AVX
       "/c ".                # Compile without linking
       "/EHa ".              # Exception handling: a,asynchronouse; s,sync (C++ only)
       "/errorReport:none ". # Error reports sent to MicroSoft
+      "/FC ".               # Use full paths in diagnostic messages
+      "/Fo\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/\" ".
+      #"/Fd\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/vc100.pdb\" ".
       "/fp:strict ".        # Floating-point behavior: fast, precise, strict
       "/fp:except ".        # Floating-point exception model: except, except-
+      "/GF ".               # Enable string pooling
       "/Gr ".               # Function call convention: d,__cdecl; r,__fastcall; z,__stdcall 
       "/GL ".               # Enable whole program optimization (Can't use /Z7, /Zi, /ZI with it)
+      "/GT ".               # Enable fiber-safe optimizations
       "/Gm- ".              # Rebuild based on .idb file: m,enable; m-,disable.
+      "/GR- ".              # Runtime type information: R,enable; R-,disable.
       "/GS ".               # Detect buffer overruns
       "/Gy ".               # Package functions in the form of packaged functions (COMDATs)
       "/MD ".               # Create a multithreaded DLL using MSVCRT.lib
+      "/MP ".               # Multi-processor compiilation
       "/nologo ".           # Suppresses the display of the copyright banner informational messages.
       "/O2 ".               # Optimizations: 1,short code; 2,fast code
+      "/Op ".               # Improve Float Consistency
+      "/openmp- ".          # OpenMP pragmas: openmp,enable; openmp-,disable.
       "/TP ".               # Treat all files named on the command line as C++ source files
       #"/Wall ".             # Enable all warnings, including those disabled by default
       "/W3 ".               # Set warning level: 0,disable; 1-4,(level of severity, high to low)
       "/WX ".               # Treat all warnings as errors
-      "/wd4710 ".           # Disable warning C4710 (function not inlined)
-      "/wd4711 ".           # Disable warning C4711 (selected for automatic inline expansion)
-      "/wd4820 ".           # Disable warning C4820 (bytes padding added after data member)
+      #"/wd4710 ".           # Disable warning C4710 (function not inlined)
+      #"/wd4711 ".           # Disable warning C4711 (selected for automatic inline expansion)
+      #"/wd4820 ".           # Disable warning C4820 (bytes padding added after data member)
       "/Zc:wchar_t  ".      # wchar_t is a native type: wchar_t,enable; wchar_t-,disable
       "/Zc:forScope  ".     # Create a separate scope for each "for" loop
       #"/Zi ".              # Generate complete debugging information
@@ -648,35 +655,48 @@ sub configureCompiler
     my $commonUserOptions = "".
       "$D WIN32 ".                    # 
       "$D NDEBUG ".                   # 
-      "$D COMPILER=".COMPILER_WIN_VC. # 
+      "$D SYSTEM=".SYSTEM_WIN_VC. # 
       "";
       
     $UTIL_COMPILER_OPS = $commonCompilerOptions." ".$commonUserOptions." $D _LIB";
       
     $APP_COMPILER_OPS = $commonCompilerOptions." ".$commonUserOptions.
       " $D _CONSOLE $D ATI_OS_WIN $D _CRT_SECURE_NO_DEPRECATE ".
-      "$D _CRT_NONSTDC_NO_DEPRECATE";
-      
+      "$D _CRT_NONSTDC_NO_DEPRECATE $D _UNICODE $D UNICODE";
+
     $APP_LINK_OPS = "".
-      "/nologo ".       # Suppresses the display of the copyright banner informational messages.
-      "/errorReport:none ". # Set error reports sent to MicroSoft
-      "/INCREMENTAL:NO ".
-      "/MANIFEST ".
+      "/ALLOWBIND ".          # DLL Binding
+      "/ALLOWISOLATION ".     # Allow isolation for manifest lookup
+      #"/DEBUG ".              # Link for debug
+      "/DYNAMICBASE ".        # Random base address
+      "/FIXED:NO ".           # No preferred base address
+      "/ERRORREPORT:NONE ".   # Set error reports sent to MicroSoft
+      "/INCREMENTAL:NO ".     # Incremental linking
+      "/LARGEADDRESSAWARE ".  # Enable larger addresses
+      "/LTCG ".               # Use link time code generation
+      "/LTCG:NOSTATUS ".      # Linking status progress indicator
+      "/MACHINE:X64 ".        # Target architecture
+      "/MANIFEST ".           # Generate manifest file
+      "/MANIFESTFILE:\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME.exe.intermediate.manifest\" ".
       "/MANIFESTUAC:\"level='asInvoker' uiAccess='false'\" ".
-      "/DEBUG ".
-      "/SUBSYSTEM:CONSOLE /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT ".
-      "/MACHINE:X64";
-      
+      "/NOLOGO ".             # Suppresses the display of the copyright banner messages.
+      "/NXCOMPAT ".           # Mark as tested with Win Data Executin Prevention feature.
+      "/OPT:REF ".            # Eliminate no referenced data/functions
+      "/OPT:ICF ".            # Perform COMDAT folding
+      "/OUT:\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME.exe\" ".
+      #"/PDB:\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/vc100.pdb\" ".
+      "/RELEASE ".            # Set checksum
+      "/SUBSYSTEM:CONSOLE ".  # Run app as: CONSOLE, etc...
+      "/TSAWARE ".            # Disable Terminal Server modifications to the app
+      "/TLBID:1 ".            # Set TypeLib resource ID
+      "/WX ".                 # Treat all link warnings as errors
+      "";
+
     $APP_LIB_CONFIG = "".
-      "/nologo ".       # Suppresses the display of the copyright banner informational messages.
-      "/IMPLIB:\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME.lib\" ".
       "/LIBPATH:\"$SCRIPT_ROOT_DIR/lib/$TARGET_ARCHITECTURE\" ".
       "/LIBPATH:\"$OCL_DIR/lib/$TARGET_ARCHITECTURE\" ".
-      #"OpenCL.lib SDKUtil.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib ".
-      "OpenCL.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib ".
-      "advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib ".
-      "kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ".
-      "ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib";
+      "OpenCL.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib ".
+      "shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib";
     
     # Set script compilation environment based on $WIN_VC_ENV_SCRIPT
     #
@@ -785,15 +805,10 @@ sub compileApp
   # Clean
   #
   $temp = "$SCRIPT_ROOT_DIR/$APP_BIN_DIR";
-  if(-e $temp) 
-  {
-    remove_tree($temp,{verbose => 0}); make_path($temp);
-  }
+  remove_tree($temp,{verbose => 0}); make_path($temp);
   #
-  if(-e $APP_INSTALL_DIR) 
-  {
-    remove_tree($APP_INSTALL_DIR,{verbose => 0}); make_path($APP_INSTALL_DIR);
-  }
+  $temp = $APP_INSTALL_DIR;
+  remove_tree($temp,{verbose => 0}); make_path($temp);
   
   # Copy src files into build dir
   #
@@ -852,15 +867,15 @@ sub compileApp
   }
   
   
-  # Option COMPILER_WIN_MINGW64
+  # Option SYSTEM_WIN_MINGW64
   #
-  if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_MINGW64 )
+  if( $APP_SPECIAL_CONFIG{"SYSTEM"} eq SYSTEM_WIN_MINGW64 )
   {
     my $tempO = "";
     
     # Build
     #
-    print "Building application (COMPILER_WIN_MINGW64)\n";
+    print "Building application (SYSTEM_WIN_MINGW64)\n";
     #
     for my $n (@APP_SRC_C) 
     {
@@ -889,9 +904,9 @@ sub compileApp
     return ($result, $info) unless($result eq "");
   }
   
-  # Option COMPILER_WIN_VC
+  # Option SYSTEM_WIN_VC
   #
-  if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_VC ) 
+  if( $APP_SPECIAL_CONFIG{"SYSTEM"} eq SYSTEM_WIN_VC ) 
   {
     # Assemble src and obj file paths
     #
@@ -906,12 +921,9 @@ sub compileApp
     
     # Build
     #
-    $temp = "$COMP $APP_COMPILER_OPS $APP_INCL_DIR ".
-      "/Fo\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/\" ".
-      "/Fd\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/vc100.pdb\" ".
-      "$tempS";
+    $temp = "$COMP $APP_COMPILER_OPS $APP_INCL_DIR $tempS";
     #
-    print "Building application (COMPILER_WIN_VC)\n";
+    print "Building application (SYSTEM_WIN_VC)\n";
     #print "$temp\n";
     $result = &systemCall($temp, STD_OUT, STD_ERR); 
     $info .= "Build:\n".$temp."\n\n";
@@ -919,11 +931,7 @@ sub compileApp
     
     # Link
     #
-    $temp = "$LINK $APP_LINK_OPS $APP_LIB_CONFIG ".
-      "/OUT:\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME.exe\" ".
-      "/ManifestFile:\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/$APP_NAME.exe.intermediate.manifest\" ".
-      "/PDB:\"$SCRIPT_ROOT_DIR/$APP_BIN_DIR/vc100.pdb\" ".
-      "$tempO";
+    $temp = "$LINK $APP_LINK_OPS $APP_LIB_CONFIG $tempO";
     #
     print "Linking application\n";
     #print "$temp\n";
@@ -936,11 +944,6 @@ sub compileApp
   #
   {
     print "Installing application\n";
-    
-    if( not(-e $APP_INSTALL_DIR) ) 
-    {
-      make_path($APP_INSTALL_DIR);
-    }
     
     for my $n ("$APP_NAME.exe", $APP_DEFINITION_FILE_NAME)
     {
@@ -966,7 +969,7 @@ sub compileApp
     
     for my $n (@APP_CONFIG_FILE_NAMES) 
     {
-      copy "$SCRIPT_ROOT_DIR/config/$n", "$APP_INSTALL_DIR/$n";
+      copy "$SCRIPT_ROOT_DIR/cfg/$n", "$APP_INSTALL_DIR/$n";
 
       if( not(-e "$APP_INSTALL_DIR/$n") ) 
       {
@@ -1056,12 +1059,9 @@ sub compileUtil
   
   # Clean bin dir
   $temp = "$SCRIPT_ROOT_DIR/$UTIL_BIN_DIR";
-  if(-e $temp) 
-  {
-    remove_tree($temp,{verbose => 0}); make_path($temp);
-  }
+  remove_tree($temp,{verbose => 0}); make_path($temp);
 
-  if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_MINGW64 ) 
+  if( $APP_SPECIAL_CONFIG{"SYSTEM"} eq SYSTEM_WIN_MINGW64 ) 
   {
     # Build libraries
     $temp = "";
@@ -1090,7 +1090,7 @@ sub compileUtil
     unlink( "$SCRIPT_ROOT_DIR/$UTIL_INSTALL_DIR/lib$UTIL_NAME.a" );
   }
   
-  if( $APP_SPECIAL_CONFIG{"COMPILER"} eq COMPILER_WIN_VC ) 
+  if( $APP_SPECIAL_CONFIG{"SYSTEM"} eq SYSTEM_WIN_VC ) 
   {
     # Build libraries
     my $tempS = ""; 

@@ -1,84 +1,15 @@
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "cpp_cl", "cpp_cl", "{BD575C4A-7AA8-4545-A610-FB2F5D1F7B04}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "app", "app", "{BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Neuro", "Neuro", "{394E5F36-4F5F-4DDA-89C4-FF19323D3B78}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Neurosim", "cpp_cl\app\Neuro\IntegrationTest.vcxproj", "{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "util", "util", "{2BBD7067-383E-4644-9236-D20AFE79A90C}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SDKUtil", "SDKUtil", "{2BEAE3BB-E0CC-4D4E-933B-98875EF60095}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SDKUtil", "cpp_cl\util\SDKUtil\SDKUtil.vcxproj", "{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "common", "common", "{6BFDFF87-AD60-4DF0-B7A2-5CA3F11C9B76}"
-	ProjectSection(SolutionItems) = preProject
-		common\openclsdk_debug.vsprops = common\openclsdk_debug.vsprops
-		common\openclsdk_debug_x64.vsprops = common\openclsdk_debug_x64.vsprops
-		common\openclsdk_debug_x64_VS10.props = common\openclsdk_debug_x64_VS10.props
-		common\openclsdk_debugVS10.props = common\openclsdk_debugVS10.props
-		common\openclsdk_no_sdkutils_debug.vsprops = common\openclsdk_no_sdkutils_debug.vsprops
-		common\openclsdk_no_sdkutils_debug_x64.vsprops = common\openclsdk_no_sdkutils_debug_x64.vsprops
-		common\openclsdk_no_sdkutils_debug_x64_VS10.props = common\openclsdk_no_sdkutils_debug_x64_VS10.props
-		common\openclsdk_no_sdkutils_debugVS10.props = common\openclsdk_no_sdkutils_debugVS10.props
-		common\openclsdk_no_sdkutils_release.vsprops = common\openclsdk_no_sdkutils_release.vsprops
-		common\openclsdk_no_sdkutils_release_x64.vsprops = common\openclsdk_no_sdkutils_release_x64.vsprops
-		common\openclsdk_no_sdkutils_release_x64_VS10.props = common\openclsdk_no_sdkutils_release_x64_VS10.props
-		common\openclsdk_no_sdkutils_releaseVS10.props = common\openclsdk_no_sdkutils_releaseVS10.props
-		common\openclsdk_release.vsprops = common\openclsdk_release.vsprops
-		common\openclsdk_release_x64.vsprops = common\openclsdk_release_x64.vsprops
-		common\openclsdk_release_x64_VS10.props = common\openclsdk_release_x64_VS10.props
-		common\openclsdk_releaseVS10.props = common\openclsdk_releaseVS10.props
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{47254E69-2AE8-46FC-936D-C54E70EB5D2F}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GL", "GL", "{D069B49B-CC8C-433F-9A5A-F76746912BD4}"
-	ProjectSection(SolutionItems) = preProject
-		include\GL\glew.h = include\GL\glew.h
-		include\GL\glext.h = include\GL\glext.h
-		include\GL\GLU.h = include\GL\GLU.h
-		include\GL\glut.h = include\GL\glut.h
-		include\GL\glxew.h = include\GL\glxew.h
-		include\GL\wglew.h = include\GL\wglew.h
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SDKUtil", "SDKUtil", "{DA1FD849-A82C-4E4C-B24A-A70A638A732A}"
-	ProjectSection(SolutionItems) = preProject
-		include\SDKUtil\SDKApplication.hpp = include\SDKUtil\SDKApplication.hpp
-		include\SDKUtil\SDKBitMap.hpp = include\SDKUtil\SDKBitMap.hpp
-		include\SDKUtil\SDKCommandArgs.hpp = include\SDKUtil\SDKCommandArgs.hpp
-		include\SDKUtil\SDKCommon.hpp = include\SDKUtil\SDKCommon.hpp
-		include\SDKUtil\SDKFile.hpp = include\SDKUtil\SDKFile.hpp
-		include\SDKUtil\SDKThread.hpp = include\SDKUtil\SDKThread.hpp
-	EndProjectSection
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "lib", "lib", "{F4FF45D1-E8B0-48A3-8D13-A3B0DF7BE20F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "x86", "x86", "{646030FA-E37C-4099-87C9-50FF535A40BE}"
 	ProjectSection(SolutionItems) = preProject
-		lib\x86\GLEW32.lib = lib\x86\GLEW32.lib
-		lib\x86\glut32.lib = lib\x86\glut32.lib
-		lib\x86\libglew32.dll.a = lib\x86\libglew32.dll.a
+		lib\x86\readme = lib\x86\readme
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "x86_64", "x86_64", "{6AB08231-FDE2-4DB7-ACB1-9642991ED998}"
 	ProjectSection(SolutionItems) = preProject
-		lib\x86_64\GLEW64.lib = lib\x86_64\GLEW64.lib
-		lib\x86_64\glut64.lib = lib\x86_64\glut64.lib
-		lib\x86_64\libglew64.dll.a = lib\x86_64\libglew64.dll.a
-		lib\x86_64\libglut64.a = lib\x86_64\libglut64.a
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SyntaxHighlighting", "SyntaxHighlighting", "{5B3323B1-3349-45D6-904B-2035C20B26B1}"
-	ProjectSection(SolutionItems) = preProject
-		SyntaxHighlighting\c.vim = SyntaxHighlighting\c.vim
-		SyntaxHighlighting\opencl.lang = SyntaxHighlighting\opencl.lang
-		SyntaxHighlighting\ReadMe.txt = SyntaxHighlighting\ReadMe.txt
-		SyntaxHighlighting\usertype.dat = SyntaxHighlighting\usertype.dat
+		lib\x86_64\readme = lib\x86_64\readme
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "doc", "doc", "{04013E7A-8B00-45B1-8131-26D997D302F4}"
@@ -97,22 +28,41 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		neurosim.pl = neurosim.pl
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "config", "config", "{8963A90B-B36B-490A-9C10-7342E389021E}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "cfg", "cfg", "{FE9F98A5-DE4E-495D-AAA7-8B60AACED55C}"
 	ProjectSection(SolutionItems) = preProject
-		config\config.xml = config\config.xml
-		config\neuron_variables_sample.csv = config\neuron_variables_sample.csv
-		config\oclCompilerOptions.txt = config\oclCompilerOptions.txt
-		config\test.xml = config\test.xml
-		config\test_Debug.xml = config\test_Debug.xml
-		config\test_Generic.xml = config\test_Generic.xml
-		config\test_Kernel_Expand.xml = config\test_Kernel_Expand.xml
-		config\test_Kernel_Group.xml = config\test_Kernel_Group.xml
-		config\test_Kernel_Make.xml = config\test_Kernel_Make.xml
-		config\test_Kernel_Scan.xml = config\test_Kernel_Scan.xml
-		config\test_Kernel_Update.xml = config\test_Kernel_Update.xml
-		config\test_QA.xml = config\test_QA.xml
-		config\test_SNN.xml = config\test_SNN.xml
+		cfg\config.xml = cfg\config.xml
+		cfg\neuron_variables_sample.csv = cfg\neuron_variables_sample.csv
+		cfg\oclCompilerOptions.txt = cfg\oclCompilerOptions.txt
+		cfg\test.xml = cfg\test.xml
+		cfg\test_Debug.xml = cfg\test_Debug.xml
+		cfg\test_Generic.xml = cfg\test_Generic.xml
+		cfg\test_Kernel_Expand.xml = cfg\test_Kernel_Expand.xml
+		cfg\test_Kernel_Group.xml = cfg\test_Kernel_Group.xml
+		cfg\test_Kernel_Make.xml = cfg\test_Kernel_Make.xml
+		cfg\test_Kernel_Scan.xml = cfg\test_Kernel_Scan.xml
+		cfg\test_Kernel_Update.xml = cfg\test_Kernel_Update.xml
+		cfg\test_QA.xml = cfg\test_QA.xml
+		cfg\test_SNN.xml = cfg\test_SNN.xml
 	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "inc", "inc", "{78CF2CC6-C20B-4EF7-9D99-43339DFF8272}"
+	ProjectSection(SolutionItems) = preProject
+		inc\readme = inc\readme
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{AF3DB13C-8C12-4432-BA7F-9EF548598277}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "neurosim", "neurosim", "{86F5CA67-1AEB-466F-AC2B-C8A7EC766CFC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SyntaxHighlighting", "SyntaxHighlighting", "{8827C6C5-89E3-48B6-A886-7A42D93157FA}"
+	ProjectSection(SolutionItems) = preProject
+		doc\SyntaxHighlighting\c.vim = doc\SyntaxHighlighting\c.vim
+		doc\SyntaxHighlighting\opencl.lang = doc\SyntaxHighlighting\opencl.lang
+		doc\SyntaxHighlighting\ReadMe.txt = doc\SyntaxHighlighting\ReadMe.txt
+		doc\SyntaxHighlighting\usertype.dat = doc\SyntaxHighlighting\usertype.dat
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Neurosim", "src\neurosim\Neurosim.vcxproj", "{856C9154-94A7-48F8-B695-8559707BB774}"
 EndProject
 Global
 	GlobalSection(SubversionScc) = preSolution
@@ -120,27 +70,23 @@ Global
 		Manager = AnkhSVN - Subversion Support for Visual Studio
 	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Release|x64.ActiveCfg = Release|x64
-		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C}.Release|x64.Build.0 = Release|x64
-		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Release|x64.ActiveCfg = Release|x64
-		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564}.Release|x64.Build.0 = Release|x64
+		{856C9154-94A7-48F8-B695-8559707BB774}.Debug|x64.ActiveCfg = Debug|x64
+		{856C9154-94A7-48F8-B695-8559707BB774}.Debug|x64.Build.0 = Debug|x64
+		{856C9154-94A7-48F8-B695-8559707BB774}.Release|x64.ActiveCfg = Release|x64
+		{856C9154-94A7-48F8-B695-8559707BB774}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21} = {BD575C4A-7AA8-4545-A610-FB2F5D1F7B04}
-		{2BBD7067-383E-4644-9236-D20AFE79A90C} = {BD575C4A-7AA8-4545-A610-FB2F5D1F7B04}
-		{394E5F36-4F5F-4DDA-89C4-FF19323D3B78} = {BBB657AF-74A6-4CF0-8DC7-8F7ECB435E21}
-		{B319D744-09B7-4E9C-8CEF-B6BF1B9C281C} = {394E5F36-4F5F-4DDA-89C4-FF19323D3B78}
-		{2BEAE3BB-E0CC-4D4E-933B-98875EF60095} = {2BBD7067-383E-4644-9236-D20AFE79A90C}
-		{721EBCD6-B0AA-48AD-A3EF-87D3EF265564} = {2BEAE3BB-E0CC-4D4E-933B-98875EF60095}
-		{D069B49B-CC8C-433F-9A5A-F76746912BD4} = {47254E69-2AE8-46FC-936D-C54E70EB5D2F}
-		{DA1FD849-A82C-4E4C-B24A-A70A638A732A} = {47254E69-2AE8-46FC-936D-C54E70EB5D2F}
 		{646030FA-E37C-4099-87C9-50FF535A40BE} = {F4FF45D1-E8B0-48A3-8D13-A3B0DF7BE20F}
 		{6AB08231-FDE2-4DB7-ACB1-9642991ED998} = {F4FF45D1-E8B0-48A3-8D13-A3B0DF7BE20F}
+		{8827C6C5-89E3-48B6-A886-7A42D93157FA} = {04013E7A-8B00-45B1-8131-26D997D302F4}
+		{86F5CA67-1AEB-466F-AC2B-C8A7EC766CFC} = {AF3DB13C-8C12-4432-BA7F-9EF548598277}
+		{856C9154-94A7-48F8-B695-8559707BB774} = {86F5CA67-1AEB-466F-AC2B-C8A7EC766CFC}
 	EndGlobalSection
 EndGlobal
