@@ -27,8 +27,7 @@ WARNING_CONTROL_START
 
 
 
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+#if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
 void
 Neurosim::allocateHostData
 (
@@ -36,130 +35,6 @@ Neurosim::allocateHostData
 )
 /**************************************************************************************************/
 {
-  cl_uint size = 0;
-  
-#if ((GROUP_EVENTS_ENABLE_V00) ||\
-     (GROUP_EVENTS_ENABLE_V01) ||\
-     (GROUP_EVENTS_ENABLE_V02) ||\
-     (GROUP_EVENTS_ENABLE_V03))
-  {
-  size = GROUP_EVENTS_GRID_SIZE_WG*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
-
-  CALLOC(dataHistogramGroupEventsVerify, cl_uint, size);
-  }
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-  {
-#if UPDATE_NEURONS_ENABLE_V00
-  size = UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE*UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS;
-#endif
-#if MAKE_EVENT_PTRS_ENABLE
-  size = MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE*MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
-#endif
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03
-  size = GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-#endif
-  
-  /* allocate memory for destination event data and verification space*/
-  CALLOC(dataGroupEventsTik, cl_uint, size);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataGroupEventsTik);
-  
-  CALLOC(dataGroupEventsTikVerify, cl_uint, size);
-  
-  /*Size alignment between kernles is not enforced since the size is querried from the data.
-    Only pitck is enforced*/
-#if (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03) && MAKE_EVENT_PTRS_ENABLE
-#if MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS
-  #error (MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
-#endif
-#if GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE
-  #error (GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE)
-#endif
-#endif
-#if (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03) && UPDATE_NEURONS_ENABLE_V00
-#if UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS
-  #error (UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
-#endif
-#if UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE
-  #error (UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE)
-#endif
-#endif
-#if MAKE_EVENT_PTRS_ENABLE && UPDATE_NEURONS_ENABLE_V00
-#if UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS
-  #error (UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS)
-#endif
-#if UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE
-  #error (UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE)
-#endif
-#endif
-  }
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03
-  {
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  /* allocate memory for debug host buffer */
-  CALLOC(dataDebugHostGroupEvents, cl_uint, GROUP_EVENTS_DEBUG_BUFFER_SIZE_WORDS);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataDebugHostGroupEvents);
-
-  /* allocate memory for debug device buffer */
-  CALLOC(dataDebugDeviceGroupEvents, cl_uint, GROUP_EVENTS_DEBUG_BUFFER_SIZE_WORDS);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataDebugDeviceGroupEvents);
-#endif
-
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  /* allocate memory for error tracking */
-  CALLOC(dataErrorGroupEvents, cl_uint, GROUP_EVENTS_ERROR_BUFFER_SIZE_WORDS);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataErrorGroupEvents);
-#endif
-  }
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
-    MAKE_EVENT_PTRS_ENABLE
-  {
-#if MAKE_EVENT_PTRS_ENABLE
-  size = MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET+1;
-#endif
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-  size = GROUP_EVENTS_GRID_SIZE_WG*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
-#endif
-
-  /* allocate memory for histogram and its verification*/
-  CALLOC(dataHistogramGroupEventsTok, cl_uint, size);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataHistogramGroupEventsTok);
-  }
-#if (GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03) &&\
-    MAKE_EVENT_PTRS_ENABLE
-#if (MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET != \
-    (GROUP_EVENTS_HISTOGRAM_BIN_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS))
-  #error (MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET != \
-         (GROUP_EVENTS_HISTOGRAM_BIN_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS))
-#endif
-#if (MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
-  #error (MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
-#endif
-#endif
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-  {
-  /* allocate memory for destination event data and verification space*/
-  size = GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-  CALLOC(dataGroupEventsTok, cl_uint, size);
-  REGISTER_MEMORY(KERNEL_ALL, MEM_GLOBAL, dataGroupEventsTok);
-  
-  CALLOC(dataGroupEventsTokVerify, cl_uint, size);
-  }
-#endif
 /**************************************************************************************************/
 #if MAKE_EVENT_PTRS_ENABLE
   {
@@ -183,6 +58,7 @@ Neurosim::allocateHostData
 /**************************************************************************************************/
 #if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   {
+  cl_uint size = 0;
   /* allocate memory for event pointer struct*/
 #if MAKE_EVENT_PTRS_ENABLE
   size = 
@@ -267,561 +143,6 @@ Neurosim::allocateHostData
 	for(int i=0; i<4; i++)
     {co[i] = (DATA_TYPE *)malloc((UPDATE_NEURONS_PS_ORDER_LIMIT+1)*sizeof(DATA_TYPE));}
 #endif
-}
-/**************************************************************************************************/
-#endif
-
-
-
-int
-Neurosim::initializeUnsortedEvents
-/**************************************************************************************************/
-(
-  cl_uint totalBuffers,
-  cl_uint bufferSize,
-  cl_uint totalNeurons,
-  cl_uint maxDelay,
-  cl_float minDelay,
-  cl_uint histogramBinSize,
-  cl_uint histogramBitMask,
-  cl_uint histogramBitShift,
-  cl_uint keyOffset,
-  cl_float percentInhibitory,
-  double   percentBufferSizeDeviation,
-  cl_uint *dataUnsortedEventCounts,
-  cl_uint *dataUnsortedEventTargets,
-  cl_uint *dataUnsortedEventDelays,
-  cl_uint *dataUnsortedEventWeights,
-  cl_uint *dataHistogram
-){
-  /*Initialize syn events and neuron counters*/
-  for(cl_uint b = 0; b < totalBuffers; b++)
-  {
-    cl_uint event_total = cl_uint(bufferSize*(1 - percentBufferSizeDeviation/100.0) +
-        abs(bufferSize*(percentBufferSizeDeviation/100.0)*(double)rand()/((double)RAND_MAX)));
-
-    if(event_total >= bufferSize){event_total = bufferSize;}
-
-    dataUnsortedEventCounts[b] = event_total;
-    
-    cl_uint count_inhibitory = cl_uint(event_total*(percentInhibitory/100.0));
-    
-    for(cl_uint e = 0; e < event_total; e++)
-    {
-      /*Compute pointer to event data*/
-      cl_uint ptr = 
-        /*Event data buffers*/
-        b * 
-        (bufferSize) +
-        /*Current event*/
-        e;
-
-      /*Compute event data*/
-      /*target neuron*/
-      cl_uint target_neuron = 
-        cl_uint(abs((totalNeurons-1)*((double)rand()/((double)RAND_MAX))));
-      /*weight*/
-      cl_float weight = 6.0f/1.4f;
-      if (count_inhibitory != 0)
-      {
-        count_inhibitory--;
-        weight = -67.0f/1.4f;
-      }
-      cl_float ev_weight = cl_float(weight*((double)rand()/((double)RAND_MAX)));
-      /*delay*/
-      cl_float ev_delay = 
-        cl_float(minDelay+abs((maxDelay-minDelay)*((double)rand()/((double)RAND_MAX))));
-
-      /*Store event*/
-      dataUnsortedEventTargets[ptr] = target_neuron;
-      *((cl_float *)(&dataUnsortedEventDelays[ptr])) = ev_delay;
-      *((cl_float *)(&dataUnsortedEventWeights[ptr])) = ev_weight;
-      
-      /*Compute histogram key for target neuron based on MSBs*/
-      cl_uint bin = 0;
-      if(keyOffset == 0)
-      {
-        bin = (dataUnsortedEventTargets[ptr]>>histogramBitShift) & histogramBitMask;
-      }
-      else if(keyOffset == 1)
-      {
-        bin = (dataUnsortedEventDelays[ptr]>>histogramBitShift) & histogramBitMask;
-      }
-      else if(keyOffset == 2)
-      {
-        bin = (dataUnsortedEventWeights[ptr]>>histogramBitShift) & histogramBitMask;
-      }
-      
-      /*Offset is based on time slot, bin, WG*/
-      cl_uint offset = 
-      /*WG offset*/
-      b +
-      /*time slot + bin with histogramBinSize as a pitch*/
-      bin*histogramBinSize;
-
-      /*Increment counter for a target neuron failing into slot/bin/WG specified by the offset.*/
-      dataHistogram[offset]++;
-    }
-  }
-  return 1;
-}
-/**************************************************************************************************/
-
-
-
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03
-int
-Neurosim::initializeGrouppedEvents
-/**************************************************************************************************/
-(
-  cl_uint enableValues,
-  cl_uint totalBuffers,
-  cl_uint bufferSize,
-  cl_uint destinationBufferSize,
-  cl_uint histogramBinSize,
-  cl_uint histogramTotalBins,
-  cl_uint histogramBitMask,
-  cl_uint histogramBitShift,
-  cl_uint histogramOutBitShift,
-  cl_uint histogramOutTotalGroups,
-  cl_uint histogramOutBitMask,
-  size_t  histogramOutSize,
-  cl_uint keyOffset,
-  cl_uint *dataUnsortedEventCounts,
-  cl_uint *dataUnsortedEventTargets,
-  cl_uint *dataUnsortedEventDelays,
-  cl_uint *dataUnsortedEventWeights,
-  cl_uint *dataGroupedEvents,
-  cl_uint *dataHistogram,
-  cl_uint *dataHistogramOut
-){
-  int result = 1;
-
-  /* allocate memory for offset copies used in verification data generation*/
-  cl_uint size = (histogramTotalBins*histogramBinSize + 1);
-  cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
-  memcpy(dataOffsetGroupEventsCopy, dataHistogram, size*sizeof(cl_uint));
-  
-  /*Init data for verification*/
-  cl_uint total_synaptic_events = 
-    dataHistogram[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
-  
-  /*Compute total chunks for grid*/
-  cl_uint total_synaptic_event_chunks = total_synaptic_events/(GROUP_EVENTS_WG_SIZE_WI*
-    GROUP_EVENTS_ELEMENTS_PER_WI);
-  if(total_synaptic_event_chunks*(GROUP_EVENTS_WG_SIZE_WI*
-    GROUP_EVENTS_ELEMENTS_PER_WI) < total_synaptic_events)
-  {
-    total_synaptic_event_chunks++;
-  }
-  /*Compute total chunks per WG for output histogram*/
-  cl_uint wg_chunk_size = total_synaptic_event_chunks/GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
-  if(wg_chunk_size*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE  < total_synaptic_event_chunks)
-  {
-    wg_chunk_size++;
-  }
-  wg_chunk_size *= (GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI);
-
-  /*Group events for verification*/
-  for(cl_uint b = 0; b < totalBuffers; b++)
-  {
-    cl_uint event_total = dataUnsortedEventCounts[b];
-    
-    for(cl_uint e = 0; e < event_total; e++)
-    {
-      /*Compute pointer to event data*/
-      cl_uint ptr = 
-        /*Event data buffers*/
-        b *
-        (bufferSize) +
-        /*Current event*/
-        e;
-
-      /*Access event*/
-      cl_uint key = 0;
-      if(keyOffset == 0)
-      {
-        key = dataUnsortedEventTargets[ptr];
-      }
-      else if(keyOffset == 1)
-      {
-        key = dataUnsortedEventDelays[ptr];
-      }
-      else if(keyOffset == 2)
-      {
-        key = dataUnsortedEventWeights[ptr];
-      }
-      
-      /*Compute offset key for target neuron*/
-      cl_uint bin = (key>>histogramBitShift)&histogramBitMask;
-        
-      /*Offset is based on time slot, bin, WG*/
-      cl_uint bin_offset = 
-      /*WG offset*/
-      b +
-      /*time slot + bin with histogramBinSize as a pitch*/
-      bin*histogramBinSize;
-
-      /*Check for offset overlap*/
-      if(dataOffsetGroupEventsCopy[bin_offset] >= dataHistogram[bin_offset+1])
-      {
-        std::cout << "initializeGrouppedEvents: Destination event bin pointer overlaps with "
-          << "next pointer for bin " << 
-          bin << ", buffer " << b << std::endl;
-        result = 0; 
-        break;
-      }
-      
-      /*Calculate offset in the grouped data space*/
-      cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
-        
-      /*Compute histogram key for target neuron*/
-      cl_uint hist_out_ptr = 
-        /*WG offset for histogram out*/
-        (dest_offset/wg_chunk_size) + 
-        /*bin*/
-        histogramOutTotalGroups*
-        ((key>>histogramOutBitShift)&histogramOutBitMask);
-      /*Verify*/
-      if(hist_out_ptr > histogramOutSize)
-      {
-        std::cout << "initializeGrouppedEvents: Pointer to an element in output histogram is "
-          << "outside of its range" << std::endl;
-        result = 0;
-        break;
-      }
-      /*Increment counter for this bin.*/
-      dataHistogramOut[hist_out_ptr]++;
-      
-      /*Store event at its group location (grouped by bins)*/
-      dataGroupedEvents[dest_offset] = key;
-      if(enableValues)
-      {
-        dataGroupedEvents[destinationBufferSize + dest_offset] = ptr;
-      }
-      /*Increment ptr for next data item*/
-      dataOffsetGroupEventsCopy[bin_offset]++;
-    }
-    if(result != 1){break;}
-  }
-  free(dataOffsetGroupEventsCopy);
-  return result;
-}
-/**************************************************************************************************/
-#endif
-
-
-
-#if GROUP_EVENTS_ENABLE_V01
-int 
-Neurosim::initializeDataForKernelGroupEventsV01
-/**************************************************************************************************/
-(
-  int step, 
-  cl_uint keyOffset,
-  double percentBufferSizeDeviation
-){
-
-  int result = 1;
-
-  cl_uint max_offset = 0;
-  
-  cl_uint shiftFirstStage, shiftNextStage;
-  if(step < 0)
-  {
-    shiftFirstStage = 0, shiftNextStage = 0;
-  }
-  else
-  {
-    shiftFirstStage = GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01 * (cl_uint)step;;
-    shiftNextStage = GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01 * ((cl_uint)step + 1);
-  }
-
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  memset(dataDebugHostGroupEvents, 0, dataDebugHostGroupEventsSizeBytes);
-  memset(dataDebugDeviceGroupEvents, 0, dataDebugDeviceGroupEventsSizeBytes);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  /*Set it with non-zero since kernel should zero it out*/
-  memset(dataErrorGroupEvents, 0xF, dataErrorGroupEventsSizeBytes);
-#endif
-  memset((*operatorSort).dataHistogramGroupEventsTik, 0, (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
-  memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
-  memset(dataGroupEventsTok, 0, dataGroupEventsTokSizeBytes);
-  memset(dataHistogramGroupEventsTok, 0, dataHistogramGroupEventsTokSizeBytes);
-
-  /* allocate memory for offset copies used in verification data generation*/
-  cl_uint size = GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS;
-  cl_uint *dataUnsortedEventCountsTemp = (cl_uint *)calloc(size, sizeof(cl_uint));
-  /* allocate memory for offset copies used in verification data generation*/
-  size = GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS * GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE;
-  cl_uint *dataUnsortedEventTargetsTemp = (cl_uint *)calloc(size, sizeof(cl_uint));
-  cl_uint *dataUnsortedEventDelaysTemp = (cl_uint *)calloc(size, sizeof(cl_uint));
-  cl_uint *dataUnsortedEventWeightsTemp = (cl_uint *)calloc(size, sizeof(cl_uint));
-  
-  size = (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + 1);
-  cl_uint *dataHistogramTemp = (cl_uint *)calloc(size, sizeof(cl_uint));
-  
-  /*Initialize syn events and neuron counters*/
-  result = initializeUnsortedEvents
-  (
-    GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
-    GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
-    GROUP_EVENTS_TOTAL_NEURONS,
-    GROUP_EVENTS_MAX_DELAY,
-    GROUP_EVENTS_MIN_DELAY,
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
-    GROUP_EVENTS_HISTOGRAM_BIN_MASK,
-    shiftFirstStage,
-    keyOffset,
-    10.0f,
-    percentBufferSizeDeviation,
-    dataUnsortedEventCountsTemp,
-    dataUnsortedEventTargetsTemp,
-    dataUnsortedEventDelaysTemp,
-    dataUnsortedEventWeightsTemp,
-    dataHistogramTemp
-  );
-
-  cl_uint print_bins = 0;
-  
-  /*Compute offsets based on histogram.*/
-  
-  print_bins ? std::cout 
-    << "initializeDataForKernelGroupEventsV01: Number of synaptic events in bins: " 
-    << std::endl, true : false;
-  
-  cl_uint runningSum = 0;
-  cl_uint runningSize = 0;
-  
-  for(cl_uint j = 0; j < GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE; j++)
-  {
-    cl_uint temp = dataHistogramTemp[j];
-    dataHistogramTemp[j] = runningSum;
-    runningSum += temp;
-
-    if(j%GROUP_EVENTS_HISTOGRAM_BIN_SIZE == 0 && j != 0)
-    {
-      print_bins ? std::cout << runningSum-runningSize << ", ", true : false;
-      runningSize = runningSum;
-    }
-  }
-  
-  dataHistogramTemp[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE] = 
-    runningSum;
-  
-  print_bins ? std::cout << runningSum-runningSize << "] = " << runningSum << 
-    std::endl, true : false;
-  
-  if(max_offset < runningSum){max_offset = runningSum;}
-
-  if(max_offset > GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE)
-  {
-    std::cout << "initializeDataForKernelGroupEventsV01: Destination event buffer overflow. " << 
-      "Need to increase GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE, which is currently " << 
-      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE << " above " << max_offset << std::endl;
-    result = 0;
-  }
-
-  if(result != 0)
-  {
-    result = initializeGrouppedEvents
-    (
-      1,
-      GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
-      GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
-      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
-      GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
-      GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK,
-      shiftFirstStage,
-      shiftNextStage,
-      GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT,
-      (*operatorSort).dataHistogramGroupEventsTikSize,
-      keyOffset,
-      dataUnsortedEventCountsTemp,
-      dataUnsortedEventTargetsTemp,
-      dataUnsortedEventDelaysTemp,
-      dataUnsortedEventWeightsTemp,
-      dataGroupEventsTik,
-      dataHistogramTemp,
-      (*operatorSort).dataHistogramGroupEventsTik
-    );
-  }
-
-  if(result != 0)
-  {
-  runningSum = (*operatorSort).dataHistogramGroupEventsTik[0];
-  (*operatorSort).dataHistogramGroupEventsTik[0] = 0;
-  
-  /*Compute offsets*/
-  for(cl_uint j = 1; 
-    j < (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE + 1); j++)
-  {
-    
-    cl_uint d = (*operatorSort).dataHistogramGroupEventsTik[j];
-    (*operatorSort).dataHistogramGroupEventsTik[j] = runningSum;
-    runningSum += d;
-  }
-  }
-
-  free(dataHistogramTemp);
-  free(dataUnsortedEventTargetsTemp);
-  free(dataUnsortedEventDelaysTemp);
-  free(dataUnsortedEventWeightsTemp);
-  free(dataUnsortedEventCountsTemp);
-  return result;
-}
-/**************************************************************************************************/
-#endif
-
-
-
-#if GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-int 
-Neurosim::initializeDataForKernelGroupEventsV02_V03
-/**************************************************************************************************/
-(
-  int step, 
-  cl_uint keyOffset,
-  double percentBufferSizeDeviation
-){
-  int result = 1;
-
-  cl_uint shiftFirstStage, shiftNextStage;
-  if(step < 0)
-  {
-    shiftFirstStage = 0, shiftNextStage = 0;
-  }
-  else
-  {
-    shiftFirstStage = GROUP_EVENTS_HISTOGRAM_BIN_BITS * (cl_uint)step;;
-    shiftNextStage = GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT * ((cl_uint)step+1);
-  }
-
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  memset(dataDebugHostGroupEvents, 0, dataDebugHostGroupEventsSizeBytes);
-  memset(dataDebugDeviceGroupEvents, 0, dataDebugDeviceGroupEventsSizeBytes);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  memset(dataErrorGroupEvents, 0, dataErrorGroupEventsSizeBytes);
-#endif
-  memset((*operatorSort).dataHistogramGroupEventsTik, 0, (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
-  memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
-  memset((*synapticEvents).dataUnsortedEventCounts, 0, (*synapticEvents).dataUnsortedEventCountsSizeBytes);
-  memset((*synapticEvents).dataUnsortedEventTargets, 0, (*synapticEvents).dataUnsortedEventTargetsSizeBytes);
-  memset((*synapticEvents).dataUnsortedEventDelays, 0, (*synapticEvents).dataUnsortedEventDelaysSizeBytes);
-  memset((*synapticEvents).dataUnsortedEventWeights, 0, (*synapticEvents).dataUnsortedEventWeightsSizeBytes);
-  memset(dataGroupEventsTok, 0, dataGroupEventsTokSizeBytes);
-  memset(dataHistogramGroupEventsTok, 0, dataHistogramGroupEventsTokSizeBytes);
-
-  cl_uint size = (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + 1);
-  cl_uint *dataHistogramTemp = (cl_uint *)calloc(size, sizeof(cl_uint));
-  
-  /*Initialize syn events and neuron counters*/
-  result = initializeUnsortedEvents
-  (
-    GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
-    GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
-    GROUP_EVENTS_TOTAL_NEURONS,
-    GROUP_EVENTS_MAX_DELAY,
-    GROUP_EVENTS_MIN_DELAY,
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
-    GROUP_EVENTS_HISTOGRAM_BIN_MASK,
-    shiftFirstStage,
-    keyOffset,
-    10.0f,
-    percentBufferSizeDeviation,
-    (*synapticEvents).dataUnsortedEventCounts,
-    (*synapticEvents).dataUnsortedEventTargets,
-    (*synapticEvents).dataUnsortedEventDelays,
-    (*synapticEvents).dataUnsortedEventWeights,
-    dataHistogramTemp
-  );
-
-  /*Compute offsets based on histogram.*/
-  cl_uint print_bins = 0;
-  print_bins ? std::cout 
-    << "initializeDataForKernelGroupEventsV02_V03: Number of synaptic events in bins: " 
-    << std::endl, true : false;
-  
-  cl_uint runningSum = 0;
-  cl_uint runningSize = 0;
-  
-  for(cl_uint j = 0; j < GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE; j++)
-  {
-    cl_uint temp = dataHistogramTemp[j];
-    dataHistogramTemp[j] = runningSum;
-    runningSum += temp;
-
-    if(j%GROUP_EVENTS_HISTOGRAM_BIN_SIZE == 0 && j != 0)
-    {
-      print_bins ? std::cout << runningSum-runningSize << ", ", true : false;
-      runningSize = runningSum;
-    }
-  }
-  
-  dataHistogramTemp[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE] = 
-    runningSum;
-  
-  print_bins ? std::cout << runningSum-runningSize << "] = " << runningSum << 
-    std::endl, true : false;
-
-  if(runningSum > GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE)
-  {
-    std::cout << "initializeDataForKernelGroupEventsV02_V03: Destination event buffer overflow. " << 
-      "Need to increase GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE, which is currently " << 
-      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE << " above " << runningSum << std::endl;
-    result = 0;
-  }
-
-  if(result != 0)
-  {
-    result = initializeGrouppedEvents
-    (
-      1,
-      GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
-      GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
-      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
-      GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
-      GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK,
-      shiftFirstStage,
-      shiftNextStage,
-      GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT,
-      (*operatorSort).dataHistogramGroupEventsTikSize,
-      keyOffset,
-      (*synapticEvents).dataUnsortedEventCounts,
-      (*synapticEvents).dataUnsortedEventTargets,
-      (*synapticEvents).dataUnsortedEventDelays,
-      (*synapticEvents).dataUnsortedEventWeights,
-      dataGroupEventsTik,
-      dataHistogramTemp,
-      (*operatorSort).dataHistogramGroupEventsTik
-    );
-  }
-
-  if(result != 0)
-  {
-    runningSum = (*operatorSort).dataHistogramGroupEventsTik[0];
-    (*operatorSort).dataHistogramGroupEventsTik[0] = 0;
-    
-    /*Compute offsets*/
-    for(cl_uint j = 1; 
-      j < (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE + 1); j++)
-    {
-      
-      cl_uint d = (*operatorSort).dataHistogramGroupEventsTik[j];
-      (*operatorSort).dataHistogramGroupEventsTik[j] = runningSum;
-      runningSum += d;
-    }
-  }
-
-  free(dataHistogramTemp);
-  return result;
 }
 /**************************************************************************************************/
 #endif
@@ -980,8 +301,8 @@ Neurosim::initializeDataForKernelMakeEventPtrs
   int result = 1;
 
   /*Reset buffers*/
-  memset(dataHistogramGroupEventsTok, 0, dataHistogramGroupEventsTokSizeBytes);
-  memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
+  memset((*synapticEvents).dataSortedEventsHistogram, 0, (*synapticEvents).dataSortedEventsHistogramSizeBytes);
+  memset((*synapticEvents).dataSortedEvents, 0, (*synapticEvents).dataSortedEventsSizeBytes);
   memset(dataMakeEventPtrsStruct, 0, dataMakeEventPtrsStructSizeBytes);
   
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
@@ -1034,7 +355,7 @@ Neurosim::initializeDataForKernelMakeEventPtrs
     totalEvents = MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE;
   }
 
-  dataHistogramGroupEventsTok[MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET] = totalEvents;
+  (*synapticEvents).dataSortedEventsHistogram[MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET] = totalEvents;
   
   /*Init sorted events*/
 #if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
@@ -1054,8 +375,8 @@ Neurosim::initializeDataForKernelMakeEventPtrs
     0,
     0,
     0,
-    dataGroupEventsTikSize/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
-    dataGroupEventsTik
+    (cl_uint)((*synapticEvents).dataSortedEventsSize)/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
+    (*synapticEvents).dataSortedEvents
   );
   
 #elif MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 1
@@ -1088,8 +409,8 @@ Neurosim::initializeDataForKernelMakeEventPtrs
     wfWorkSize,
     MAKE_EVENT_PTRS_STRUCT_SIZE,
     MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE,
-    dataGroupEventsTikSize/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
-    dataGroupEventsTik
+    (*synapticEvents).dataSortedEventsSize/MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS,
+    (*synapticEvents).dataSortedEvents
   );
 #endif
   
@@ -1373,7 +694,7 @@ Neurosim::initializeDataForKernelUpdateNeurons
 
   if(resetEvents)
   {
-    memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
+    memset((*synapticEvents).dataSortedEvents, 0, (*synapticEvents).dataSortedEventsSizeBytes);
     result = initializeSortedEvents
     (
       2,
@@ -1381,12 +702,12 @@ Neurosim::initializeDataForKernelUpdateNeurons
       30.0,
       5.0,
       gabaRatio,
-      dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+      (cl_uint)((*synapticEvents).dataSortedEventsSize)/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
       0,
       0,
       0,
-      dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
-      dataGroupEventsTik
+      (cl_uint)((*synapticEvents).dataSortedEventsSize)/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+      (*synapticEvents).dataSortedEvents
     );
     if(result != 1){return result;}
     
@@ -1395,10 +716,10 @@ Neurosim::initializeDataForKernelUpdateNeurons
     result = initializeEventPointers
     (
       true,
-      dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+      (cl_uint)((*synapticEvents).dataSortedEventsSize)/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
       UPDATE_NEURONS_TOTAL_NEURONS,
       UPDATE_NEURONS_STRUCT_ELEMENT_SIZE,
-      dataGroupEventsTik,
+      (*synapticEvents).dataSortedEvents,
       dataMakeEventPtrsStruct
     );
     if(result != 1){return result;}
@@ -1473,8 +794,7 @@ Neurosim::initializeDataForKernelUpdateNeurons
 
 
 
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+#if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
 void
 Neurosim::registerLocalMemory
 (
@@ -1482,26 +802,6 @@ Neurosim::registerLocalMemory
 )
 /**************************************************************************************************/
 {
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03
-  {
-  size_t lmCacheGroupEvents = sizeof(cl_uint)*(GROUP_EVENTS_CACHE_SIZE_WORDS); 
-  size_t lmCacheGroupEventsSizeBytes = lmCacheGroupEvents;
-  REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmCacheGroupEvents);
-
-  size_t lmlocalHistogramReference = sizeof(cl_uint)*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS; 
-  size_t lmlocalHistogramReferenceSizeBytes = lmlocalHistogramReference;
-  REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmlocalHistogramReference);
-
-#if (GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT)
-  size_t lmGroupEventsHistogramOut = sizeof(cl_uint)*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT);
-  size_t lmGroupEventsHistogramOutSizeBytes = lmGroupEventsHistogramOut;
-  REGISTER_MEMORY(GROUP_EVENTS_KERNEL_NAME, MEM_LOCAL, lmGroupEventsHistogramOut);
-#endif
-  }
-#endif
 /**************************************************************************************************/
 #if MAKE_EVENT_PTRS_ENABLE
   {
@@ -1837,13 +1137,46 @@ Neurosim::setup()
   ASSERT_CL_SUCCESS(err, "Neurosim::setupCL: CommandQueue::CommandQueue() failed.")
 
   /* Allocate host memory objects*/
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+#if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   this->allocateHostData(*d);
 #endif
 
     /*Initialize data objects*/
-    
+
+#if EXPAND_EVENTS_ENABLE || GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || \
+  GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
+  
+  cl_uint sortedEventBufferCount = 0;
+  cl_uint sortedEventBufferSize = 0;
+  cl_uint sortedEventsHistogramBacketCount = 0;
+  cl_uint sortedEventsHistogramBinSize = 0;
+  cl_uint sortedEventsHistogramBinCount = 0;
+
+#if UPDATE_NEURONS_ENABLE_V00
+  sortedEventBufferSize = UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE;
+  sortedEventBufferCount = UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS;
+#elif MAKE_EVENT_PTRS_ENABLE
+  sortedEventBufferSize = MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE;
+  sortedEventBufferCount = MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS;
+#elif (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
+    GROUP_EVENTS_ENABLE_V03)
+  sortedEventBufferSize = GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE;
+  sortedEventBufferCount = GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
+#endif
+
+#if MAKE_EVENT_PTRS_ENABLE
+  sortedEventsHistogramBacketCount = MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET+1;
+  sortedEventsHistogramBinSize = 1;
+  sortedEventsHistogramBinCount = 1;
+#endif
+
+#if (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
+    GROUP_EVENTS_ENABLE_V03)
+  sortedEventsHistogramBacketCount = GROUP_EVENTS_GRID_SIZE_WG;
+  sortedEventsHistogramBinSize = GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
+  sortedEventsHistogramBinCount = GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
+#endif
+
 #if EXPAND_EVENTS_ENABLE
   synapticEvents = new Data_SynapticEvents
   (
@@ -1858,7 +1191,12 @@ Neurosim::setup()
     EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS,
     EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE,
     EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS,
-    EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS
+    EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS,
+    sortedEventsHistogramBacketCount,
+    sortedEventsHistogramBinSize,
+    sortedEventsHistogramBinCount,
+    sortedEventBufferCount,
+    sortedEventBufferSize
   );
 #elif GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || \
   GROUP_EVENTS_ENABLE_V03
@@ -1875,46 +1213,14 @@ Neurosim::setup()
     GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
     GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE,
     GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE
+    GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
+    sortedEventsHistogramBacketCount,
+    sortedEventsHistogramBinSize,
+    sortedEventsHistogramBinCount,
+    sortedEventBufferCount,
+    sortedEventBufferSize
   );
 #endif
-
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-  {
-    CREATE_BUFFER(CL_MEM_READ_WRITE, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes);
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03
-  {
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    CREATE_BUFFER(CL_MEM_READ_WRITE, dataDebugHostGroupEventsBuffer, 
-      dataDebugHostGroupEventsSizeBytes);
-    CREATE_BUFFER(CL_MEM_READ_WRITE, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-    CREATE_BUFFER(CL_MEM_READ_WRITE, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes);
-#endif
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
-    MAKE_EVENT_PTRS_ENABLE
-  {
-    CREATE_BUFFER(CL_MEM_READ_WRITE, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes);
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-  {
-    CREATE_BUFFER(CL_MEM_READ_WRITE, dataGroupEventsTokBuffer, 
-      dataGroupEventsTokSizeBytes);
-  }
 #endif
 
 #if EXPAND_EVENTS_ENABLE || UPDATE_NEURONS_ENABLE_V00
@@ -1972,82 +1278,6 @@ Neurosim::setup()
       UPDATE_NEURONS_TOTAL_NEURONS
     );
 #endif
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V00
-  {
-    createKernel
-    (
-#if LOG_SIMULATION
-      dataToSimulationLogFile,
-#endif
-      context,
-      *d,
-      kernelGroupEventsV00,
-      GROUP_EVENTS_KERNEL_FILE_NAME,
-      GROUP_EVENTS_KERNEL_NAME,
-      "-D SYSTEM=" TOSTRING(SYSTEM_CONTROL_OFF) " -D GROUP_EVENTS_DEVICE_V00=1",
-      blockSizeX_kernelGroupEventsV00,
-      blockSizeY_kernelGroupEventsV00
-    );
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V01 
-  {
-    createKernel
-    (
-#if LOG_SIMULATION
-      dataToSimulationLogFile,
-#endif
-      context,
-      *d,
-      kernelGroupEventsV01,
-      GROUP_EVENTS_KERNEL_FILE_NAME,
-      GROUP_EVENTS_KERNEL_NAME,
-      "-D SYSTEM=" TOSTRING(SYSTEM_CONTROL_OFF) " -D GROUP_EVENTS_DEVICE_V01=1",
-      blockSizeX_kernelGroupEventsV01,
-      blockSizeY_kernelGroupEventsV01
-    );
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V02
-  {
-    createKernel
-    (
-#if LOG_SIMULATION
-      dataToSimulationLogFile,
-#endif
-      context,
-      *d,
-      kernelGroupEventsV02,
-      GROUP_EVENTS_KERNEL_FILE_NAME,
-      GROUP_EVENTS_KERNEL_NAME,
-      "-D SYSTEM=" TOSTRING(SYSTEM_CONTROL_OFF) " -D GROUP_EVENTS_DEVICE_V02=1",
-      blockSizeX_kernelGroupEventsV02,
-      blockSizeY_kernelGroupEventsV02
-    );
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V03
-  {
-    createKernel
-    (
-#if LOG_SIMULATION
-      dataToSimulationLogFile,
-#endif
-      context,
-      *d,
-      kernelGroupEventsV03,
-      GROUP_EVENTS_KERNEL_FILE_NAME,
-      GROUP_EVENTS_KERNEL_NAME,
-      "-D SYSTEM=" TOSTRING(SYSTEM_CONTROL_OFF) " -D GROUP_EVENTS_DEVICE_V03=1",
-      blockSizeX_kernelGroupEventsV03,
-      blockSizeY_kernelGroupEventsV03
-    );
   }
 #endif
 
@@ -2174,38 +1404,6 @@ Neurosim::setup()
 
     /*Initialize operator objects*/
     
-#if ENABLE_OPERATOR_SCAN
-  operatorScan = new Operator_Scan
-  (
-#if SCAN_DEBUG_ENABLE || SCAN_ERROR_TRACK_ENABLE || \
-    ENABLE_UNIT_TEST_SCAN_V00 || ENABLE_UNIT_TEST_SCAN_V01
-    CL_FALSE,
-    commandQueue,
-#endif
-    context,
-    *d,
-    kernelStats,
-    dataToSimulationLogFile,
-    dataToReportLogFile
-  );
-#endif
-    
-#if ENABLE_OPERATOR_SORT
-  operatorSort = new Operator_Sort
-  (
-    context,
-    *d,
-    commandQueue,
-    CL_FALSE,
-    kernelStats,
-    dataToSimulationLogFile,
-    dataToReportLogFile,
-    GROUP_EVENTS_GRID_SIZE_WG,
-    GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT
-  );
-#endif
-    
 #if ENABLE_OPERATOR_EXPAND
   operatorExpand = new Operator_Expand
   (
@@ -2221,9 +1419,40 @@ Neurosim::setup()
   );
 #endif
 
+#if ENABLE_OPERATOR_SORT
+  {
+    cl_uint sortByTimeIterationCount = 0;
+    cl_uint sortByNeuronIterationCount = 0;
+    
+#if ENABLE_OPERATOR_GROUP
+    sortByTimeIterationCount = (32/GROUP_EVENTS_HISTOGRAM_BIN_BITS);
+    sortByNeuronIterationCount = GROUP_EVENTS_NEURON_ID_SORT_ITERATIONS;
+#endif
+    
+    this->operatorSort = new Operator_Sort
+    (
+#if ENABLE_UNIT_TEST_GROUP_EVENTS
+      GROUP_EVENTS_TEST_MODE,
+#endif
+#if (SCAN_DEBUG_ENABLE || SCAN_ERROR_TRACK_ENABLE || ENABLE_UNIT_TEST_SCAN_V00 || \
+  ENABLE_UNIT_TEST_SCAN_V01) || (GROUP_EVENTS_DEBUG_ENABLE || GROUP_EVENTS_ERROR_TRACK_ENABLE)
+      CL_FALSE,
+      commandQueue,
+#endif
+      sortByTimeIterationCount,
+      sortByNeuronIterationCount,
+      context,
+      *d,
+      kernelStats,
+      synapticEvents,
+      dataToSimulationLogFile,
+      dataToReportLogFile
+    );
+  }
+#endif
+
   /* Register local memory for stats */
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+#if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   this->registerLocalMemory(*d);
 #endif
   
@@ -2510,39 +1739,8 @@ Neurosim::run()
 #if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
     GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   {
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, dataGroupEventsTikBuffer, 
-    dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03
-  {
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-    dataDebugHostGroupEvents);
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-    dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
-    dataErrorGroupEvents);
-#endif
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
-    MAKE_EVENT_PTRS_ENABLE
-  {
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-    dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-  {
-  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, dataGroupEventsTokBuffer, 
-    dataGroupEventsTokSizeBytes, dataGroupEventsTok);
+  ENQUEUE_WRITE_BUFFER(CL_FALSE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, 
+    (*synapticEvents).dataSortedEventsSizeBytes, (*synapticEvents).dataSortedEvents);
   }
 #endif
 
@@ -2579,69 +1777,6 @@ Neurosim::run()
 #endif
 
   /* Set arguments to the kernels */
-
-#if GROUP_EVENTS_ENABLE_V00
-  cl_uint argNumGrupEventsV00 = 0;
-  {
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  SET_KERNEL_ARG(kernelGroupEventsV00, dataDebugHostGroupEventsBuffer, argNumGrupEventsV00++);
-  SET_KERNEL_ARG(kernelGroupEventsV00, dataDebugDeviceGroupEventsBuffer, argNumGrupEventsV00++);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  SET_KERNEL_ARG(kernelGroupEventsV00, dataErrorGroupEventsBuffer, argNumGrupEventsV00++);
-#endif
-  SET_KERNEL_ARG(kernelGroupEventsV00, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV00++);
-  SET_KERNEL_ARG(kernelGroupEventsV00, (*synapticEvents).dataUnsortedEventCountsBuffer, argNumGrupEventsV00++);
-  SET_KERNEL_ARG(kernelGroupEventsV00, (*synapticEvents).dataUnsortedEventDelaysBuffer, argNumGrupEventsV00++);
-  SET_KERNEL_ARG(kernelGroupEventsV00, dataGroupEventsTikBuffer, argNumGrupEventsV00++);
-  SET_KERNEL_ARG(kernelGroupEventsV00, (*synapticEvents).dataHistogramBuffer, argNumGrupEventsV00++);
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V01
-  cl_uint argNumGrupEventsV01 = 0;
-  {
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  SET_KERNEL_ARG(kernelGroupEventsV01, dataDebugHostGroupEventsBuffer, argNumGrupEventsV01++);
-  SET_KERNEL_ARG(kernelGroupEventsV01, dataDebugDeviceGroupEventsBuffer, argNumGrupEventsV01++);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  SET_KERNEL_ARG(kernelGroupEventsV01, dataErrorGroupEventsBuffer, argNumGrupEventsV01++);
-#endif
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V02
-  cl_uint argNumGrupEventsV02 = 0;
-  {
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  SET_KERNEL_ARG(kernelGroupEventsV02, dataDebugHostGroupEventsBuffer, argNumGrupEventsV02++);
-  SET_KERNEL_ARG(kernelGroupEventsV02, dataDebugDeviceGroupEventsBuffer, argNumGrupEventsV02++);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  SET_KERNEL_ARG(kernelGroupEventsV02, dataErrorGroupEventsBuffer, argNumGrupEventsV02++);
-#endif
-  SET_KERNEL_ARG(kernelGroupEventsV02, (*synapticEvents).dataUnsortedEventTargetsBuffer, argNumGrupEventsV02++);
-  SET_KERNEL_ARG(kernelGroupEventsV02, (*synapticEvents).dataUnsortedEventDelaysBuffer, argNumGrupEventsV02++);
-  SET_KERNEL_ARG(kernelGroupEventsV02, (*synapticEvents).dataUnsortedEventWeightsBuffer, argNumGrupEventsV02++);
-  }
-#endif
-
-#if GROUP_EVENTS_ENABLE_V03
-  cl_uint argNumGrupEventsV03 = 0;
-  {
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  SET_KERNEL_ARG(kernelGroupEventsV03, dataDebugHostGroupEventsBuffer, argNumGrupEventsV03++);
-  SET_KERNEL_ARG(kernelGroupEventsV03, dataDebugDeviceGroupEventsBuffer, argNumGrupEventsV03++);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  SET_KERNEL_ARG(kernelGroupEventsV03, dataErrorGroupEventsBuffer, argNumGrupEventsV03++);
-#endif
-  SET_KERNEL_ARG(kernelGroupEventsV03, (*synapticEvents).dataUnsortedEventTargetsBuffer, argNumGrupEventsV03++);
-  SET_KERNEL_ARG(kernelGroupEventsV03, (*synapticEvents).dataUnsortedEventDelaysBuffer, argNumGrupEventsV03++);
-  SET_KERNEL_ARG(kernelGroupEventsV03, (*synapticEvents).dataUnsortedEventWeightsBuffer, argNumGrupEventsV03++);
-  }
-#endif
 
 #if MAKE_EVENT_PTRS_ENABLE
   cl_uint argNumMakeEventPtrs = 0;
@@ -2730,30 +1865,6 @@ Neurosim::run()
   */
   
   cl::Event ndrEvt;
-
-#if GROUP_EVENTS_ENABLE_V00
-  cl::NDRange globalThreadsGroupEventsV00(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_GRID_SIZE_WG);
-  cl::NDRange localThreadsGroupEventsV00(blockSizeX_kernelGroupEventsV00, 
-    blockSizeY_kernelGroupEventsV00);
-#endif
-
-#if GROUP_EVENTS_ENABLE_V01
-  cl::NDRange globalThreadsGroupEventsV01(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_GRID_SIZE_WG);
-  cl::NDRange localThreadsGroupEventsV01(blockSizeX_kernelGroupEventsV01, 
-    blockSizeY_kernelGroupEventsV01);
-#endif
-
-#if GROUP_EVENTS_ENABLE_V02
-  cl::NDRange globalThreadsGroupEventsV02(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_GRID_SIZE_WG);
-  cl::NDRange localThreadsGroupEventsV02(blockSizeX_kernelGroupEventsV02, 
-    blockSizeY_kernelGroupEventsV02);
-#endif
-
-#if GROUP_EVENTS_ENABLE_V03
-  cl::NDRange globalThreadsGroupEventsV03(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_GRID_SIZE_WG);
-  cl::NDRange localThreadsGroupEventsV03(blockSizeX_kernelGroupEventsV03, 
-    blockSizeY_kernelGroupEventsV03);
-#endif
 
 #if MAKE_EVENT_PTRS_ENABLE
   cl::NDRange globalThreadsMakeEventPtrs(MAKE_EVENT_PTRS_WG_SIZE_WI*MAKE_EVENT_PTRS_GRID_SIZE_WG);
@@ -2894,775 +2005,39 @@ Neurosim::run()
     }
 #endif
 /**************************************************************************************************/
-#if ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V00
-    {
-#if ENABLE_UNIT_TEST_SCAN_V00
-
-    (*operatorScan).scanUnitTest_v00
+#if ENABLE_OPERATOR_SORT
+    (*operatorSort).sortEvents
     (
 #if KERNEL_LEVEL_PROFILING
       kernelStats,
 #endif
-      commandQueue,
-      ndrEvt,
-      currentTimeStep
-    );
-    
-#else
-
-#if SCAN_VERIFY_ENABLE
-    (*synapticEvents).refresh(commandQueue, CL_FALSE);
-#endif
-
-    (*operatorScan).scan_v00
-    (
-#if KERNEL_LEVEL_PROFILING
-      kernelStats,
-#endif
-      commandQueue,
-      ndrEvt,
-      currentTimeStep,
-      SAFE_GET((*synapticEvents).timeSlots),
-      (*synapticEvents).dataHistogramBuffer
-    );
-
-#if DEVICE_HOST_DATA_COHERENCE
-    (*synapticEvents).invalidateHistogram();
-#endif
-
-#if SCAN_VERIFY_ENABLE
-    cl_uint scanTimeStep = currentTimeStep % SAFE_GET((*synapticEvents).timeSlots);
-    
-    (*operatorScan).verifyScan_v00
-    (
-      commandQueue,
-      (void*)synapticEvents, 
-      Data_SynapticEvents::getPreviousHistogramItem, 
-      Data_SynapticEvents::getCurrentHistogramItem,
-      SAFE_GET((*synapticEvents).timeSlots),
-      SAFE_GET((*synapticEvents).histogramBinCount),
-      SAFE_GET((*synapticEvents).histogramBinSize),
-      scanTimeStep
-    );
-#endif
-#endif
-    }
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00
-    {
-      cl_uint groupEventsTimeStep = currentTimeStep%GROUP_EVENTS_TIME_SLOTS;
-/*Unit test initialization*/
-#if !(EXPAND_EVENTS_ENABLE && SCAN_ENABLE_V00)
-    /*Reset the data with new values every some number of steps for better represenation*/
-#if !EXPAND_EVENTS_ENABLE && !SCAN_ENABLE_V00
-    if(!groupEventsTimeStep)
-#endif
-    {
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    memset(dataDebugHostGroupEvents, 0, dataDebugHostGroupEventsSizeBytes);
-    memset(dataDebugDeviceGroupEvents, 0, dataDebugDeviceGroupEventsSizeBytes);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-    memset(dataErrorGroupEvents, 0, dataErrorGroupEventsSizeBytes);
-#endif
-    /*Set it with non-zero since kernel should zero it out*/
-    memset((*operatorSort).dataHistogramGroupEventsTik, 0xF, (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
-    memset(dataGroupEventsTik, 0, dataGroupEventsTikSizeBytes);
-    
-#if GROUP_EVENTS_TEST_MODE == -1
-    double perecentInh = 5.0;
-    double deltaDev = 50.0; 
-    int detla = int(((GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE*deltaDev)/100)/
-      GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS);
-#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
-    double perecentInh = 5.0;
-    double deltaDev = GROUP_EVENTS_TEST_MODE; 
-    int detla = -1;
-#endif
-
-    (*synapticEvents).setUnsortedEvents
-    (
-#if CLASS_VALIDATION_ENABLE
-      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
-#endif
-      commandQueue,
-      CL_TRUE,
-      true,
-      detla,
-      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00,
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK,
-      GROUP_EVENTS_TOTAL_NEURONS,
-      deltaDev,
-      perecentInh,
-      GROUP_EVENTS_MIN_DELAY,
-      0.0
-    );
-
-    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
-
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    }
-/*End unit test initialization*/
-
-#elif GROUP_EVENTS_VERIFY_ENABLE || SORT_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventTargets);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
-      (*synapticEvents).dataUnsortedEventDelays);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventWeights);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataHistogramBuffer, (*synapticEvents).dataHistogramSizeBytes, (*synapticEvents).dataHistogram);
-#endif
-
-#if SORT_VERIFY_ENABLE && \
-    (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
-     GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
-    if(captureUnsortedEvents((*synapticEvents).dataUnsortedEventCounts, (*synapticEvents).dataUnsortedEventTargets, 
-       (*synapticEvents).dataUnsortedEventDelays, (*synapticEvents).dataUnsortedEventWeights) != 1)
-    {
-      throw SimException("Neurosim::run: Failed captureUnsortedEvents.");
-    }
-#endif
-
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-
-    SET_KERNEL_ARG(kernelGroupEventsV00, groupEventsTimeStep, argNumGrupEventsV00);
-    
-    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV00, 
-      globalThreadsGroupEventsV00, localThreadsGroupEventsV00, NULL, ndrEvt, 
-      "kernelGroupEventsV00");
-
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-    if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
-    {
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
-        dataErrorGroupEvents);
-      if(dataErrorGroupEvents[0] != 0)
-      {
-        std::stringstream ss;
-        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV00: "
-          << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
-        throw SimException(ss.str());
-      }
-    }
-#endif
-
-#if DEVICE_HOST_DATA_COHERENCE
-    (*operatorSort).invalidateHistogram();
-#endif
-
 #if GROUP_EVENTS_VERIFY_ENABLE
-    (*operatorSort).getData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
-    
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-      
-    if(verifyKernelGroupEventsV00() != 1)
-    {
-      throw SimException("Neurosim::run: Failed verifyKernelGroupEventsV00");
-    }
+      currentTimeSlot,
 #endif
-    }
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02
-    /*
-      Sort positive floats (event time) in the rage 0.0f - 1.0f 0x(00 00 00 00 - 3F 80 00 00).
-      No need to flip - unflip: 
-      #define FLOAT_UNFLIP(f)       (f ^ (((f >> 31) - 1) | 0x80000000))
-      #define FLOAT_FLIP(f)         (f ^ (-int(f >> 31) | 0x80000000))
-    */
-    for
-    (
-      cl_uint sortStep = 1; 
-      sortStep < (32/GROUP_EVENTS_HISTOGRAM_BIN_BITS); 
-      sortStep++
-    )
-#endif
-    {
-/**************************************************************************************************/
-#if ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V01
-    {
-#if !(GROUP_EVENTS_ENABLE_V00)
-
-    (*operatorScan).scanUnitTest_v01
-    (
-#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE
+#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE || GROUP_EVENTS_ERROR_TRACK_ENABLE || \
+(ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V00) || (ENABLE_OPERATOR_GROUP && GROUP_EVENTS_ENABLE_V00)
       currentTimeStep,
 #endif
-#if KERNEL_LEVEL_PROFILING
-      kernelStats,
-#endif
       commandQueue,
-      ndrEvt,
-      SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V01
-    );
-    
-#else
-
-#if SCAN_VERIFY_ENABLE
-    (*operatorSort).refreshHistogram(commandQueue, CL_TRUE);
-#endif
-
-    (*operatorScan).scan_v01
-    (
-#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE
-      currentTimeStep,
-#endif
-#if KERNEL_LEVEL_PROFILING
-      kernelStats,
-#endif
-      commandQueue,
-      ndrEvt,
-      (*operatorSort).dataHistogramGroupEventsTikBuffer
-    );
-    
-#if DEVICE_HOST_DATA_COHERENCE
-    (*operatorSort).invalidateHistogram();
-#endif
-
-#if SCAN_VERIFY_ENABLE
-    (*operatorScan).verifyScan_v01
-    (
-      commandQueue,
-      (void*)operatorSort, 
-      Operator_Sort::getPreviousHistogramItem,
-      Operator_Sort::getCurrentHistogramItem,
-      SCAN_HISTOGRAM_BIN_BACKETS,
-      SCAN_HISTOGRAM_TOTAL_BINS_V01,
-      SCAN_HISTOGRAM_BIN_SIZE_V01
+      ndrEvt
     );
 #endif
-#endif
-    }
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02
-    if(sortStep < (32/GROUP_EVENTS_HISTOGRAM_BIN_BITS)-1)
-#endif
-    {
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01
-    {
-/*Unit test initialization*/
-#if !(GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01) 
-    {
-#if GROUP_EVENTS_TEST_MODE == -1
-    if(initializeDataForKernelGroupEventsV01(((int)sortStep)-1, 1, 0) != 1)
-    {
-      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV01");
-    }
-#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
-    if(initializeDataForKernelGroupEventsV01(((int)sortStep)-1, 1, GROUP_EVENTS_TEST_MODE) != 1)
-    {
-      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV01");
-    }
-#endif
-
-    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
-
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
-      dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    }
-/*End unit test initialization*/
-
-#elif GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*operatorSort).dataHistogramGroupEventsTikBuffer, 
-      (*operatorSort).dataHistogramGroupEventsTikSizeBytes, (*operatorSort).dataHistogramGroupEventsTik);
-#endif
-
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-
-    SET_KERNEL_ARG(kernelGroupEventsV01, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV01++);
-    SET_KERNEL_ARG(kernelGroupEventsV01, dataGroupEventsTikBuffer, argNumGrupEventsV01);
-    SET_KERNEL_ARG(kernelGroupEventsV01, dataGroupEventsTokBuffer, argNumGrupEventsV01+1);
-    SET_KERNEL_ARG(kernelGroupEventsV01, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV01+2);
-    SET_KERNEL_ARG(kernelGroupEventsV01, sortStep, argNumGrupEventsV01+3);
-    argNumGrupEventsV01--;
-
-    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV01, 
-      globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, ndrEvt, 
-      "kernelGroupEventsV01");
-
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-    if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
-    {
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
-        dataErrorGroupEvents);
-      if(dataErrorGroupEvents[0] != 0)
-      {
-        std::stringstream ss;
-        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV01: "
-          << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
-        throw SimException(ss.str());
-      }
-    }
-#endif
-
-#if DEVICE_HOST_DATA_COHERENCE
-    (*operatorSort).invalidateHistogram();
-#endif
-
-#if GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
-      dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    if(verifyKernelGroupEventsV01(sortStep) != 1)
-    {
-      throw SimException("Neurosim::run: Failed verifyKernelGroupEventsV01");
-    }
-#endif
-    }
-#endif
-/**************************************************************************************************/
-    }
-#if GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02
-    else
-#endif
-    {
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V02
-    {
-/*Unit test initialization*/
-#if !(GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01) 
-    {
-#if GROUP_EVENTS_TEST_MODE == -1
-    if(initializeDataForKernelGroupEventsV02_V03(((int)sortStep)-1, 1, 0) != 1)
-    {
-      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV02_V03");
-    }
-#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
-    if(initializeDataForKernelGroupEventsV02_V03(((int)sortStep)-1, 1, GROUP_EVENTS_TEST_MODE) 
-      != 1)
-    {
-      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV02_V03");
-    }
-#endif
-
-    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
-    
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventTargets);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
-      (*synapticEvents).dataUnsortedEventDelays);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventWeights);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
-      dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    }
-/*End unit test initialization*/
-
-#elif GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventTargets);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
-      (*synapticEvents).dataUnsortedEventDelays);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventWeights);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
-      dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*operatorSort).dataHistogramGroupEventsTikBuffer, 
-      (*operatorSort).dataHistogramGroupEventsTikSizeBytes, (*operatorSort).dataHistogramGroupEventsTik);
-#endif
-
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-
-    SET_KERNEL_ARG(kernelGroupEventsV02, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV02++);
-    SET_KERNEL_ARG(kernelGroupEventsV02, dataGroupEventsTikBuffer, argNumGrupEventsV02);
-    SET_KERNEL_ARG(kernelGroupEventsV02, dataGroupEventsTokBuffer, argNumGrupEventsV02+1);
-    SET_KERNEL_ARG(kernelGroupEventsV02, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV02+2);
-    SET_KERNEL_ARG(kernelGroupEventsV02, sortStep, argNumGrupEventsV02+3);
-    argNumGrupEventsV02--;
-
-    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV02, 
-      globalThreadsGroupEventsV02, localThreadsGroupEventsV02, NULL, ndrEvt, 
-      "kernelGroupEventsV02");
-      
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-    if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
-    {
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
-        dataErrorGroupEvents);
-      if(dataErrorGroupEvents[0] != 0)
-      {
-        std::stringstream ss;
-        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV02: "
-          << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
-        throw SimException(ss.str());
-      }
-    }
-#endif
-
-#if DEVICE_HOST_DATA_COHERENCE
-    (*operatorSort).invalidateHistogram();
-#endif
-
-#if GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
-      dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    if(verifyKernelGroupEventsV02(sortStep, GROUP_EVENTS_REPLACEMENT_KEY_OFFSET_V02) != 1)
-    {
-      throw SimException("Neurosim::run: Failed verifyKernelGroupEventsV02");
-    }
-#endif
-    }
-#endif
-/**************************************************************************************************/
-    }/*if*/
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02
-    /*Swap buffers for next iteration*/
-    swap2((*operatorSort).dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
-    swap2(dataGroupEventsTikBuffer, dataGroupEventsTokBuffer);
-#endif
-    }/*for*/
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V03
-    /*
-      Sort positive integers (neuron IDs).
-    */
-    for
-    (
-      cl_uint sortStep = 0; 
-      sortStep < GROUP_EVENTS_NEURON_ID_SORT_ITERATIONS; 
-      sortStep++
-    )
-#endif
-    {
-/**************************************************************************************************/
-#if ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V01
-    {
-#if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02)
-
-    (*operatorScan).scanUnitTest_v01
-    (
-#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE
-      currentTimeStep,
-#endif
-#if KERNEL_LEVEL_PROFILING
-      kernelStats,
-#endif
-      commandQueue,
-      ndrEvt,
-      SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V01
-    );
-    
-#else
-
-#if SCAN_VERIFY_ENABLE
-    (*operatorSort).refreshHistogram(commandQueue, CL_TRUE);
-#endif
-
-    (*operatorScan).scan_v01
-    (
-#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE
-      currentTimeStep,
-#endif
-#if KERNEL_LEVEL_PROFILING
-      kernelStats,
-#endif
-      commandQueue,
-      ndrEvt,
-      (*operatorSort).dataHistogramGroupEventsTikBuffer
-    );
-    
-#if DEVICE_HOST_DATA_COHERENCE
-    (*operatorSort).invalidateHistogram();
-#endif
-
-#if SCAN_VERIFY_ENABLE
-    (*operatorScan).verifyScan_v01
-    (
-      commandQueue,
-      (void*)operatorSort, 
-      Operator_Sort::getPreviousHistogramItem, 
-      Operator_Sort::getCurrentHistogramItem,
-      SCAN_HISTOGRAM_BIN_BACKETS,
-      SCAN_HISTOGRAM_TOTAL_BINS_V01,
-      SCAN_HISTOGRAM_BIN_SIZE_V01
-    );
-#endif
-#endif
-    }
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V03
-    if(sortStep < (GROUP_EVENTS_NEURON_ID_SORT_ITERATIONS-1))
-#endif
-    {
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01
-    {
-/*Unit test initialization*/
-#if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && SCAN_ENABLE_V01 &&\
-      GROUP_EVENTS_ENABLE_V02)
-    {
-#if GROUP_EVENTS_TEST_MODE == -1
-    if(initializeDataForKernelGroupEventsV01(((int)sortStep)-1, 1, 0) != 1)
-    {
-      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV01");
-    }
-#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
-    if(initializeDataForKernelGroupEventsV01(((int)sortStep)-1, 1, GROUP_EVENTS_TEST_MODE) != 1)
-    {
-      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV01");
-    }
-#endif
-
-    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
-
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
-      dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    }
-/*End unit test initialization*/
-
-#elif GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*operatorSort).dataHistogramGroupEventsTikBuffer, 
-      (*operatorSort).dataHistogramGroupEventsTikSizeBytes, (*operatorSort).dataHistogramGroupEventsTik);
-#endif
-
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-
-    SET_KERNEL_ARG(kernelGroupEventsV01, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV01++);
-    SET_KERNEL_ARG(kernelGroupEventsV01, dataGroupEventsTikBuffer, argNumGrupEventsV01);
-    SET_KERNEL_ARG(kernelGroupEventsV01, dataGroupEventsTokBuffer, argNumGrupEventsV01+1);
-    SET_KERNEL_ARG(kernelGroupEventsV01, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV01+2);
-    SET_KERNEL_ARG(kernelGroupEventsV01, sortStep, argNumGrupEventsV01+3);
-    argNumGrupEventsV01--;
-
-    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV01, 
-      globalThreadsGroupEventsV01, localThreadsGroupEventsV01, NULL, ndrEvt, 
-      "kernelGroupEventsV01");
-      
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-    if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
-    {
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
-        dataErrorGroupEvents);
-      if(dataErrorGroupEvents[0] != 0)
-      {
-        std::stringstream ss;
-        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, kernelGroupEventsV01: "
-          << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
-        throw SimException(ss.str());
-      }
-    }
-#endif
-
-#if DEVICE_HOST_DATA_COHERENCE
-    (*operatorSort).invalidateHistogram();
-#endif
-
-#if GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
-      dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    if(verifyKernelGroupEventsV01(sortStep) != 1)
-    {
-      throw SimException("Neurosim::run: Failed verifyKernelGroupEventsV01");
-    }
-#endif
-    }
-#endif
-/**************************************************************************************************/
-    }
-#if GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V03
-    else
-#endif
-    {
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V03
-    {
-/*Unit test initialization*/
-#if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && SCAN_ENABLE_V01 &&\
-      GROUP_EVENTS_ENABLE_V02)
-    {
-#if GROUP_EVENTS_TEST_MODE == -1
-    if(initializeDataForKernelGroupEventsV02_V03(((int)sortStep)-1, 1, 0) != 1)
-    {
-      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV02_V03");
-    }
-#elif (GROUP_EVENTS_TEST_MODE >= 0) && (GROUP_EVENTS_TEST_MODE <= 100)
-    if(initializeDataForKernelGroupEventsV02_V03(((int)sortStep)-1, 1, GROUP_EVENTS_TEST_MODE) 
-      != 1)
-    {
-      throw SimException("Neurosim::run: Failed initializeDataForKernelGroupEventsV02_V03");
-    }
-#endif
-
-    (*operatorSort).storeData(commandQueue, CL_TRUE, 0x1); /*TODO: temporary, get rid of it*/
-    
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventTargets);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
-      (*synapticEvents).dataUnsortedEventDelays);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventWeights);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
-      dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    }
-/*End unit test initialization*/
-
-#elif GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventTargetsBuffer, (*synapticEvents).dataUnsortedEventTargetsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventTargets);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventDelaysBuffer, (*synapticEvents).dataUnsortedEventDelaysSizeBytes, 
-      (*synapticEvents).dataUnsortedEventDelays);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
-      (*synapticEvents).dataUnsortedEventWeights);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
-      dataGroupEventsTik);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*operatorSort).dataHistogramGroupEventsTikBuffer, 
-      (*operatorSort).dataHistogramGroupEventsTikSizeBytes, (*operatorSort).dataHistogramGroupEventsTik);
-#elif SIMULATION_SNAPSHOT
+/**************************************************************************************************/    
+#if SIMULATION_SNAPSHOT
     if(takeSimSnapshot)
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataUnsortedEventWeightsBuffer, 
+        (*synapticEvents).dataUnsortedEventWeightsSizeBytes, 
         (*synapticEvents).dataUnsortedEventWeights);
     }
 #endif
-
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-
-    SET_KERNEL_ARG(kernelGroupEventsV03, dataHistogramGroupEventsTokBuffer, argNumGrupEventsV03++);
-    SET_KERNEL_ARG(kernelGroupEventsV03, dataGroupEventsTikBuffer, argNumGrupEventsV03);
-    SET_KERNEL_ARG(kernelGroupEventsV03, dataGroupEventsTokBuffer, argNumGrupEventsV03+1);
-    SET_KERNEL_ARG(kernelGroupEventsV03, (*operatorSort).dataHistogramGroupEventsTikBuffer, argNumGrupEventsV03+2);
-    SET_KERNEL_ARG(kernelGroupEventsV03, sortStep, argNumGrupEventsV03+3);
-    argNumGrupEventsV03--;
-
-    ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelGroupEventsV03, 
-      globalThreadsGroupEventsV03, localThreadsGroupEventsV03, NULL, ndrEvt, 
-      "kernelGroupEventsV03");
-
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugHostGroupEventsBuffer, dataDebugHostGroupEventsSizeBytes, 
-      dataDebugHostGroupEvents);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataDebugDeviceGroupEventsBuffer, 
-      dataDebugDeviceGroupEventsSizeBytes, dataDebugDeviceGroupEvents);
-#endif
-
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-    if(!((currentTimeStep+1)%ERROR_TRACK_ACCESS_EVERY_STEPS))
-    {
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataErrorGroupEventsBuffer, dataErrorGroupEventsSizeBytes, 
-        dataErrorGroupEvents);
-      if(dataErrorGroupEvents[0] != 0)
-      {
-        std::stringstream ss;
-        ss << "Neurosim::run: GROUP_EVENTS_ERROR_TRACK_ENABLE, verifyKernelGroupEventsV03: "
-          << "Received error code from device: " << dataErrorGroupEvents[0] << std::endl;
-        throw SimException(ss.str());
-      }
-    }
-#endif
-
-#if DEVICE_HOST_DATA_COHERENCE
-    (*operatorSort).invalidateHistogram();
-#endif
-
-#if GROUP_EVENTS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTokBuffer, 
-      dataGroupEventsTokSizeBytes, dataGroupEventsTok);
-    if(verifyKernelGroupEventsV03(sortStep) != 1)
-    {
-      std::stringstream ss;
-      ss << "Neurosim::run: Failed verifyKernelGroupEventsV03, sort step " << sortStep 
-      << std::endl; 
-      throw SimException(ss.str());
-    }
-#endif
-    }
-#endif
-/**************************************************************************************************/
-    }/*if*/
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V03
-    /*Swap buffers for next iteration*/
-    swap2((*operatorSort).dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
-    swap2(dataGroupEventsTikBuffer, dataGroupEventsTokBuffer);
-#endif
-    }/*for*/
 /**************************************************************************************************/
 #if MAKE_EVENT_PTRS_ENABLE
     {
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02 &&\
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V01)
+#error (MAKE_EVENT_PTRS_ENABLE unit test is temporary unavailable because *synapticEvents cannot be initialized)
     /*Use milder mode if UPDATE_NEURONS_ENABLE_V00*/
     int mode = (currentTimeStep == 0) ? 0 : (UPDATE_NEURONS_ENABLE_V00 ? 1 : 2);
     
@@ -3671,17 +2046,17 @@ Neurosim::run()
       throw SimException("Neurosim::run: Failed initializeDataForKernelMakeEventPtrs");
     }
     
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsHistogramWriteBuffer, 
+      (*synapticEvents).dataSortedEventsHistogramSizeBytes, (*synapticEvents).dataSortedEventsHistogram);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, 
+      (*synapticEvents).dataSortedEventsSizeBytes, (*synapticEvents).dataSortedEvents);
 /*End unit test initialization*/
 
 #elif MAKE_EVENT_PTRS_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataHistogramGroupEventsTokBuffer, 
-      dataHistogramGroupEventsTokSizeBytes, dataHistogramGroupEventsTok);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsHistogramReadBuffer, 
+      (*synapticEvents).dataSortedEventsHistogramSizeBytes, (*synapticEvents).dataSortedEventsHistogram);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, 
+      (*synapticEvents).dataSortedEventsSizeBytes, (*synapticEvents).dataSortedEvents);
 #endif
 
 #if (MAKE_EVENT_PTRS_DEBUG_ENABLE)
@@ -3691,8 +2066,8 @@ Neurosim::run()
       dataMakeEventPtrsDebugDeviceSizeBytes, dataMakeEventPtrsDebugDevice);
 #endif
 
-    SET_KERNEL_ARG(kernelMakeEventPtrs, dataHistogramGroupEventsTokBuffer, argNumMakeEventPtrs);
-    SET_KERNEL_ARG(kernelMakeEventPtrs, dataGroupEventsTikBuffer, argNumMakeEventPtrs+1);
+    SET_KERNEL_ARG(kernelMakeEventPtrs, (*synapticEvents).dataSortedEventsHistogramWriteBuffer, argNumMakeEventPtrs);
+    SET_KERNEL_ARG(kernelMakeEventPtrs, (*synapticEvents).dataSortedEventsReadBuffer, argNumMakeEventPtrs+1);
     SET_KERNEL_ARG(kernelMakeEventPtrs, dataMakeEventPtrsStructBuffer, argNumMakeEventPtrs+2); /*TODO: instead of a new buffer it could be a reuse*/
 
     ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelMakeEventPtrs, 
@@ -3741,19 +2116,42 @@ Neurosim::run()
 #if (GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
      GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
 #if SORT_VERIFY_ENABLE
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-      dataGroupEventsTikSizeBytes, dataGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, 
+      (*synapticEvents).dataSortedEventsSizeBytes, (*synapticEvents).dataSortedEvents);
     ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, 
       dataMakeEventPtrsStructSizeBytes, dataMakeEventPtrsStruct);
-    if(verifySortedEvents(dataGroupEventsTik, dataMakeEventPtrsStruct, 2) != 1)
-    {
-      throw SimException("Neurosim::run: Failed verifySortedEvents");
-    }
+
+    (*operatorSort).captureUnsortedEvents
+    (
+      currentTimeSlot,
+      GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS,
+      GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
+      GROUP_EVENTS_MAX_DELAY,
+      GROUP_EVENTS_MIN_DELAY,
+      commandQueue,
+      (*synapticEvents)
+    );
+
+    (*operatorSort).verifySortedEvents
+    (
+      currentTimeStep,
+      2,
+      GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS,
+      GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
+      MAKE_EVENT_PTRS_STRUCTS,
+      MAKE_EVENT_PTRS_STRUCT_SIZE,
+      MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE,
+      MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE,
+      GROUP_EVENTS_MAX_DELAY,
+      GROUP_EVENTS_MIN_DELAY,
+      (*synapticEvents).dataSortedEvents,
+      dataMakeEventPtrsStruct
+    );
 #elif SIMULATION_SNAPSHOT
     if(takeSimSnapshot)
     {
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, 
-        dataGroupEventsTikSizeBytes, dataGroupEventsTik);
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, 
+        (*synapticEvents).dataSortedEventsSizeBytes, (*synapticEvents).dataSortedEvents);
       ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, 
         dataMakeEventPtrsStructSizeBytes, dataMakeEventPtrsStruct);
     }
@@ -3765,6 +2163,7 @@ Neurosim::run()
 /*Unit test initialization*/
 #if !(GROUP_EVENTS_ENABLE_V00 && GROUP_EVENTS_ENABLE_V01 && GROUP_EVENTS_ENABLE_V02 &&\
       GROUP_EVENTS_ENABLE_V03 && SCAN_ENABLE_V00 && SCAN_ENABLE_V01 && EXPAND_EVENTS_ENABLE)
+#error (UPDATE_NEURONS_ENABLE_V00 unit test is temporary unavailable because *synapticEvents cannot be initialized)
     bool resetVarsAndParams = (currentTimeStep==0); /*TODO: fix, doesnt work with !(currentTimeStep%17);*/
 
     (*spikeEvents).clearEvents(commandQueue, CL_TRUE);
@@ -3788,13 +2187,13 @@ Neurosim::run()
         modelParameters);
     }
 #if !(MAKE_EVENT_PTRS_ENABLE)
-    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
-      dataGroupEventsTik);
+    ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, (*synapticEvents).dataSortedEventsSizeBytes, 
+      (*synapticEvents).dataSortedEvents);
     ENQUEUE_WRITE_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
       dataMakeEventPtrsStruct);
 # else
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
-      dataGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, (*synapticEvents).dataSortedEventsSizeBytes, 
+      (*synapticEvents).dataSortedEvents);
     ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataMakeEventPtrsStructBuffer, dataMakeEventPtrsStructSizeBytes, 
       dataMakeEventPtrsStruct);
 #endif
@@ -3846,7 +2245,7 @@ device modifies it.*/
 /*END Get dataMakeEventPtrsStruct*/
 
 /*Set loop-dependent arguments for update kernel and equeue it*/
-    SET_KERNEL_ARG(kernelUpdateNeuronsV00, dataGroupEventsTikBuffer, argNumUpdateNeuronsV00);
+    SET_KERNEL_ARG(kernelUpdateNeuronsV00, (*synapticEvents).dataSortedEventsReadBuffer, argNumUpdateNeuronsV00);
     SET_KERNEL_ARG(kernelUpdateNeuronsV00, currentTimeStep, argNumUpdateNeuronsV00+1);
 
     ENQUEUE_KERNEL_V0(currentTimeStep, kernelStats, commandQueue, kernelUpdateNeuronsV00, 
@@ -3859,7 +2258,7 @@ device modifies it.*/
 /*END enqueue update kernel*/
 
 /*Set loop-dependent arguments for update kernel for spiked neurons and equeue it*/
-    SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, dataGroupEventsTikBuffer, 
+    SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, (*synapticEvents).dataSortedEventsReadBuffer, 
       argNumUpdateSpikedNeuronsV00);
     SET_KERNEL_ARG(kernelUpdateSpikedNeuronsV00, currentTimeStep, 
       argNumUpdateSpikedNeuronsV00+1);
@@ -3931,8 +2330,8 @@ device modifies it.*/
     {
       ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
         modelVariables);
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
-        dataGroupEventsTik);
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, (*synapticEvents).dataSortedEventsSizeBytes, 
+        (*synapticEvents).dataSortedEvents);
     }
 #if OVERWRITE_SPIKES_UNTILL_STEP > 0
     if(currentTimeStep < OVERWRITE_SPIKES_UNTILL_STEP)
@@ -3945,9 +2344,9 @@ device modifies it.*/
           true,
           true,
           currentTimeStep,
-          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+          (*synapticEvents).dataSortedEventsSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
-          dataGroupEventsTik,
+          (*synapticEvents).dataSortedEvents,
           modelVariables,
           (*spikeEvents),
           (*connectome),
@@ -3969,9 +2368,9 @@ device modifies it.*/
           false,
           true,
           currentTimeStep,
-          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+          (cl_uint)((*synapticEvents).dataSortedEventsSize)/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
-          dataGroupEventsTik,
+          (*synapticEvents).dataSortedEvents,
           modelVariables,
           (*spikeEvents),
           (*connectome),
@@ -3993,8 +2392,8 @@ device modifies it.*/
     {
       ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
         modelVariables);
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
-        dataGroupEventsTik);
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, (*synapticEvents).dataSortedEventsSizeBytes, 
+        (*synapticEvents).dataSortedEvents);
 
       if
       (
@@ -4004,9 +2403,9 @@ device modifies it.*/
           true,
           true,
           currentTimeStep,
-          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+          (*synapticEvents).dataSortedEventsSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
-          dataGroupEventsTik,
+          (*synapticEvents).dataSortedEvents,
           modelVariables,
           (*spikeEvents),
           (*connectome),
@@ -4022,8 +2421,8 @@ device modifies it.*/
     {
       ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
         modelVariables);
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
-        dataGroupEventsTik);
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, (*synapticEvents).dataSortedEventsSizeBytes, 
+        (*synapticEvents).dataSortedEvents);
 
       if
       (
@@ -4033,9 +2432,9 @@ device modifies it.*/
           false,
           true,
           currentTimeStep,
-          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+          (*synapticEvents).dataSortedEventsSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
-          dataGroupEventsTik,
+          (*synapticEvents).dataSortedEvents,
           modelVariables,
           (*spikeEvents),
           (*connectome),
@@ -4051,8 +2450,8 @@ device modifies it.*/
     {
       ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
         modelVariables);
-      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
-        dataGroupEventsTik);
+      ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, (*synapticEvents).dataSortedEventsSizeBytes, 
+        (*synapticEvents).dataSortedEvents);
         
       if
       (
@@ -4062,9 +2461,9 @@ device modifies it.*/
           false,
           true,
           currentTimeStep,
-          dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+          (*synapticEvents).dataSortedEventsSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
           dataMakeEventPtrsStruct,
-          dataGroupEventsTik,
+          (*synapticEvents).dataSortedEvents,
           modelVariables,
           (*spikeEvents),
           (*connectome),
@@ -4092,9 +2491,9 @@ device modifies it.*/
         false,
         false,
         currentTimeStep,
-        dataGroupEventsTikSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
+        (*synapticEvents).dataSortedEventsSize/UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS,
         dataMakeEventPtrsStruct,
-        dataGroupEventsTik,
+        (*synapticEvents).dataSortedEvents,
         modelVariables,
         (*spikeEvents),
         (*connectome),
@@ -4117,29 +2516,21 @@ device modifies it.*/
   {
     ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, modelVariablesBuffer, modelVariablesSizeBytes, 
       modelVariables);
-    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, dataGroupEventsTikBuffer, dataGroupEventsTikSizeBytes, 
-      dataGroupEventsTik);
+    ENQUEUE_READ_BUFFER(CL_TRUE, commandQueue, (*synapticEvents).dataSortedEventsReadBuffer, (*synapticEvents).dataSortedEventsSizeBytes, 
+      (*synapticEvents).dataSortedEvents);
         
     takeSimulationSnapshot
     (
       currentTimeStep,
       1000,
       dataMakeEventPtrsStruct,
-      dataGroupEventsTik,
+      (*synapticEvents).dataSortedEvents,
       modelVariables,
       (*spikeEvents),
       (*synapticEvents),
       commandQueue
     );
   }
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V03
-#if ((GROUP_EVENTS_NEURON_ID_SORT_ITERATIONS%2) == 0)
-    /*Restore original buffer pointer for the next step*/
-    swap2((*operatorSort).dataHistogramGroupEventsTikBuffer, dataHistogramGroupEventsTokBuffer);
-    swap2(dataGroupEventsTikBuffer, dataGroupEventsTokBuffer);
-#endif
 #endif
 /**************************************************************************************************/
   }/*for SIMULATION_TIME_STEPS*/
@@ -4265,943 +2656,6 @@ device modifies it.*/
 
 
 
-int 
-Neurosim::verifyKernelGroupEventsV00
-()
-/**************************************************************************************************/
-{
-  bool result = 1;
-#if GROUP_EVENTS_ENABLE_V00
-  {
-  cl_uint print = 0;
-  std::stringstream ss;
-  
-  cl_uint offset = currentTimeSlot*
-    (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + 1);
-  
-  /* allocate memory for offset copies used in verification data generation*/
-  cl_uint size = GROUP_EVENTS_TIME_SLOTS*(GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE+1);
-  cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
-  memcpy(dataOffsetGroupEventsCopy, (*synapticEvents).dataHistogram, (*synapticEvents).dataHistogramSizeBytes);
-  
-  /*Init data for verification*/
-  for(cl_uint i = 0; i < dataHistogramGroupEventsVerifySize; i++)
-  {
-    dataHistogramGroupEventsVerify[i] = 0;
-  }
-  
-  cl_uint total_synaptic_events = 
-    (*synapticEvents).dataHistogram[offset+GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
-  
-  print ? ss << "Total synaptic events: " << total_synaptic_events << std::endl,true : false;
-  
-  /*Compute total chunks for grid*/
-  cl_uint total_synaptic_event_chunks = total_synaptic_events/(GROUP_EVENTS_WG_SIZE_WI*
-    GROUP_EVENTS_ELEMENTS_PER_WI);
-  if(total_synaptic_event_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI) < 
-     total_synaptic_events)
-  {
-    total_synaptic_event_chunks++;
-  }
-  
-  /*Compute total chunks per WG for output histogram*/
-  cl_uint wg_chunk_size = total_synaptic_event_chunks/GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
-  if(wg_chunk_size*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE  < total_synaptic_event_chunks)
-  {
-    wg_chunk_size++;
-  }
-  wg_chunk_size *= (GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI);
-
-  for(cl_uint i = 0; i < dataGroupEventsTikVerifySize; i++)
-  {
-    dataGroupEventsTikVerify[i] = 0;
-  }
-  
-  /*Group events for verification*/
-  for(cl_uint b = 0; b < GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS; b++)
-  {
-    cl_uint event_total = (*synapticEvents).dataUnsortedEventCounts[GROUP_EVENTS_TIME_SLOTS*b + currentTimeSlot];
-    
-    for(cl_uint e = 0; e < event_total; e++)
-    {
-      /*Compute pointer to event data*/
-      cl_uint ptr = 
-        /*Event data buffers*/
-        b * GROUP_EVENTS_TIME_SLOTS * GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE +
-        /*Current event data buffer*/
-        currentTimeSlot * GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE +
-        /*Current event*/
-        e;
-
-      /*Access event*/
-      cl_uint key = (*synapticEvents).dataUnsortedEventDelays[ptr];
-      
-      /*Compute offset key for target neuron*/
-      cl_uint bin = (key >> GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00)&
-        GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-        
-      /*Offset is based on time slot, bin, WG*/
-      cl_uint bin_offset = 
-        /*Time slot*/
-        currentTimeSlot*(GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + 1) + 
-        /*WG offset*/
-        b +
-        /*time slot + bin with GROUP_EVENTS_HISTOGRAM_BIN_SIZE as a pitch*/
-        bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
-
-      /*Check for offset overlap*/
-      if(dataOffsetGroupEventsCopy[bin_offset] >= (*synapticEvents).dataHistogram[bin_offset+1])
-      {
-        std::cout << "verifyKernelGroupEventsV00: Destination event bin pointer overlaps "
-          << "with next pointer for bin " << 
-          bin << ", time slot " << currentTimeSlot << ", buffer " << b << std::endl;
-        result = 0; 
-        break;
-      }
-      
-      /*Calculate offset in the grouped data space*/
-      cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
-        
-      /*Compute histogram key for target neuron*/
-      cl_uint hist_out_ptr = 
-        /*WG offset*/
-        (b/GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG) * 
-        (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + 
-        /*WG offset for histogram out*/
-        (dest_offset/wg_chunk_size) + 
-        /*bin*/
-        GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
-        ((key>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V00)&
-        GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT);
-      /*Verify*/
-      if(hist_out_ptr > dataHistogramGroupEventsVerifySize)
-      {
-        std::cout << "verifyKernelGroupEventsV00: Pointer to an element in output histogram "
-          << "is outside of its range" << std::endl;
-        result = 0;
-        break;
-      }
-      /*Increment counter for this bin.*/
-      dataHistogramGroupEventsVerify[hist_out_ptr]++;
-      
-      /*Store event at its group location (grouped by bins)*/
-      dataGroupEventsTikVerify[dest_offset] = key;
-#if GROUP_EVENTS_VALUES_MODE_V00
-      dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE+dest_offset] = ptr;
-#endif
-      /*Increment ptr for next data item*/
-      dataOffsetGroupEventsCopy[bin_offset]++;
-    }
-    if(result != 1){break;}
-  }
-  
-  free(dataOffsetGroupEventsCopy);
-  
-  print ? ss << "Time slot " << currentTimeSlot << ": " << std::endl, true : false;
-
-  /*Verify event data*/
-  for(cl_uint j = 0; j < GROUP_EVENTS_HISTOGRAM_TOTAL_BINS; j++)
-  {
-    /*Error counters*/
-    unsigned long long verify_checksum_target_neuron = 0;
-    unsigned long long actual_checksum_target_neuron = 0;
-    unsigned long long verify_checksum_value_01 = 0;
-    unsigned long long actual_checksum_value_01 = 0;
-    unsigned long long verify_error_count_target_neuron = 0;
-    unsigned long long actual_error_count_target_neuron = 0;
-    
-    /*Start and end bin ptr*/
-    cl_uint start = (*synapticEvents).dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
-    cl_uint end = (*synapticEvents).dataHistogram[offset + (j+1)*GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
-
-    print ? ss << "Start-End: " << start << "-" << end << std::endl, true : false;
-
-    /*Verify correct bin and checksum in that bin for current time slot*/
-    for(cl_uint p = start; p < end; p++)
-    {
-      cl_uint v_key = (dataGroupEventsTikVerify[p] >> GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
-        GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-      cl_uint a_key = (dataGroupEventsTik[p] >> GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00) & 
-        GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-
-      verify_error_count_target_neuron += (v_key != j);
-      (print && (v_key != j)) ? ss << "V," << p << ": (" << v_key << " != " << j << ")" 
-        << "; ", true : false;
-      actual_error_count_target_neuron += (a_key != j);
-      (print && (a_key != j)) ? ss << "A," << p << ": (" << a_key << " != " << j << ")" 
-        << "; ", true : false;
-
-      CHECKSUM01(verify_checksum_target_neuron, dataGroupEventsTikVerify[p]);
-      /* verify_checksum_target_neuron += dataGroupEventsTikVerify[p]; */
-      CHECKSUM01(actual_checksum_target_neuron, dataGroupEventsTik[p]);
-      /*actual_checksum_target_neuron += dataGroupEventsTik[p]; */
-#if GROUP_EVENTS_VALUES_MODE_V00
-      CHECKSUM01(verify_checksum_value_01, dataGroupEventsTikVerify[p + 
-        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]);
-      /*verify_checksum_value_01 += dataGroupEventsTikVerify[p + 
-        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]; */
-      CHECKSUM01(actual_checksum_value_01, dataGroupEventsTik[p + 
-        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]);
-      /*actual_checksum_value_01 += dataGroupEventsTik[p + 
-        GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE]; */
-#endif
-    }
-    
-    print ? ss << std::endl, true : false;
-    
-    if(verify_error_count_target_neuron)
-    {
-      std::cout << "verifyKernelGroupEventsV00: Failed to validate correct bin for " 
-        << verify_error_count_target_neuron 
-        << " keys out of " << (end-start) << " in verification data in bin " << j 
-        << ", time slot " << currentTimeSlot << std::endl;
-      result = 0;
-    }
-    
-    if(actual_error_count_target_neuron)
-    {
-      std::cout << "verifyKernelGroupEventsV00: Failed to validate correct bin for " 
-        << actual_error_count_target_neuron 
-        << " keys out of " << (end-start) << " in actual data in bin " << j 
-        << ", time slot " << currentTimeSlot << std::endl;
-      result = 0;
-    }
-    
-    if(verify_checksum_target_neuron != actual_checksum_target_neuron)
-    {
-      std::cout << "verifyKernelGroupEventsV00: Failed to match neuron checksum in bin " 
-        << j << ", time slot " 
-        << currentTimeSlot << std::endl;
-      result = 0;
-    }
-#if GROUP_EVENTS_VALUES_MODE_V00
-    if(verify_checksum_value_01 != actual_checksum_value_01)
-    {
-      std::cout << "verifyKernelGroupEventsV00: Failed to match value 01 checksum in bin " 
-        << j << ", time slot " 
-        << currentTimeSlot << std::endl;
-      result = 0;
-    }
-#endif
-    if(print && (result != 1))
-    {
-      ss << "WG Pointers for bin " << j 
-        << "\nWG,Ptr Start,Ptr End,Index,Key Verified,Key Actual,F/P" << std::endl;
-        
-      for(cl_uint w = 0; w < GROUP_EVENTS_HISTOGRAM_BIN_SIZE; w++)
-      {
-        cl_uint start = (*synapticEvents).dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + w];
-        cl_uint end = (*synapticEvents).dataHistogram[offset + j*GROUP_EVENTS_HISTOGRAM_BIN_SIZE + w + 1] - 1;
-          
-        for(cl_uint p = start; p < end; p++)
-        {
-          cl_uint v_key = dataGroupEventsTikVerify[p];
-          cl_uint a_key = dataGroupEventsTik[p];
-          bool pass = (v_key == a_key);
-          
-          ss << w << "," << start << "," << end << "," << p << "," << v_key << "," << a_key << ","; 
-          if(!pass){ss << "F";}
-          ss << std::endl;
-        }
-      }
-    }
-    
-    if(result != 1){break;}
-  }
-  
-  print ? ss << std::endl, true : false;
-  
-  /*Verify event data*/
-  for(cl_uint w = 0; w < (GROUP_EVENTS_GRID_SIZE_WG); w++)
-  {
-    for(cl_uint b = 0; b < (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT); b++)
-    {
-      /*Checksums have to be the same across each bin*/
-      unsigned long long verify_checksum_histogram_out = 0;
-      unsigned long long actual_checksum_histogram_out = 0;
-      for(cl_uint j = 0; j < (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE); j++)
-      {
-        cl_uint p = 
-          /*WG offset*/
-          w*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + 
-          /*WG offset for histogram out*/
-          j +
-          /*bin*/
-          b*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
-        CHECKSUM01(verify_checksum_histogram_out, dataHistogramGroupEventsVerify[p]);
-        /*verify_checksum_histogram_out += dataHistogramGroupEventsVerify[p]; */
-        CHECKSUM01(actual_checksum_histogram_out, (*operatorSort).dataHistogramGroupEventsTik[p]);
-        /*actual_checksum_histogram_out += (*operatorSort).dataHistogramGroupEventsTik[p]; */
-      }
-      
-      /*Verify*/
-      if(verify_checksum_histogram_out != actual_checksum_histogram_out)
-      {
-        std::cout << "verifyKernelGroupEventsV00: Failed to match output histogram checksum in bin " 
-          << b << ", WG " << w << ", time slot " << currentTimeSlot << std::endl;
-        result = 0;
-        print ? ss << "Output histogram:" << std::endl, true : false;
-        for(cl_uint j = 0; j < (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE); j++)
-        {
-          cl_uint p = 
-            /*WG offset*/
-            w*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + 
-            /*WG offset for histogram out*/
-            j +
-            /*bin*/
-            b*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
-          print ? ss << p << "," << dataHistogramGroupEventsVerify[p] << ","
-            << (*operatorSort).dataHistogramGroupEventsTik[p] << std::endl, true : false;
-        }
-        break;
-      }
-    }
-    if(result != 1){break;}
-  }
-
-  if(print){LOG_SIM(ss.str());}
-  }
-#endif
-  return result;
-}
-/**************************************************************************************************/
-
-
-
-int 
-Neurosim::verifyKernelGroupEvents
-(
-  cl_uint verifyKeyBins,
-  cl_uint timeSlot,
-  cl_uint step,
-  cl_uint value1CarryEnable,
-  cl_uint value2CarryEnable,
-  cl_uint stepShiftEnable,
-  cl_uint destinationBufferSize,
-  cl_uint histogramBinSize,
-  cl_uint histogramTotalBins,
-  cl_uint histogramBitMask,
-  cl_uint histogramBitShift,
-  cl_uint histogramOutTotalBins,
-  cl_uint histogramOutTotalGroups,
-  cl_uint groupSize,
-  cl_uint *dataHistogram,
-  cl_uint *dataHistogramOut,
-  cl_uint *dataHistogramOutVerify,
-  cl_uint *dataGroupedEvents,
-  cl_uint *dataGroupedEventsVerify
-)
-/**************************************************************************************************/
-{
-  int result = 1;
-  bool print = false;
-  
-  print ? std::cout << "Time slot " << timeSlot << ": " << std::endl, true : false;
-
-  /*Verify event data*/
-  for(cl_uint j = 0; j < histogramTotalBins; j++)
-  {
-    /*Error counters*/
-    unsigned long long verify_checksum_target_neuron = 0;
-    unsigned long long actual_checksum_target_neuron = 0;
-    unsigned long long verify_checksum_value_01 = 0;
-    unsigned long long actual_checksum_value_01 = 0;
-    unsigned long long verify_checksum_value_02 = 0;
-    unsigned long long actual_checksum_value_02 = 0;
-    unsigned long long verify_error_count_target_neuron = 0;
-    unsigned long long actual_error_count_target_neuron = 0;
-    
-    /*Start and end bin ptr*/
-    cl_uint start = dataHistogram[j*histogramBinSize];
-    cl_uint end = dataHistogram[(j+1)*histogramBinSize];
-    
-    print ? std::cout << "Start-End: " << start << "-" << end << std::endl, true : false;
-    
-    /*Verify correct bin and checksum in that bin for current time slot*/
-    for(cl_uint p = start; p < end; p++)
-    {
-      cl_uint v_key = 0;
-      cl_uint a_key = 0;
-      if(stepShiftEnable)
-      {
-        v_key = (dataGroupedEventsVerify[p]>>(histogramBitShift*step)) & 
-        histogramBitMask;
-        a_key = (dataGroupedEvents[p]>>(histogramBitShift*step)) & 
-        histogramBitMask;
-      }
-      else
-      {
-        v_key = (dataGroupedEventsVerify[p]>>histogramBitShift) & 
-        histogramBitMask;
-        a_key = (dataGroupedEvents[p]>>histogramBitShift) & 
-        histogramBitMask;
-      }
-      
-      if(verifyKeyBins)
-      {
-        verify_error_count_target_neuron += (v_key != j);
-        actual_error_count_target_neuron += (a_key != j);
-      }
-      CHECKSUM01(verify_checksum_target_neuron, dataGroupedEventsVerify[p]);
-      /*verify_checksum_target_neuron += dataGroupedEventsVerify[p]; */
-      CHECKSUM01(actual_checksum_target_neuron, dataGroupedEvents[p]);
-      /*actual_checksum_target_neuron += dataGroupedEvents[p]; */
-      if(value1CarryEnable)
-      {
-        CHECKSUM01(verify_checksum_value_01, dataGroupedEventsVerify[destinationBufferSize + p]);
-        /*verify_checksum_value_01 += dataGroupedEventsVerify[destinationBufferSize + p]; */
-        CHECKSUM01(actual_checksum_value_01, dataGroupedEvents[destinationBufferSize + p]);
-        /*actual_checksum_value_01 += dataGroupedEvents[destinationBufferSize + p]; */
-      }
-      if(value2CarryEnable)
-      {
-        CHECKSUM01(verify_checksum_value_02, dataGroupedEventsVerify[2*destinationBufferSize + p]);
-        /*verify_checksum_value_02 += dataGroupedEventsVerify[2*destinationBufferSize + p]; */
-        CHECKSUM01(actual_checksum_value_02, dataGroupedEvents[2*destinationBufferSize + p]);
-        /*actual_checksum_value_02 += dataGroupedEvents[2*destinationBufferSize + p]; */
-      }
-    }
-    
-    if(verifyKeyBins)
-    {
-    if(verify_error_count_target_neuron)
-    {
-      std::cout << "verifyKernelGroupEvents: Failed to validate correct bin for " 
-        << verify_error_count_target_neuron 
-        << " keys out of " << (end-start) << " in verification data in bin " << j 
-        << ", time slot " << timeSlot << std::endl;
-      result = 0;
-      break;
-    }
-    
-    if(actual_error_count_target_neuron)
-    {
-      std::cout << "verifyKernelGroupEvents: Failed to validate correct bin for " 
-        << actual_error_count_target_neuron 
-        << " keys out of " << (end-start) << " in actual data in bin " << j 
-        << ", time slot " << timeSlot << std::endl;
-      result = 0;
-      break;
-    }
-    }
-    
-    if(verify_checksum_target_neuron != actual_checksum_target_neuron)
-    {
-      std::cout << "verifyKernelGroupEvents: Failed to match neuron checksum in bin " 
-        << j << ", time slot " << timeSlot << std::endl;
-      result = 0;
-      break;
-    }
-    if(value1CarryEnable && (verify_checksum_value_01 != actual_checksum_value_01))
-    {
-      std::cout << "verifyKernelGroupEvents: Failed to match value 01 checksum in bin " 
-        << j << ", time slot " 
-        << timeSlot << std::endl;
-      result = 0;
-      break;
-    }
-    if(value2CarryEnable && (verify_checksum_value_02 != actual_checksum_value_02))
-    {
-      std::cout << "verifyKernelGroupEvents: Failed to match value 02 checksum in bin " 
-        << j << ", time slot " 
-        << timeSlot << std::endl;
-      result = 0;
-      break;
-    }
-    /*
-    print ? std::cout << verify_checksum_target_neuron << ", ", true : false;
-    */
-  }
-  
-  if(result != 1){return result;}
-  
-  print ? std::cout << std::endl, true : false;
-  
-  /*Verify event data*/
-  if(dataHistogramOutVerify != NULL)
-  {
-  for(cl_uint w = 0; w < (groupSize); w++)
-  {
-    for(cl_uint b = 0; b < (histogramOutTotalBins); b++)
-    {
-      unsigned long long verify_checksum_histogram_out = 0;
-      unsigned long long actual_checksum_histogram_out = 0;
-      for(cl_uint j = 0; j < (histogramOutTotalGroups); j++)
-      {
-        cl_uint p = 
-          /*WG offset*/
-          w*(histogramOutTotalGroups*histogramOutTotalBins) + 
-          /*WG offset for histogram out*/
-          j +
-          /*bin*/
-          b*histogramOutTotalGroups;
-        CHECKSUM01(verify_checksum_histogram_out, dataHistogramOutVerify[p]);
-        /*verify_checksum_histogram_out += dataHistogramOutVerify[p]; */
-        CHECKSUM01(actual_checksum_histogram_out, dataHistogramOut[p]);
-        /*actual_checksum_histogram_out += dataHistogramOut[p]; */
-      }
-      /*Verify*/
-      if(verify_checksum_histogram_out != actual_checksum_histogram_out)
-      {
-        std::cout << "verifyKernelGroupEvents: Failed to match output histogram checksum in bin "
-          << b << ", WG " << w << ", time slot " << currentTimeSlot << std::endl;
-        result = 0;
-        break;
-      }
-    }
-    if(result != 1){break;}
-  }
-  }
-
-  return result;
-}
-/**************************************************************************************************/
-
-
-
-#if GROUP_EVENTS_ENABLE_V01
-int 
-Neurosim::verifyKernelGroupEventsV01(cl_uint step)
-/**************************************************************************************************/
-{
-  int result = 1;
-  
-  /* allocate memory for offset copies used in verification data generation*/
-  cl_uint size = GROUP_EVENTS_GRID_SIZE_WG*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
-  cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
-  memcpy(dataOffsetGroupEventsCopy, (*operatorSort).dataHistogramGroupEventsTik, 
-    (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
-  
-  cl_uint event_total = (*operatorSort).dataHistogramGroupEventsTik[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
-    
-  /*Init data for verification*/
-  /*Compute total chunks for grid*/
-  cl_uint total_synaptic_event_chunks = event_total/(GROUP_EVENTS_WG_SIZE_WI*
-    GROUP_EVENTS_ELEMENTS_PER_WI);
-  if(total_synaptic_event_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI) 
-    < event_total)
-  {
-    total_synaptic_event_chunks++;
-  }
-  
-  /*Compute total chunks for WG*/
-  cl_uint total_wg_chunks = total_synaptic_event_chunks/GROUP_EVENTS_GRID_SIZE_WG;
-  if(total_wg_chunks*GROUP_EVENTS_GRID_SIZE_WG  < total_synaptic_event_chunks)
-  {
-    total_wg_chunks++;
-  }
-  
-  /*Compute total chunks per WG for output histogram*/
-  cl_uint wg_chunk_size = total_synaptic_event_chunks/GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
-  if(wg_chunk_size*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE  < total_synaptic_event_chunks)
-  {
-    wg_chunk_size++;
-  }
-  wg_chunk_size *= (GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI);
-
-  for(cl_uint i = 0; i < dataHistogramGroupEventsVerifySize; i++)
-  {
-    dataHistogramGroupEventsVerify[i] = 0;
-  }
-
-  for(cl_uint i = 0; i < dataGroupEventsTikVerifySize; i++)
-  {
-    dataGroupEventsTikVerify[i] = 0;
-  }
-    
-  /*Group events for verification*/
-  for(cl_uint e = 0; e < event_total; e++)
-  {
-    /*Access event*/
-    cl_uint key = dataGroupEventsTik[e];
-    cl_uint value = dataGroupEventsTik[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + e];
-    
-    /*Compute WG which is working on this element*/
-    cl_uint wg_id = e/(total_wg_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI));
-
-    /*Compute bin for neuron*/
-#if GROUP_EVENTS_ENABLE_STEP_SHIFT_V01
-    cl_uint bin = (key>>(GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01*step))&
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-#else
-    cl_uint bin = (key>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01)&
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-#endif
-
-    /*Offset is based on time slot, bin, WG*/
-    cl_uint bin_offset = 
-    /*WG offset*/
-    wg_id +
-    /*time slot + bin with GROUP_EVENTS_HISTOGRAM_BIN_SIZE as a pitch*/
-    bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
-
-    /*Check for offset overlap*/
-    if(dataOffsetGroupEventsCopy[bin_offset] >= (*operatorSort).dataHistogramGroupEventsTik[bin_offset+1])
-    {
-      std::cout << "verifyKernelGroupEventsV01: Destination event bin pointer overlaps "
-      << "with next pointer for bin " << bin << ", time slot " << currentTimeSlot << ", WG " 
-      << wg_id << ", pointer " << e << ", sort step " << step << std::endl;
-      result = 0; 
-      break;
-    }
-    
-    /*Calculate offset in the grouped data space*/
-    cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
-
-    /*Compute histogram key for target neuron*/
-    cl_uint hist_out_ptr = 
-      /*WG offset*/
-      (wg_id/GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG) * 
-      (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + 
-      /*WG offset for histogram out*/
-      dest_offset/wg_chunk_size + 
-      /*bin*/
-      GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
-#if GROUP_EVENTS_ENABLE_STEP_SHIFT_V01
-      ((key>>(GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01*(step+1)))&
-#else
-      ((key>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01)&
-#endif
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT);
-    /*Verify overflow*/
-    if(hist_out_ptr > dataHistogramGroupEventsVerifySize)
-    {
-      std::cout << "verifyKernelGroupEventsV01: Pointer to an element in output histogram is "
-        << "outside of its range" << std::endl;
-      result = 0;
-      break;
-    }
-    /*Increment counter for this bin.*/
-    dataHistogramGroupEventsVerify[hist_out_ptr]++;
-    
-    /*Store event at its group location (grouped by bins)*/
-    dataGroupEventsTikVerify[dest_offset] = key;
-#if GROUP_EVENTS_VALUES_MODE_V01 == 1
-    dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = e;
-#elif GROUP_EVENTS_VALUES_MODE_V01 == 2
-    dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = value;
-#endif
-    /*Increment ptr for next data item*/
-    dataOffsetGroupEventsCopy[bin_offset]++;
-  }
-  
-  free(dataOffsetGroupEventsCopy);
-  if(result != 1){return result;}
-
-  result = verifyKernelGroupEvents
-  (
-    1,
-    currentTimeSlot,
-    step,
-    GROUP_EVENTS_VALUES_MODE_V01,
-    0,
-    GROUP_EVENTS_ENABLE_STEP_SHIFT_V01,
-    GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
-    GROUP_EVENTS_HISTOGRAM_BIN_MASK,
-    GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01,
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT,
-    GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
-    GROUP_EVENTS_GRID_SIZE_WG,
-    (*operatorSort).dataHistogramGroupEventsTik,
-    dataHistogramGroupEventsTok,
-    dataHistogramGroupEventsVerify,
-    dataGroupEventsTok,
-    dataGroupEventsTikVerify
-  );
-  
-  return result;
-}
-/**************************************************************************************************/
-#endif
-
-
-
-#if GROUP_EVENTS_ENABLE_V02
-int 
-Neurosim::verifyKernelGroupEventsV02(cl_uint step, cl_uint keyOffset)
-/**************************************************************************************************/
-{
-  int result = 1;
-  
-  /* allocate memory for offset copies used in verification data generation*/
-  cl_uint size = GROUP_EVENTS_GRID_SIZE_WG*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
-  cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
-  memcpy(dataOffsetGroupEventsCopy, (*operatorSort).dataHistogramGroupEventsTik, 
-    (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
-    
-  cl_uint event_total = (*operatorSort).dataHistogramGroupEventsTik[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
-    
-  /*Init data for verification*/
-  /*Compute total chunks for grid*/
-  cl_uint total_synaptic_event_chunks = event_total/(GROUP_EVENTS_WG_SIZE_WI*
-    GROUP_EVENTS_ELEMENTS_PER_WI);
-  if(total_synaptic_event_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI) 
-    < event_total)
-  {
-    total_synaptic_event_chunks++;
-  }
-  
-  /*Compute total chunks for WG*/
-  cl_uint total_wg_chunks = total_synaptic_event_chunks/GROUP_EVENTS_GRID_SIZE_WG;
-  if(total_wg_chunks*GROUP_EVENTS_GRID_SIZE_WG  < total_synaptic_event_chunks)
-  {
-    total_wg_chunks++;
-  }
-  
-  /*Compute total chunks per WG for output histogram*/
-  cl_uint wg_chunk_size = total_synaptic_event_chunks/GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE;
-  if(wg_chunk_size*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE  < total_synaptic_event_chunks)
-  {
-    wg_chunk_size++;
-  }
-  wg_chunk_size *= (GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI);
-
-  for(cl_uint i = 0; i < dataHistogramGroupEventsVerifySize; i++)
-  {
-    dataHistogramGroupEventsVerify[i] = 0;
-  }
-
-  for(cl_uint i = 0; i < dataGroupEventsTikVerifySize; i++)
-  {
-    dataGroupEventsTikVerify[i] = 0;
-  }
-    
-  /*Group events for verification*/
-  for(cl_uint e = 0; e < event_total; e++)
-  {
-    /*Access event*/
-    cl_uint key = dataGroupEventsTik[e];
-    cl_uint value = dataGroupEventsTik[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + e];
-    cl_uint new_key = (*synapticEvents).dataUnsortedEventTargets[value+keyOffset];
-    
-    /*Compute WG which is working on this element*/
-    cl_uint wg_id = e/(total_wg_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI));
-
-    /*Compute bin for neuron*/
-#if GROUP_EVENTS_ENABLE_STEP_SHIFT_V02
-    cl_uint bin = (key>>(GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V02*step))&
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-#else
-    cl_uint bin = (key>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V02)&
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-#endif
-
-    /*Offset is based on time slot, bin, WG*/
-    cl_uint bin_offset = 
-    /*WG offset*/
-    wg_id +
-    /*time slot + bin with GROUP_EVENTS_HISTOGRAM_BIN_SIZE as a pitch*/
-    bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
-
-    /*Check for offset overlap*/
-    if(dataOffsetGroupEventsCopy[bin_offset] >= (*operatorSort).dataHistogramGroupEventsTik[bin_offset+1])
-    {
-      std::cout << "verifyKernelGroupEventsV02: Destination event bin pointer overlaps "
-      << "with next pointer for bin " << bin << ", time slot " << currentTimeSlot << ", WG " 
-      << wg_id << ", pointer " << e << std::endl;
-      result = 0; 
-      break;
-    }
-    
-    /*Calculate offset in the grouped data space*/
-    cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
-      
-    /*Compute histogram key for target neuron*/
-    cl_uint hist_out_ptr = 
-      /*WG offset*/
-      (wg_id/GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS_PER_WG) * 
-      (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + 
-      /*WG offset for histogram out*/
-      dest_offset/wg_chunk_size + 
-      /*bin*/
-      GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
-#if GROUP_EVENTS_ENABLE_STEP_SHIFT_V02
-      ((new_key>>(GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V02*(step+1)))&
-#else
-      ((new_key>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V02)&
-#endif
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT);
-    /*Verify overflow*/
-    if(hist_out_ptr > dataHistogramGroupEventsVerifySize)
-    {
-      std::cout << "verifyKernelGroupEventsV02: Pointer to an element in output histogram is "
-        << "outside of its range" << std::endl;
-      result = 0;
-      break;
-    }
-    /*Increment counter for this bin.*/
-    dataHistogramGroupEventsVerify[hist_out_ptr]++;
-    
-    /*Store event at its group location (grouped by bins)*/
-    dataGroupEventsTikVerify[dest_offset] = new_key;
-    dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = value;
-
-    /*Increment ptr for next data item*/
-    dataOffsetGroupEventsCopy[bin_offset]++;
-  }
-  
-  free(dataOffsetGroupEventsCopy);
-  if(result != 1){return result;}
-
-  result = verifyKernelGroupEvents
-  (
-    0,
-    currentTimeSlot,
-    step,
-    GROUP_EVENTS_VALUES_MODE_V02,
-    0,
-    GROUP_EVENTS_ENABLE_STEP_SHIFT_V02,
-    GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
-    GROUP_EVENTS_HISTOGRAM_BIN_MASK,
-    GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V02,
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT,
-    GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
-    GROUP_EVENTS_GRID_SIZE_WG,
-    (*operatorSort).dataHistogramGroupEventsTik,
-    dataHistogramGroupEventsTok,
-    dataHistogramGroupEventsVerify,
-    dataGroupEventsTok,
-    dataGroupEventsTikVerify
-  );
-
-  return result;
-}
-/**************************************************************************************************/
-#endif
-
-
-
-#if GROUP_EVENTS_ENABLE_V03
-int 
-Neurosim::verifyKernelGroupEventsV03(cl_uint step)
-/**************************************************************************************************/
-{
-  int result = 1;
-  
-  /* allocate memory for offset copies used in verification data generation*/
-  cl_uint size = GROUP_EVENTS_GRID_SIZE_WG*GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT;
-  cl_uint *dataOffsetGroupEventsCopy = (cl_uint *)calloc(size, sizeof(cl_uint));
-  memcpy(dataOffsetGroupEventsCopy, (*operatorSort).dataHistogramGroupEventsTik, 
-    (*operatorSort).dataHistogramGroupEventsTikSizeBytes);
-    
-  cl_uint event_total = (*operatorSort).dataHistogramGroupEventsTik[GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE];
-    
-  /*Init data for verification*/
-  for(cl_uint i = 0; i < dataGroupEventsTikVerifySize; i++)
-  {
-    dataGroupEventsTikVerify[i] = 0;
-  }
-  
-  /*Compute total chunks for grid*/
-  cl_uint total_synaptic_event_chunks = event_total/(GROUP_EVENTS_WG_SIZE_WI*
-    GROUP_EVENTS_ELEMENTS_PER_WI);
-  if(total_synaptic_event_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI) 
-    < event_total)
-  {
-    total_synaptic_event_chunks++;
-  }
-  
-  /*Compute total chunks for WG*/
-  cl_uint total_wg_chunks = total_synaptic_event_chunks/GROUP_EVENTS_GRID_SIZE_WG;
-  if(total_wg_chunks*GROUP_EVENTS_GRID_SIZE_WG  < total_synaptic_event_chunks)
-  {
-    total_wg_chunks++;
-  }
-    
-  /*Group events for verification*/
-  for(cl_uint e = 0; e < event_total; e++)
-  {
-    /*Access event*/
-    cl_uint key = dataGroupEventsTik[e];
-    cl_uint valuePtr = dataGroupEventsTik[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + e];
-
-    /*Compute WG which is working on this element*/
-    cl_uint wg_id = e/(total_wg_chunks*(GROUP_EVENTS_WG_SIZE_WI*GROUP_EVENTS_ELEMENTS_PER_WI));
-
-    /*Compute bin for neuron*/
-#if GROUP_EVENTS_ENABLE_STEP_SHIFT_V03
-    cl_uint bin = (key>>(GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V03*step))&
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-#else
-    cl_uint bin = (key>>GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V03)&
-      GROUP_EVENTS_HISTOGRAM_BIN_MASK;
-#endif
-
-    /*Offset is based on time slot, bin, WG*/
-    cl_uint bin_offset = 
-    /*WG offset*/
-    wg_id +
-    /*time slot + bin with GROUP_EVENTS_HISTOGRAM_BIN_SIZE as a pitch*/
-    bin*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
-
-    /*Check for offset overlap*/
-    if(dataOffsetGroupEventsCopy[bin_offset] >= (*operatorSort).dataHistogramGroupEventsTik[bin_offset+1])
-    {
-      std::cout << "verifyKernelGroupEventsV03: Destination event bin pointer overlaps "
-      << "with next pointer for bin " << bin << ", time slot " << currentTimeSlot << ", WG " 
-      << wg_id << ", pointer " << e << std::endl;
-      result = 0; 
-      break;
-    }
-    
-    /*Calculate offset in the grouped data space*/
-    cl_uint dest_offset = dataOffsetGroupEventsCopy[bin_offset];
-    
-    /*Store event at its group location (grouped by bins)*/
-    dataGroupEventsTikVerify[dest_offset] = key;
-    dataGroupEventsTikVerify[GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = 
-      (*synapticEvents).dataUnsortedEventDelays[valuePtr];
-    dataGroupEventsTikVerify[2*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + dest_offset] = 
-      (*synapticEvents).dataUnsortedEventWeights[valuePtr];
-    
-    /*Increment ptr for next data item*/
-    dataOffsetGroupEventsCopy[bin_offset]++;
-  }
-  
-  free(dataOffsetGroupEventsCopy);
-  if(result != 1){return result;}
-
-  result = verifyKernelGroupEvents
-  (
-    1,
-    currentTimeSlot,
-    step,
-    GROUP_EVENTS_VALUES_MODE_V03,
-    1,
-    GROUP_EVENTS_ENABLE_STEP_SHIFT_V03,
-    GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE,
-    GROUP_EVENTS_HISTOGRAM_BIN_SIZE,
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS,
-    GROUP_EVENTS_HISTOGRAM_BIN_MASK,
-    GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V03,
-    GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT,
-    GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE,
-    GROUP_EVENTS_GRID_SIZE_WG,
-    (*operatorSort).dataHistogramGroupEventsTik,
-    dataHistogramGroupEventsTok,
-    NULL,
-    dataGroupEventsTok,
-    dataGroupEventsTikVerify
-  );
-
-  return result;
-}
-/**************************************************************************************************/
-#endif
-
-
-
 #if MAKE_EVENT_PTRS_ENABLE
 int 
 Neurosim::verifyKernelMakeEventPtrs()
@@ -5210,7 +2664,7 @@ Neurosim::verifyKernelMakeEventPtrs()
   int result = 1;
   
   /*Load total event for the test*/
-  cl_uint totalEvents = dataHistogramGroupEventsTok[MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET];
+  cl_uint totalEvents = (*synapticEvents).dataSortedEventsHistogram[MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET];
 
   /*Compute total chunks in the grid*/
   cl_uint totalEventChunks = totalEvents/
@@ -5267,14 +2721,14 @@ Neurosim::verifyKernelMakeEventPtrs()
       bool error = false;
       cl_uint totalCountsVerifyOriginal = 0;
       cl_uint previousElementOffset = 0;
-      cl_uint previousElement = dataGroupEventsTik[previousElementOffset];
+      cl_uint previousElement = (*synapticEvents).dataSortedEvents[previousElementOffset];
       
       for(cl_uint j = 0; j < totalEvents; j++)
       {
         /*Detect boundary*/
-        if(dataGroupEventsTik[j] != previousElement)
+        if((*synapticEvents).dataSortedEvents[j] != previousElement)
         {
-          cl_uint offsetVerify = dataMakeEventPtrsStruct[dataGroupEventsTik[j]*
+          cl_uint offsetVerify = dataMakeEventPtrsStruct[(*synapticEvents).dataSortedEvents[j]*
             MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE];
             
           cl_uint countVerify = dataMakeEventPtrsStruct[previousElement*
@@ -5288,13 +2742,13 @@ Neurosim::verifyKernelMakeEventPtrs()
           if(error)
           {
             std::cerr << "ERROR, verifyKernelMakeEventPtrs, mismatched data for neuron ID " 
-              << dataGroupEventsTik[j] << ": pointer (" << offsetVerify << " vs " << j 
+              << (*synapticEvents).dataSortedEvents[j] << ": pointer (" << offsetVerify << " vs " << j 
               << "), count (" << countVerify << " vs " << j-previousElementOffset << ")"
               << std::endl;
             result = 0;
           }
           
-          previousElement = dataGroupEventsTik[j];
+          previousElement = (*synapticEvents).dataSortedEvents[j];
           previousElementOffset = j;
           totalCountsVerifyOriginal++;
           if(error){break;}
@@ -5337,7 +2791,7 @@ Neurosim::verifyKernelMakeEventPtrs()
   cl_uint wf = j/wfWorkSize;
   cl_uint count = dataMakeEventPtrsStruct[0];
   cl_uint offsetPtr = (wfDataIter[wf]++)*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE;
-  cl_uint error = (dataGroupEventsTik[j] != dataMakeEventPtrsStruct[1 + offsetPtr]) && count;
+  cl_uint error = ((*synapticEvents).dataSortedEvents[j] != dataMakeEventPtrsStruct[1 + offsetPtr]) && count;
   error += (j != dataMakeEventPtrsStruct[1 + offsetPtr + 1]) && count;
   
   if(!error && (result != 0))
@@ -5345,7 +2799,7 @@ Neurosim::verifyKernelMakeEventPtrs()
     for(j = 1; j < totalEvents; j++)
     {
       /*Detect boundary*/
-      if(dataGroupEventsTik[j] != dataGroupEventsTik[j-1])
+      if((*synapticEvents).dataSortedEvents[j] != (*synapticEvents).dataSortedEvents[j-1])
       {
         totalCountsVerifyOriginal++;
         
@@ -5370,7 +2824,7 @@ Neurosim::verifyKernelMakeEventPtrs()
         /*Verify pointer*/
         wf = j/wfWorkSize;
         offsetPtr = (wfDataIter[wf]++)*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE;
-        error = (dataGroupEventsTik[j] != 
+        error = ((*synapticEvents).dataSortedEvents[j] != 
           dataMakeEventPtrsStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*wf + 1 + offsetPtr]);
         error += (j != 
           dataMakeEventPtrsStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*wf + 1 + offsetPtr + 1]);
@@ -5385,7 +2839,7 @@ Neurosim::verifyKernelMakeEventPtrs()
   {
     offsetPtr = (wfDataIter[wf]-1)*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE;
     std::cerr << "ERROR, verifyKernelMakeEventPtrs, unmatched pointer for WF " << wf
-      << ", global element ID " << j << ": key " << dataGroupEventsTik[j] << " vs " 
+      << ", global element ID " << j << ": key " << (*synapticEvents).dataSortedEvents[j] << " vs " 
       << dataMakeEventPtrsStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*wf + 1 + offsetPtr] 
       << ", value " << j << " vs " 
       << dataMakeEventPtrsStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*wf + 1 + offsetPtr + 1] 
@@ -5424,7 +2878,7 @@ Neurosim::injectSortedEvents
   cl_uint       totalNeurons,
   cl_uint       eventQueueSize,
   cl_uint       pointersPitch,
-  cl_uint       sortedEventsSize,
+  size_t        sortedEventsSize,
   cl_uint       *sortedEvents,
   cl_uint       *pointersToEvents,
   neuron_iz_ps  *nrn
@@ -5696,7 +3150,7 @@ Neurosim::verifyEvents
   bool          correctWeightPositionMismatch,
   unsigned int  totalNeurons,
   unsigned int  structElementSize,
-  unsigned int  sortedEventsSize,
+  size_t        sortedEventsSize,
   unsigned int  *pointerStruct,
   unsigned int  *sortedEvents,
   neuron_iz_ps  *nrn
@@ -6369,7 +3823,7 @@ Neurosim::verifyKernelUpdateNeurons
   bool              injectSpikes,
   bool              propagateEvents,
   cl_uint           step,
-  cl_uint           sortedEventsSize,
+  size_t            sortedEventsSize,
   unsigned int      *pointerStruct,
   unsigned int      *sortedEvents,
   DATA_TYPE         *modelVariables,
@@ -6627,368 +4081,6 @@ Neurosim::verifyKernelUpdateNeurons
   free(spikeCheck);
   }
 
-  return result;
-}
-/**************************************************************************************************/
-#endif
-
-
-
-#if SORT_VERIFY_ENABLE
-#define PRINT_VERIFY_SORTED_EVENTS  0
-int 
-Neurosim::verifySortedEvents
-(
-  cl_uint *sortedEvents, 
-  cl_uint *pointerStruct, 
-  cl_uint level
-)
-/**************************************************************************************************/
-{
-  int result = 1;
-  cl_uint keyOffset = 0;
-  cl_uint val1Offset = (keyOffset+1)%GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-  cl_uint val2Offset = (keyOffset+2)%GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-  char *sortedEventsCheck = NULL;
-  
-  if(level > 0)
-  {
-    sortedEventsCheck = (char *)calloc(dataUnsortedEventsSnapShotSize/
-      GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS, sizeof(char));
-  }
-  
-#if PRINT_VERIFY_SORTED_EVENTS
-    std::cout << "verifySortedEvents " << currentTimeStep << ": started" << std::endl;
-    std::cout << "verifySortedEvents " << currentTimeStep << ": found " 
-      << dataUnsortedEventsSnapShotSize/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS 
-      << " key-value(s) elements" << std::endl;
-#endif
-  
-  /*Check sort order*/
-  for
-  (
-    cl_uint i = 1; 
-    i < dataUnsortedEventsSnapShotSize/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS; 
-    i++
-  ){
-    /*Verify sorted order for keys*/
-    cl_uint v1 = sortedEvents[keyOffset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i];
-    cl_uint v2 = sortedEvents[keyOffset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i-1];
-    
-    if(v1 < v2)
-    {
-      std::cout << "verifySortedEvents " << currentTimeStep 
-        << ": failed to verify sort order for key element " << i << ": " << v1 << "<" << v2 
-        << std::endl;
-      result = 0;
-      break;
-    }
-    
-    /*Verify sorted order for values*/
-    if(v1 == v2)
-    {
-      cl_float time1 = 
-        *((cl_float *)(&sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i]));
-      cl_float time2 = 
-        *((cl_float *)(&sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i-1]));
-      
-      if(time1 < 0.0f || time1 > (float)(GROUP_EVENTS_MAX_DELAY-GROUP_EVENTS_MIN_DELAY))
-      {
-        std::cout << "verifySortedEvents: found an event in actual data with delay outside "
-          << "of defined range: value " << time1 << ", range " << 0.0f << " - " 
-          << (float)(GROUP_EVENTS_MAX_DELAY-GROUP_EVENTS_MIN_DELAY) << std::endl;
-        result = 0;
-        break;
-      }
-      
-      if(time1 < time2)
-      {
-        std::cout << "verifySortedEvents " << currentTimeStep 
-          << ": failed to verify sort order for value element " << i << ": " << time1 << "<" 
-          << time2 << std::endl;
-        result = 0;
-        break;
-      }
-    }
-    /*
-    std::cout  << v1 << "->" 
-      << *((cl_float *)(&sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i])) 
-      << ", ";
-    */
-  }
-  
-#if PRINT_VERIFY_SORTED_EVENTS
-  if(result != 0)
-  {
-    std::cout << "verifySortedEvents " << currentTimeStep << ": verified sort order" << std::endl;
-  }
-#endif
-
-  if(result != 0 && level > 0)
-  {
-#if PRINT_VERIFY_SORTED_EVENTS
-#if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 1
-    /*Determine how many avtive structs*/
-    cl_uint activeStructsCount = 0xFFFFFFFF;
-    for(cl_uint i = 0; i < MAKE_EVENT_PTRS_STRUCTS; i++)
-    {
-      if(pointerStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*i] == 0)
-      {
-        activeStructsCount = i;
-        break;
-      }
-    }
-
-    cl_uint printFreq = 100000;
-    std::cout << "verifySortedEvents " << currentTimeStep << ": currently verifying key-value(s)/" 
-      << printFreq << ": ";
-#endif
-#endif
-    /*Each key-value(s) elements of dataUnsortedEventsSnapShot must be found in sortedEvents*/
-    for
-    (
-      cl_uint p = 0; 
-      p < dataUnsortedEventsSnapShotSize/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS; 
-      p++
-    ){
-      cl_uint testedElementKey = 
-        dataUnsortedEventsSnapShot[keyOffset + p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS];
-      cl_uint entryCount = 0;
-      cl_uint entryAddress = 0xFFFFFFFF;
-      cl_uint nextEntryAddress = 0xFFFFFFFF;
-
-#if MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 0
-
-      entryAddress = *(pointerStruct + testedElementKey*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE);
-      entryCount = *(pointerStruct + testedElementKey*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1);
-      nextEntryAddress = entryAddress + entryCount;
-
-#elif MAKE_EVENT_PTRS_EVENT_DELIVERY_MODE == 1
-
-      cl_uint structPtr = 0;
-      
-      /*Determine to which struct testedElementKey belongs to*/
-      /*TODO: binary search on sorted array*/
-      for(structPtr = 0; structPtr < MAKE_EVENT_PTRS_STRUCTS; structPtr++)
-      {
-        entryCount = pointerStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*structPtr];
-        if(entryCount > 0)
-        {
-          cl_uint ptr = 
-            /*base*/
-            MAKE_EVENT_PTRS_STRUCT_SIZE*structPtr + 
-            /*place for count*/
-            1 + 
-            /*last element*/
-            (entryCount-1)*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE;
-          if(pointerStruct[ptr] >= testedElementKey){break;}
-        }
-      }
-
-      /*Search for entry for this element*/
-      /*TODO: binary search on sorted array*/
-      for(cl_uint s = 0; s < entryCount; s++)
-      {
-        cl_uint ptr = 
-          /*base*/
-          MAKE_EVENT_PTRS_STRUCT_SIZE*structPtr + 
-          /*place for count*/
-          1 + 
-          /*key of the element*/
-          s*MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE;
-        if(pointerStruct[ptr] == testedElementKey)
-        {
-          /*address*/
-          entryAddress = pointerStruct[ptr+1];
-          /*limit address for this element*/
-          if(s < entryCount-1)
-          {
-            nextEntryAddress = pointerStruct[ptr+MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE + 1];
-          }
-          else
-          {
-            nextEntryAddress = pointerStruct[MAKE_EVENT_PTRS_STRUCT_SIZE*(structPtr + 1) + 
-              MAKE_EVENT_PTRS_STRUCT_ELEMENT_SIZE]; 
-          }
-          break;
-        }
-      }
-
-      /*Verify that the entry was found*/
-      if(entryAddress == 0xFFFFFFFF || nextEntryAddress == 0xFFFFFFFF)
-      {
-        std::cout << "verifySortedEvents " << currentTimeStep << ": not able to find a struct for "
-          << "element " << testedElementKey << " at pointer " << p << std::endl;
-        result = 0;
-        break;
-      }
-#endif
-
-      /*Find the entry*/
-      result = 0;
-      /*TODO: binary search on sorted array*/
-      for
-      (
-        cl_uint a = entryAddress; 
-        a < nextEntryAddress; 
-        a++
-      ){
-        if(testedElementKey == 
-           sortedEvents[keyOffset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + a])
-        {
-          if(dataUnsortedEventsSnapShot[val1Offset + p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS] 
-             == sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + a])
-          {
-            if(dataUnsortedEventsSnapShot[val2Offset + p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS] 
-               == sortedEvents[val2Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + a])
-            {
-              result = 1;
-              sortedEventsCheck[a] = 1;
-              break;
-            }
-          }
-        }
-      }
-
-      if(result == 0)
-      {
-        std::cout << "verifySortedEvents " << currentTimeStep << ": not able to find in "
-          << "sorted data a combination of " << "key-value(s) for key " << p << "(" 
-          << dataUnsortedEventsSnapShot[keyOffset + p*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS] 
-          << ") from unsorted data" << std::endl;
-        break;
-      }
-#if PRINT_VERIFY_SORTED_EVENTS
-      if((p)%printFreq == 0)
-      {
-        std::cout  << ((p)/printFreq) << ",";
-      }
-#endif
-    }
-#if PRINT_VERIFY_SORTED_EVENTS
-    if(result != 0)
-    {
-      std::cout 
-        << "\nverifySortedEvents" << currentTimeStep << ": verified mapping of unsorted "
-        << "data in sorted data" << std::endl;
-    }
-#endif
-  }
-  
-  /*Check for unrecognized keys*/
-  if(result != 0 && level > 1)
-  {
-    for(cl_uint i = 0; i < dataUnsortedEventsSnapShotSize/GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS; 
-      i++)
-    {
-      if(!sortedEventsCheck[i])
-      {
-        std::cerr << "verifySortedEvents " << currentTimeStep << ": found unrecognized element ("
-        << i << "): (" << sortedEvents[keyOffset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i] 
-        << ")->(" << sortedEvents[val1Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i] 
-        << "," << sortedEvents[val2Offset*GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE + i] << ")" 
-        << std::endl;
-        /*result = 0;
-        break; */
-      }
-    }
-#if PRINT_VERIFY_SORTED_EVENTS
-    if(result != 0)
-    {
-      std::cout << "verifySortedEvents " << currentTimeStep << ": checked for unrecognized keys" 
-        << std::endl;
-    }
-#endif
-  }
-  
-#if PRINT_VERIFY_SORTED_EVENTS
-  std::cout << "verifySortedEvents " << currentTimeStep << ": finished" << std::endl;
-#endif
-
-  if(dataUnsortedEventsSnapShot){free(dataUnsortedEventsSnapShot);} 
-  dataUnsortedEventsSnapShot = NULL;
-  
-  if(level > 0)
-  {
-    free(sortedEventsCheck);
-  }
-  return result;
-}
-/**************************************************************************************************/
-#endif
-
-
-
-#if SORT_VERIFY_ENABLE
-int 
-Neurosim::captureUnsortedEvents
-(
-  cl_uint *unsortedEventCounts,
-  cl_uint *unsortedEventTargets,
-  cl_uint *unsortedEventDelays,
-  cl_uint *unsortedEventWeights
-)
-/**************************************************************************************************/
-{
-
-  cl_uint ptr_store = 0;
-  cl_uint event_total = 0;
-  int result = 1;
-  
-  /*Initialize syn events and neuron counters*/
-  for(cl_uint b = 0; b < GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS; b++)
-  {
-    event_total += unsortedEventCounts[GROUP_EVENTS_TIME_SLOTS*b + currentTimeSlot];
-  }
-  
-  if(dataUnsortedEventsSnapShot){free(dataUnsortedEventsSnapShot);}
-  CALLOC(dataUnsortedEventsSnapShot, cl_uint, event_total*GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS);
-  
-  /*Initialize syn events and neuron counters*/
-  for(cl_uint b = 0; b < GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS; b++)
-  {
-    event_total = unsortedEventCounts[GROUP_EVENTS_TIME_SLOTS*b + currentTimeSlot];
-
-    for(cl_uint e = 0; e < event_total; e++)
-    {
-      /*Compute pointer to event data*/
-      cl_uint ptr = 
-        /*Event data buffers*/
-        b * GROUP_EVENTS_TIME_SLOTS * 
-        (GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE) +
-        /*Current event data buffer*/
-        currentTimeSlot * 
-        (GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE) +
-        /*Current event*/
-        e;
-
-      /*Check if valid and copy event*/
-      cl_uint neuron = unsortedEventTargets[ptr];
-      cl_uint time = unsortedEventDelays[ptr];
-      cl_uint weight = unsortedEventWeights[ptr];
-      
-      if(*((cl_float *)(&time)) < 0.0f || 
-         *((cl_float *)(&time)) > (float)(GROUP_EVENTS_MAX_DELAY-GROUP_EVENTS_MIN_DELAY))
-      {
-        std::cout << "captureUnsortedEvents: found an event with delay outside of defined "
-          << "range: value " << *((cl_float *)(&time)) << ", range " << 0.0f
-          << " - " << (float)(GROUP_EVENTS_MAX_DELAY-GROUP_EVENTS_MIN_DELAY) << std::endl;
-        result = 0;
-        break;
-      }
-      
-      dataUnsortedEventsSnapShot[ptr_store] = neuron;
-      dataUnsortedEventsSnapShot[ptr_store+1] = time;
-      dataUnsortedEventsSnapShot[ptr_store+2] = weight;
-      ptr_store += GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS;
-    }
-  }
-  
-  if(result != 1)
-  {
-    free(dataUnsortedEventsSnapShot);
-  }
-  
   return result;
 }
 /**************************************************************************************************/

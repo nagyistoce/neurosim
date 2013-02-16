@@ -23,12 +23,12 @@
     <!--  -->
 
 
-    <exe name="0" tag="skip">
+    <exe name="0" tag="noskip">
       <id>QA_Tahiti_Unit_Tests</id>
       <!-- Configuration -->
       <config>
         <!-- SYSTEM: 0x10000, 0x10001 -->
-        <param id="SYSTEM">0x10000</param>
+        <param id="SYSTEM">0x10000,0x10001</param>
       
         <param id="TARGET_DEVICE_NAME">'\\"Tahiti\\"'</param>
         
@@ -39,7 +39,10 @@
           oct("0b1111111100000000"),oct("0b1011111110000000") 
         -->
         <param id="ENABLE_MASK">
-          490024
+          oct("0b1000000000000000"),oct("0b0100000000000000"),oct("0b0010000000000000"),
+          oct("0b0001000000000000"),oct("0b0000100000000000"),oct("0b0000010000000000"),
+          oct("0b0000001000000000"),oct("0b0000000100000000"),oct("0b0000000010000000"),
+          oct("0b1111111100000000"),oct("0b1011111110000000")
         </param>
 
         <!-- UNIT_TEST_MODE: 0, 1, 2 -->
@@ -161,7 +164,7 @@
         
         <node name="VerifyAll_Medium">
           <param id="SIMULATION_MODE">0</param>
-          <param id="SIMULATION_TIME_STEPS">3</param>
+          <param id="SIMULATION_TIME_STEPS">4</param>
           <result id="PASS">Profile_Medium</result>
           <result id="FAIL">Profile_Medium</result>
         </node>
@@ -209,7 +212,7 @@
       <!-- Configuration -->
       <config>
         <!-- SYSTEM: 0x10000, 0x10001 -->
-        <param id="SYSTEM">0x10000</param>
+        <param id="SYSTEM">0x10000,0x10001</param>
       
         <param id="TARGET_DEVICE_NAME">'\\"Tahiti\\"'</param>
         
@@ -559,7 +562,7 @@
         
         <node name="Nonblocking_Medium">
           <param id="SIMULATION_MODE">5</param>
-          <param id="SIMULATION_TIME_STEPS">10</param>
+          <param id="SIMULATION_TIME_STEPS">4</param>
           <!-- REFERENCE_EVENT_QUEUE_SIZE: 10000 -->
           <param id="REFERENCE_EVENT_QUEUE_SIZE">750</param>
           <!-- TOTAL_NEURON_BITS: 17 -->

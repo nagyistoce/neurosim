@@ -21,6 +21,7 @@
     <ClInclude Include="Kernel_Primitives.h" />
     <ClInclude Include="Neurosim.hpp" />
     <ClInclude Include="Operator_Expand.hpp" />
+    <ClInclude Include="Operator_Group.hpp" />
     <ClInclude Include="Operator_Scan.hpp" />
     <ClInclude Include="Operator_Sort.hpp" />
   </ItemGroup>
@@ -33,6 +34,7 @@
     <ClCompile Include="iz_util.c" />
     <ClCompile Include="Neurosim.cpp" />
     <ClCompile Include="Operator_Expand.cpp" />
+    <ClCompile Include="Operator_Group.cpp" />
     <ClCompile Include="Operator_Scan.cpp" />
     <ClCompile Include="Operator_Sort.cpp" />
   </ItemGroup>

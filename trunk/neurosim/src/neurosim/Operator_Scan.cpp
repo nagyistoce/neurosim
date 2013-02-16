@@ -146,7 +146,7 @@ Operator_Scan::scan_v00
     "Operator_Scan::scan_v00:",
     currentTimeStep, 
     {this->invalidateError(); this->getData(queue, CL_TRUE, OPERATOR_SCAN_VALID_ERROR);}, 
-    dataScanError
+    this->dataScanError
   );
 #endif
 }
@@ -209,7 +209,7 @@ Operator_Scan::scan_v01
     "Operator_Scan::scan_v01:",
     currentTimeStep, 
     {this->invalidateError(); this->getData(queue, CL_TRUE, OPERATOR_SCAN_VALID_ERROR);}, 
-    dataScanError
+    this->dataScanError
   );
 #endif
 }
@@ -251,7 +251,7 @@ Operator_Scan::scanUnitTest_v00
   
   this->invalidateUnitTestData_v00();
 
-#if SCAN_VERIFY_ENABLE
+#if (SCAN_ENABLE_V00 && SCAN_VERIFY_ENABLE)
   this->verifyScan_v00
   (
     queue,
@@ -281,14 +281,13 @@ Operator_Scan::scanUnitTest_v01
   struct kernelStatistics             &kernelStats,
 #endif
   cl::CommandQueue                    &queue,
-  cl::Event                           &ndrEvt,
-  cl_uint                             maxCount
+  cl::Event                           &ndrEvt
 )
 /**************************************************************************************************/
 {
   LOG_SIM("Operator_Scan::scanUnitTest_v01: performing unit test");
   
-  this->setUnitTestData_v01(queue, CL_TRUE, maxCount);
+  this->setUnitTestData_v01(queue, CL_TRUE);
 
   this->scan_v01
   (
@@ -305,16 +304,13 @@ Operator_Scan::scanUnitTest_v01
   
   this->invalidateUnitTestData_v01();
 
-#if SCAN_VERIFY_ENABLE
+#if (SCAN_ENABLE_V01 && SCAN_VERIFY_ENABLE)
   this->verifyScan_v01
   (
     queue,
     (void*)this, 
     Operator_Scan::getPreviousHistogramItem_v01, 
-    Operator_Scan::getCurrentHistogramItem_v01,
-    this->histogramBinBackets,
-    this->histogramBinCount_v01,
-    this->histogramBinSize_v01
+    Operator_Scan::getCurrentHistogramItem_v01
   );
 #endif
 }
@@ -323,7 +319,7 @@ Operator_Scan::scanUnitTest_v01
 
 
 
-#if SCAN_VERIFY_ENABLE
+#if (SCAN_ENABLE_V00 && SCAN_VERIFY_ENABLE)
 void 
 Operator_Scan::verifyScan_v00
 (
@@ -413,17 +409,14 @@ Operator_Scan::verifyScan_v00
 
 
 
-#if SCAN_VERIFY_ENABLE
+#if (SCAN_ENABLE_V01 && SCAN_VERIFY_ENABLE)
 void 
 Operator_Scan::verifyScan_v01
 (
   cl::CommandQueue  &queue,
   void              *objectToCall,
   cl_uint           (*getPreviousItem)(cl::CommandQueue &, cl_uint, cl_uint, cl_uint, void*),
-  cl_uint           (*getResentItem)(cl::CommandQueue &, cl_uint, cl_uint, cl_uint, void*),
-  cl_uint           histogramBinBackets,
-  cl_uint           histogramBinCount,
-  cl_uint           histogramBinSize
+  cl_uint           (*getResentItem)(cl::CommandQueue &, cl_uint, cl_uint, cl_uint, void*)
 )
 /**************************************************************************************************/
 {
@@ -432,21 +425,21 @@ Operator_Scan::verifyScan_v01
 #endif
 
   /* allocate memory for histogram */
-  cl_uint *temp = (cl_uint *)calloc((histogramBinSize*histogramBinCount + 1), 
+  cl_uint *temp = (cl_uint *)calloc(((this->histogramBinSize_v01)*(this->histogramBinCount_v01)+1), 
     sizeof(cl_uint));
   
   /*Compute histogram*/
-  for(cl_uint j = 0; j < histogramBinSize; j++)
+  for(cl_uint j = 0; j < (this->histogramBinSize_v01); j++)
   {
-    for(cl_uint b = 0; b < histogramBinCount; b++)
+    for(cl_uint b = 0; b < (this->histogramBinCount_v01); b++)
     {
       cl_uint sum = 0;
       
-      for(cl_uint w = 0; w < histogramBinBackets; w++)
+      for(cl_uint w = 0; w < (this->histogramBinBackets); w++)
       {
         sum += getPreviousItem(queue, w, b, j, objectToCall);
       }
-      temp[j + b*histogramBinSize] = sum;
+      temp[j + b*(this->histogramBinSize_v01)] = sum;
     }
   }
   
@@ -454,7 +447,7 @@ Operator_Scan::verifyScan_v01
   temp[0] = 0;
   
   /*Compute offsets*/
-  for(cl_uint j = 1; j < (histogramBinCount*histogramBinSize + 1); j++)
+  for(cl_uint j = 1; j < ((this->histogramBinCount_v01)*(this->histogramBinSize_v01) + 1); j++)
   {
     cl_uint d = temp[j];
     temp[j] = runningSum;
@@ -463,11 +456,12 @@ Operator_Scan::verifyScan_v01
   
   unsigned long long error_count_histogram_out = 0;
 
-  for(cl_uint i = 1; i < (histogramBinCount*histogramBinSize + 1); i++)
+  for(cl_uint i = 1; i < ((this->histogramBinCount_v01)*(this->histogramBinSize_v01) + 1); i++)
   {
-    cl_uint w = (i/(histogramBinCount*histogramBinSize))%histogramBinBackets;
-    cl_uint b = (i/histogramBinSize)%histogramBinCount;
-    cl_uint j = i%histogramBinSize;
+    cl_uint w = (i/((this->histogramBinCount_v01)*(this->histogramBinSize_v01)))%
+      (this->histogramBinBackets);
+    cl_uint b = (i/(this->histogramBinSize_v01))%(this->histogramBinCount_v01);
+    cl_uint j = i%(this->histogramBinSize_v01);
     
     error_count_histogram_out += (getResentItem(queue, w, b, j, objectToCall) != temp[i]);
     /*
@@ -519,8 +513,6 @@ Operator_Scan::initialize
 #if (SYSTEM_OS == SYSTEM_OS_WINDOWS)
     QueryPerformanceFrequency((LARGE_INTEGER *)&(this->performanceFrequency));
 #endif
-
-#if (SCAN_ENABLE_V00 || SCAN_ENABLE_V01)
 
   /* register device local memory buffer for stats */
   size_t lmScanData = sizeof(cl_uint)*cacheSizeWords; 
@@ -586,7 +578,6 @@ Operator_Scan::initialize
     this->blockSizeX_kernelScanHistogramV01,
     this->blockSizeY_kernelScanHistogramV01
   );
-#endif
 #endif
 }
 /**************************************************************************************************/
@@ -691,8 +682,7 @@ void
 Operator_Scan::setUnitTestData_v01
 (
   cl::CommandQueue    &queue,
-  cl_bool             block,
-  cl_uint             maxCount
+  cl_bool             block
 )
 /**************************************************************************************************/
 {
@@ -715,7 +705,8 @@ Operator_Scan::setUnitTestData_v01
           /*bin*/
           b*(this->histogramBinSize_v01);
           
-        this->dataHistogramV01[p] = cl_uint(abs(maxCount*((double)rand()/((double)RAND_MAX))));
+        this->dataHistogramV01[p] = cl_uint(abs((this->histogramMaxCount)*((double)rand()/
+          ((double)RAND_MAX))));
       }
     }
   }

@@ -32,9 +32,7 @@ WARNING_CONTROL_START
   Class Preprocessor Definitions
 ***************************************************************************************************/
 
-#define OPERATOR_SORT_VALID_HISTOGRAM_TIK         0x1
-#define OPERATOR_SORT_VALID_ALL                   (OPERATOR_SORT_VALID_HISTOGRAM_TIK)
-#define OPERATOR_SORT_ENABLE_PAST_EVENTS          1
+
 
 /**************************************************************************************************/
 
@@ -44,7 +42,15 @@ WARNING_CONTROL_START
   Forward declarations for cyclic dependency
 ***************************************************************************************************/
 
+class Data_SynapticEvents;
 
+#if ENABLE_OPERATOR_SCAN
+class Operator_Scan;
+#endif
+/* *** */
+#if ENABLE_OPERATOR_GROUP
+class Operator_Group;
+#endif
 
 /**************************************************************************************************/
 
@@ -65,36 +71,34 @@ class Operator_Sort
   public:  /*public variables*/
 /**************************************************************************************************/
   
-  
-  
-  /*TODO: eventually all of them have to move to private*/
-  size_t dataHistogramGroupEventsTikSize;
-  size_t dataHistogramGroupEventsTikSizeBytes;
-  cl_uint* dataHistogramGroupEventsTik;
-  cl::Buffer dataHistogramGroupEventsTikBuffer;
-#if OPERATOR_SORT_ENABLE_PAST_EVENTS
-  cl_uint* dataPastHistogramGroupEventsTik;
-#endif
-  
-  
+
   
 /**************************************************************************************************/
   private:  /*private variables*/
 /**************************************************************************************************/
 
-
-
-  static const int RECENT = 0;
-  static const int PREVIOUS = 1;
+  cl_uint sortByTimeIterationCount;
+  cl_uint sortByNeuronIterationCount;
   
-  cl_uint dataValid;
-  cl_uint histogramBacketCount;
-  cl_uint histogramBinSize;
-  cl_uint histogramBinCount;
-  
-  unsigned int srandSeed;
-  unsigned int srandCounter;
+#if ENABLE_UNIT_TEST_GROUP_EVENTS
+  double groupTestMode;
+#endif
 
+#if ENABLE_OPERATOR_SCAN
+  Operator_Scan *operatorScan;
+#endif
+
+#if ENABLE_OPERATOR_GROUP
+  Operator_Group *operatorGroup;
+#endif
+
+#if SORT_VERIFY_ENABLE
+  cl_uint dataUnsortedEventsSnapShotSize;
+  cl_uint dataUnsortedEventsSnapShotSizeBytes;
+  cl_uint* dataUnsortedEventsSnapShot;
+#endif
+
+  Data_SynapticEvents *synapticEvents;
   std::stringstream *dataToSimulationLogFile;
   std::stringstream *dataToReportLogFile;
 
@@ -112,32 +116,45 @@ class Operator_Sort
   */
   Operator_Sort
   (
+#if ENABLE_UNIT_TEST_GROUP_EVENTS
+    double                              groupTestMode,
+#endif
+#if (SCAN_DEBUG_ENABLE || SCAN_ERROR_TRACK_ENABLE || ENABLE_UNIT_TEST_SCAN_V00 || \
+  ENABLE_UNIT_TEST_SCAN_V01) || (GROUP_EVENTS_DEBUG_ENABLE || GROUP_EVENTS_ERROR_TRACK_ENABLE)
+    cl_bool                             block,
+    cl::CommandQueue                    &queue,
+#endif
+    cl_uint                             sortByTimeIterationCount,
+    cl_uint                             sortByNeuronIterationCount,
     cl::Context                         &context,
     cl::Device                          &device,
-    cl::CommandQueue                    &queue,
-    cl_bool                             block,
     struct kernelStatistics             &kernelStats,
+    Data_SynapticEvents                 *synapticEvents,
     std::stringstream                   *dataToSimulationLogFile,
-    std::stringstream                   *dataToReportLogFile,
-    cl_uint                             histogramBacketCount,
-    cl_uint                             histogramBinSize,
-    cl_uint                             histogramBinCount
+    std::stringstream                   *dataToReportLogFile
   ) :
-    dataHistogramGroupEventsTikSize(0),
-    dataHistogramGroupEventsTikSizeBytes(0),
-    dataHistogramGroupEventsTik(NULL),
-    dataHistogramGroupEventsTikBuffer(),
+    sortByTimeIterationCount(sortByTimeIterationCount),
+    sortByNeuronIterationCount(sortByNeuronIterationCount),
     /* *** */
-#if OPERATOR_SORT_ENABLE_PAST_EVENTS
-    dataPastHistogramGroupEventsTik(NULL),
+#if ENABLE_UNIT_TEST_GROUP_EVENTS
+    groupTestMode(groupTestMode),
 #endif
     /* *** */
-    dataValid(0),
-    histogramBacketCount(histogramBacketCount),
-    histogramBinSize(histogramBinSize),
-    histogramBinCount(histogramBinCount),
-    srandSeed(1),
-    srandCounter(0),
+#if ENABLE_OPERATOR_SCAN
+    operatorScan(NULL),
+#endif
+    /* *** */
+#if ENABLE_OPERATOR_GROUP
+    operatorGroup(NULL),
+#endif
+    /* *** */
+#if SORT_VERIFY_ENABLE
+    dataUnsortedEventsSnapShotSize(0),
+    dataUnsortedEventsSnapShotSizeBytes(0),
+    dataUnsortedEventsSnapShot(NULL),
+#endif
+    /* *** */
+    synapticEvents(synapticEvents),
     dataToSimulationLogFile(dataToSimulationLogFile),
     dataToReportLogFile(dataToReportLogFile)
 /**************************************************************************************************/
@@ -145,10 +162,13 @@ class Operator_Sort
     /* Must be called only from the constructor and only once*/
     this->initialize
     (
+#if (SCAN_DEBUG_ENABLE || SCAN_ERROR_TRACK_ENABLE || ENABLE_UNIT_TEST_SCAN_V00 || \
+  ENABLE_UNIT_TEST_SCAN_V01) || (GROUP_EVENTS_DEBUG_ENABLE || GROUP_EVENTS_ERROR_TRACK_ENABLE)
+      block,
+      queue,
+#endif
       context,
       device,
-      queue,
-      block,
       kernelStats
     );
   };
@@ -160,146 +180,80 @@ class Operator_Sort
   /**
     Destructor.
   */
-  ~Operator_Sort()
-  {
-    if(this->dataHistogramGroupEventsTik)
-    {
-      free(this->dataHistogramGroupEventsTik);
-      this->dataHistogramGroupEventsTik = NULL;
-    }
-    /* *** */
-#if OPERATOR_SORT_ENABLE_PAST_EVENTS
-    if(this->dataPastHistogramGroupEventsTik)
-    {
-      free(this->dataPastHistogramGroupEventsTik);
-      this->dataPastHistogramGroupEventsTik = NULL;
-    }
+  ~Operator_Sort();
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Performs sort of event data.
+  */
+#if (ENABLE_OPERATOR_SCAN || ENABLE_OPERATOR_GROUP)
+  void
+  sortEvents
+  (
+#if KERNEL_LEVEL_PROFILING
+    struct kernelStatistics&,
 #endif
-    /* *** */
-    this->dataToSimulationLogFile = NULL;
-    this->dataToReportLogFile = NULL;
-  };
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Clears data.
-  */
-  void
-  clearData
-  (
+#if GROUP_EVENTS_VERIFY_ENABLE
+    cl_uint,
+#endif
+#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE || GROUP_EVENTS_ERROR_TRACK_ENABLE || \
+(ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V00) || (ENABLE_OPERATOR_GROUP && GROUP_EVENTS_ENABLE_V00)
+    cl_uint,
+#endif
     cl::CommandQueue&,
-    cl_bool,
-    cl_uint
+    cl::Event&
   );
+#endif
 /**************************************************************************************************/
 
 
 
 /**************************************************************************************************/
   /**
-    Returns histogram item
+    Takes a snapshot of unsorted events and stores it in memory.
   */
-  static cl_uint
-  getPreviousHistogramItem
-  (
-    cl::CommandQueue&,
-    cl_uint,
-    cl_uint,
-    cl_uint,
-    void*
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Returns histogram item
-  */
-  static cl_uint
-  getCurrentHistogramItem
-  (
-    cl::CommandQueue&,
-    cl_uint,
-    cl_uint,
-    cl_uint,
-    void*
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Returns histogram item
-  */
-  cl_uint
-  getHistogramItem
-  (
-      cl::CommandQueue&,
-      cl_uint,
-      cl_uint,
-      cl_uint,
-      const int
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Invalidates current histogram.
-  */
+#if SORT_VERIFY_ENABLE
   void 
-  invalidateHistogram
-  ();
+  captureUnsortedEvents
+  (
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    double,
+    double,
+    cl::CommandQueue&,
+    Data_SynapticEvents&
+  );
+#endif
 /**************************************************************************************************/
 
 
 
 /**************************************************************************************************/
   /**
-    Refreshes host data with data from device.
+    Verifies sort operation.
   */
+#if SORT_VERIFY_ENABLE
   void 
-  refreshHistogram
+  verifySortedEvents
   (
-    cl::CommandQueue&,
-    cl_bool
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    cl_uint,
+    double,
+    double,
+    cl_uint*,
+    cl_uint*
   );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Loads data from the device if it is invalid on the host.
-  */
-  void
-  getData
-  (
-    cl::CommandQueue&,
-    cl_bool,
-    cl_uint
-  );
-/**************************************************************************************************/
-
-
-
-/**************************************************************************************************/
-  /**
-    Stores data on device.
-  */
-  void
-  storeData
-  (
-    cl::CommandQueue&,
-    cl_bool,
-    cl_uint
-  );
+#endif
 /**************************************************************************************************/
 
 
@@ -317,14 +271,96 @@ class Operator_Sort
   void
   initialize
   (
+#if (SCAN_DEBUG_ENABLE || SCAN_ERROR_TRACK_ENABLE || ENABLE_UNIT_TEST_SCAN_V00 || \
+  ENABLE_UNIT_TEST_SCAN_V01) || (GROUP_EVENTS_DEBUG_ENABLE || GROUP_EVENTS_ERROR_TRACK_ENABLE)
+    cl_bool,
+    cl::CommandQueue&,
+#endif
     cl::Context&,
     cl::Device&,
-    cl::CommandQueue&,
-    cl_bool,
     struct kernelStatistics&
   );
 /**************************************************************************************************/
 
+
+
+/**************************************************************************************************/
+  /**
+    Performs first pass of sort of time data.
+  */
+#if (ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V00) || (ENABLE_OPERATOR_GROUP && GROUP_EVENTS_ENABLE_V00)
+  void
+  sortByTimeFirstPass
+  (
+#if KERNEL_LEVEL_PROFILING
+    struct kernelStatistics&,
+#endif
+#if GROUP_EVENTS_VERIFY_ENABLE
+    cl_uint,
+#endif
+    cl_uint,
+    cl::CommandQueue&,
+    cl::Event&
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Performs sort of data based on time key.
+  */
+#if ((ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V00) || \
+    (ENABLE_OPERATOR_GROUP && GROUP_EVENTS_ENABLE_V00) || \
+    (ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V01) || \
+    (ENABLE_OPERATOR_GROUP && GROUP_EVENTS_ENABLE_V01) || \
+    (ENABLE_OPERATOR_GROUP && GROUP_EVENTS_ENABLE_V02))
+  void
+  sortByTime
+  (
+#if KERNEL_LEVEL_PROFILING
+    struct kernelStatistics&,
+#endif
+#if GROUP_EVENTS_VERIFY_ENABLE
+    cl_uint,
+#endif
+#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE || GROUP_EVENTS_ERROR_TRACK_ENABLE || \
+(ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V00) || (ENABLE_OPERATOR_GROUP && GROUP_EVENTS_ENABLE_V00)
+    cl_uint,
+#endif
+    cl::CommandQueue&,
+    cl::Event&
+  );
+#endif
+/**************************************************************************************************/
+
+
+
+/**************************************************************************************************/
+  /**
+    Performs sort of data based on neuron ID key.
+  */
+#if ((ENABLE_OPERATOR_SCAN && SCAN_ENABLE_V01) || \
+    (ENABLE_OPERATOR_GROUP && GROUP_EVENTS_ENABLE_V01) || \
+    (ENABLE_OPERATOR_GROUP && GROUP_EVENTS_ENABLE_V03))
+  void
+  sortByNeuron
+  (
+#if KERNEL_LEVEL_PROFILING
+    struct kernelStatistics&,
+#endif
+#if GROUP_EVENTS_VERIFY_ENABLE
+    cl_uint,
+#endif
+#if KERNEL_LEVEL_PROFILING || SCAN_ERROR_TRACK_ENABLE || GROUP_EVENTS_ERROR_TRACK_ENABLE
+    cl_uint,
+#endif
+    cl::CommandQueue&,
+    cl::Event&
+  );
+#endif
+/**************************************************************************************************/
 };
 
 #endif  /*ENABLE_OPERATOR_SORT*/

@@ -80,7 +80,6 @@ class Operator_Expand
   __int64 performanceCounter, performanceFrequency;
 #endif
 
-#if EXPAND_EVENTS_ENABLE
   bool setKernelArguments;
   size_t blockSizeX_KernelExpandEvents;
   size_t blockSizeY_KernelExpandEvents;
@@ -106,7 +105,6 @@ class Operator_Expand
   size_t dataExpandEventsErrorSizeBytes;
   cl_uint* dataExpandEventsError;
   cl::Buffer dataExpandEventsErrorBuffer;
-#endif
 #endif
 
   std::stringstream *dataToSimulationLogFile;
@@ -143,7 +141,6 @@ class Operator_Expand
     performanceFrequency(0),
 #endif
     /* *** */
-#if EXPAND_EVENTS_ENABLE
     setKernelArguments(true),
     blockSizeX_KernelExpandEvents(EXPAND_EVENTS_WG_SIZE_WI),
     blockSizeY_KernelExpandEvents(1),
@@ -168,7 +165,6 @@ class Operator_Expand
     dataExpandEventsErrorSizeBytes(0),
     dataExpandEventsError(NULL),
     dataExpandEventsErrorBuffer(),
-#endif
 #endif
     /* *** */
     dataToSimulationLogFile(dataToSimulationLogFile),
@@ -205,7 +201,6 @@ class Operator_Expand
   */
   ~Operator_Expand()
   {
-#if (EXPAND_EVENTS_ENABLE)
     if(this->globalThreadsExpandEvents)
     {
       delete(this->globalThreadsExpandEvents);
@@ -234,7 +229,6 @@ class Operator_Expand
       free(this->dataExpandEventsError);
       this->dataExpandEventsError = NULL;
     }
-#endif
 #endif
     /* *** */
     this->dataToSimulationLogFile = NULL;
@@ -274,7 +268,6 @@ class Operator_Expand
   /**
     Performs expand operation.
   */
-#if EXPAND_EVENTS_ENABLE
   void 
   expand
   (
@@ -289,7 +282,6 @@ class Operator_Expand
     Data_SynapticEvents&,
     Data_Connectome&
   );
-#endif
 /**************************************************************************************************/
 
 
@@ -298,7 +290,6 @@ class Operator_Expand
   /**
     Performs expand operation.
   */
-#if EXPAND_EVENTS_ENABLE
   void 
   expand
   (
@@ -317,7 +308,6 @@ class Operator_Expand
     Data_SynapticEvents&,
     Data_Connectome&
   );
-#endif
 /**************************************************************************************************/
 
 

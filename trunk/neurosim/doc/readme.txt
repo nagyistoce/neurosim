@@ -1,3 +1,5 @@
+http://code.google.com/p/neurosim/
+
 Currently supports only Win7 x86_64
 
 Install AMD APP SDK

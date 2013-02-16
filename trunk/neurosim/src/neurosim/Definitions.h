@@ -514,10 +514,14 @@ WARNING_CONTROL_START
   
 #define REGISTER_MEMORY_O(device, kernel_name, mem_type, mem_name, kernelStats)\
   {\
+  size_t size_test = mem_name ##SizeBytes;\
+  \
+  if( size_test > 0)\
+  {\
     cl_uint minDataTypeAlignSize = (device).getInfo<CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE>();\
     cl_ulong memMaxAllocactionSize = (device).getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();\
     size_t size = ((mem_name ##SizeBytes)/minDataTypeAlignSize + 1)*minDataTypeAlignSize;\
-    std::stringstream ss;\
+    \
     switch (mem_type)\
     {\
       case MEM_CONSTANT:\
@@ -583,10 +587,14 @@ WARNING_CONTROL_START
         << ((float)size)/(1024.0*1024.0) << " MB exceeds CL_DEVICE_MAX_MEM_ALLOC_SIZE, "\
         << ((float)memMaxAllocactionSize)/(1024.0*1024.0));\
     }\
+  }\
   }
   
 /*Calloc host memory*/
 #define CALLOC(name, type, size)\
+  {\
+  size_t size_test = size;\
+  if(size_test > 0)\
   {\
     if(this->name != NULL)\
     {\
@@ -600,6 +608,7 @@ WARNING_CONTROL_START
     {\
       throw SimException("CALLOC: Failed to allocate memory for (" #name ")");\
     }\
+  }\
   }
 
 /*Swap 2 memory references*/
@@ -648,12 +657,13 @@ WARNING_CONTROL_START
     buffer = cl::Buffer(context, flags, size, NULL, &err);\
     if(err != CL_SUCCESS)\
     {\
-      THROW_SIMEX("CREATE_BUFFER_O: Failed to allocate " << #buffer << " due to error code " \
+      THROW_SIMEX("CREATE_BUFFER: Failed to allocate " << #buffer << " due to error code " \
         << err);\
     }\
   }
   
 #define CREATE_BUFFER_O(context, flags, buffer, size)\
+  if(size > 0)\
   {\
     cl_int err = CL_SUCCESS;\
     buffer = cl::Buffer(context, flags, size, NULL, &err);\
@@ -666,6 +676,7 @@ WARNING_CONTROL_START
   
 /*Enqueu write buffer*/
 #define ENQUEUE_WRITE_BUFFER(block, queue, buffer, size, data)\
+  if(data != NULL)\
   {\
     cl_int status;\
     cl::Event writeEvt = NULL;\
@@ -697,6 +708,7 @@ WARNING_CONTROL_START
   
 /*Enqueue read buffer*/
 #define ENQUEUE_READ_BUFFER(block, queue, buffer, size, data)\
+  if(data != NULL)\
   {\
     cl_int status;\
     cl_int eventStatus = CL_QUEUED;\
@@ -1249,9 +1261,9 @@ WARNING_CONTROL_START
   {\
     getErrorDataCode\
     \
-    if(this->errorData[0] != 0)\
+    if(errorData[0] != 0)\
     {\
-      THROW_SIMEX(specifier << " received error code from the device: " << this->errorData[0]);\
+      THROW_SIMEX(specifier << " received error code from the device: " << errorData[0]);\
     }\
   }
   
@@ -1424,22 +1436,6 @@ WARNING_CONTROL_START
     }
 #else
   #define LOG_SIM(message)
-#endif
-/**************************************************************************************************/
-
-
-
-/***************************************************************************************************
-  General Restrictions
-***************************************************************************************************/
-#if SORT_VERIFY_ENABLE && \
-    !(GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
-     GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
-  #undef SORT_VERIFY_ENABLE
-  #define SORT_VERIFY_ENABLE  0
-#endif
-#if (PROFILING_MODE == 1) && KERNEL_VERIFY_ENABLE
-  #error (cannot use (PROFILING_MODE = 1) if KERNEL_VERIFY_ENABLE is true)
 #endif
 /**************************************************************************************************/
 
@@ -1647,7 +1643,7 @@ WARNING_CONTROL_START
   #error Parameter EXPAND_EVENTS_SPIKE_PACKETS must be divisible by \
     (EXPAND_EVENTS_GRID_SIZE_WG*EXPAND_EVENTS_WG_SIZE_WF)
 #endif
-#endif
+#endif /*EXPAND_EVENTS_ENABLE*/
 /*
                                                Default Definitions
 */
@@ -1815,7 +1811,7 @@ WARNING_CONTROL_START
   #error (Parameters SCAN_DEVICE_V00 && SCAN_DEVICE_V01 must be enabled one at a time)
 #endif
 /* *** */
-#endif
+#endif /*SCAN_ENABLE*/
 /*
                                                Default Definitions
 */
@@ -1856,7 +1852,7 @@ WARNING_CONTROL_START
   
   /*Error tracking and codes*/
   /*CONTROL: enable error tracking*/
-  #define GROUP_EVENTS_ERROR_TRACK_ENABLE                       0
+  #define GROUP_EVENTS_ERROR_TRACK_ENABLE                       ERROR_TRACK_ENABLE
   #define GROUP_EVENTS_ERROR_BUFFER_SIZE_WORDS                  1
   #define GROUP_EVENTS_ERROR_CODE_1                             0x1
   
@@ -1903,7 +1899,6 @@ WARNING_CONTROL_START
   #define GROUP_EVENTS_HISTOGRAM_BIN_SIZE                       (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS)
 
   /*Outgoing histogram of target neurons*/
-  #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT              1
   #define GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT                   4   /*Must be aligned with GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT*/
   #define GROUP_EVENTS_HISTOGRAM_BIN_MASK_OUT                   0xF /*Must be aligned with GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT*/
   #define GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT                 (1<<GROUP_EVENTS_HISTOGRAM_BIN_BITS_OUT)
@@ -2018,25 +2013,38 @@ WARNING_CONTROL_START
   /*Host and Device*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00                  0
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V00              4
+  #define GROUP_EVENTS_ENABLE_STEP_SHIFT_V00                    0
   #define GROUP_EVENTS_VALUES_MODE_V00                          1
   #define GROUP_EVENTS_SOURCE_KEY_OFFSET_V00                    1
-  
+  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE_V00    0
+  #define GROUP_EVENTS_RELOCATE_VALUES_V00                      0
+  #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V00          1
+  #define GROUP_EVENTS_CACHE_SIZE_WORDS_V00                     (GROUP_EVENTS_CACHE_SIZE_WORDS + \
+                                                                GROUP_EVENTS_HISTOGRAM_TOTAL_BINS + \
+                                                                GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V00 * \
+                                                                GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT * \
+                                                                (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE * \
+                                                                GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT))
+
   /*Device*/
 #if GROUP_EVENTS_DEVICE_V00
+  /*Enable outgoing histogram of target neurons*/
+  #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT              GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V00
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V00
   /*Bit shift used for computing the outgoing histogram of target neurons*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V00
   /*Source events may be delivered in different data structures*/
-  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        0 /*Block-partitioned by exapnd kernel*/
+  /*Block-partitioned by exapnd kernel*/
+  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE_V00 
   /*Linking step parameter to shift parameter used in masking bits for sort*/
-  #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        0
+  #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        GROUP_EVENTS_ENABLE_STEP_SHIFT_V00
   /*Each key gets a value of its address in GM*/
   #define GROUP_EVENTS_VALUES_MODE                              GROUP_EVENTS_VALUES_MODE_V00
   /*Key offset: which element to use as a key from GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS*/
   #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        GROUP_EVENTS_SOURCE_KEY_OFFSET_V00
   /*Relocate original values based on pointers stored in their place (useful for multiple values/key)*/
-  #define GROUP_EVENTS_RELOCATE_VALUES                          0
+  #define GROUP_EVENTS_RELOCATE_VALUES                          GROUP_EVENTS_RELOCATE_VALUES_V00
   /*Replace key. Useful if need to sort with a new key.*/
   #define GROUP_EVENTS_REPLACE_KEY                              0
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   0
@@ -2056,15 +2064,27 @@ WARNING_CONTROL_START
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01              4
   #define GROUP_EVENTS_ENABLE_STEP_SHIFT_V01                    1
   #define GROUP_EVENTS_VALUES_MODE_V01                          2
-  
+  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE_V01    1
+  #define GROUP_EVENTS_RELOCATE_VALUES_V01                      0
+  #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V01          1
+  #define GROUP_EVENTS_CACHE_SIZE_WORDS_V01                     (GROUP_EVENTS_CACHE_SIZE_WORDS + \
+                                                                GROUP_EVENTS_HISTOGRAM_TOTAL_BINS + \
+                                                                GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V01 * \
+                                                                GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT * \
+                                                                (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE * \
+                                                                GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT))
+
   /*Device*/
 #if GROUP_EVENTS_DEVICE_V01
+  /*Enable outgoing histogram of target neurons*/
+  #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT              GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V01
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V01
   /*Bit shift used for computing the outgoing histogram of target neurons*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V01
   /*Source events may be delivered in different data structures*/
-  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        1 /*Contiguous*/
+  /*Contiguous*/
+  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE_V01
   /*Linking step parameter to shift parameter used in masking bits for sort*/
   #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        GROUP_EVENTS_ENABLE_STEP_SHIFT_V01
   /*Each key gets a value carried out from before*/
@@ -2072,7 +2092,7 @@ WARNING_CONTROL_START
   /*Key offset: which element to use as a key from GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS*/
   #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        0
   /*Relocate original values based on pointers stored in their place (useful for multiple values/key)*/
-  #define GROUP_EVENTS_RELOCATE_VALUES                          0
+  #define GROUP_EVENTS_RELOCATE_VALUES                          GROUP_EVENTS_RELOCATE_VALUES_V01
   /*Replace key. Useful if need to sort with a new key.*/
   #define GROUP_EVENTS_REPLACE_KEY                              0
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   0
@@ -2093,15 +2113,27 @@ WARNING_CONTROL_START
   #define GROUP_EVENTS_ENABLE_STEP_SHIFT_V02                    1
   #define GROUP_EVENTS_VALUES_MODE_V02                          2
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET_V02               0
-  
+  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE_V02    1
+  #define GROUP_EVENTS_RELOCATE_VALUES_V02                      0
+  #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V02          1
+  #define GROUP_EVENTS_CACHE_SIZE_WORDS_V02                     (GROUP_EVENTS_CACHE_SIZE_WORDS + \
+                                                                GROUP_EVENTS_HISTOGRAM_TOTAL_BINS + \
+                                                                GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V02 * \
+                                                                GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT * \
+                                                                (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE * \
+                                                                GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT))
+
   /*Device*/
 #if GROUP_EVENTS_DEVICE_V02
+  /*Enable outgoing histogram of target neurons*/
+  #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT              GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V02
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V02
   /*Bit shift used for computing the outgoing histogram of target neurons*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V02
   /*Source events may be delivered in different data structures*/
-  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        1 /*Contiguous*/
+  /*Contiguous*/
+  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE_V02
   /*Linking step parameter to shift parameter used in masking bits for sort*/
   #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        GROUP_EVENTS_ENABLE_STEP_SHIFT_V02
   /*Each key gets a value carried out from before*/
@@ -2109,7 +2141,7 @@ WARNING_CONTROL_START
   /*Key offset: which element to use as a key from GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS*/
   #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        0
   /*Relocate original values based on pointers stored in their place (useful for multiple values/key)*/
-  #define GROUP_EVENTS_RELOCATE_VALUES                          0
+  #define GROUP_EVENTS_RELOCATE_VALUES                          GROUP_EVENTS_RELOCATE_VALUES_V02
   /*Replace key. Useful if need to sort with a new key.*/
   #define GROUP_EVENTS_REPLACE_KEY                              1
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   GROUP_EVENTS_REPLACEMENT_KEY_OFFSET_V02
@@ -2130,15 +2162,27 @@ WARNING_CONTROL_START
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V03              0
   #define GROUP_EVENTS_ENABLE_STEP_SHIFT_V03                    1
   #define GROUP_EVENTS_VALUES_MODE_V03                          2
+  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE_V03    1
+  #define GROUP_EVENTS_RELOCATE_VALUES_V03                      1
+  #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V03          0
+  #define GROUP_EVENTS_CACHE_SIZE_WORDS_V03                     (GROUP_EVENTS_CACHE_SIZE_WORDS + \
+                                                                GROUP_EVENTS_HISTOGRAM_TOTAL_BINS + \
+                                                                GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V03 * \
+                                                                GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT * \
+                                                                (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE * \
+                                                                GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT))
 
   /*Device*/
 #if GROUP_EVENTS_DEVICE_V03
+  /*Enable outgoing histogram of target neurons*/
+  #define GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT              GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT_V03
   /*Bit shift used for computing the incoming histogram of target neurons passed as a parameter*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT                      GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_V03
   /*Bit shift used for computing the outgoing histogram of target neurons*/
   #define GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT                  GROUP_EVENTS_HISTOGRAM_BIT_SHIFT_OUT_V03
   /*Source events may be delivered in different data structures*/
-  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        1 /*Contiguous*/
+  /*Contiguous*/
+  #define GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE        GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE_V03
   /*Linking step parameter to shift parameter used in masking bits for sort*/
   #define GROUP_EVENTS_ENABLE_STEP_SHIFT                        GROUP_EVENTS_ENABLE_STEP_SHIFT_V03
   /*Each key gets a value carried out from before*/
@@ -2146,7 +2190,7 @@ WARNING_CONTROL_START
   /*Key offset: which element to use as a key from GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS*/
   #define GROUP_EVENTS_SOURCE_KEY_OFFSET                        0
   /*Relocate original values based on pointers stored in their place (useful for multiple values/key)*/
-  #define GROUP_EVENTS_RELOCATE_VALUES                          1
+  #define GROUP_EVENTS_RELOCATE_VALUES                          GROUP_EVENTS_RELOCATE_VALUES_V03
   /*Replace key. Useful if need to sort with a new key.*/
   #define GROUP_EVENTS_REPLACE_KEY                              0
   #define GROUP_EVENTS_REPLACEMENT_KEY_OFFSET                   0
@@ -2195,6 +2239,20 @@ WARNING_CONTROL_START
 #endif
 /* *** */
 #endif /*GROUP_EVENTS_ENABLE*/
+/*
+                                               Default Definitions
+*/
+#if !defined (GROUP_EVENTS_DEBUG_ENABLE)
+  #define GROUP_EVENTS_DEBUG_ENABLE                                   0
+#endif
+/* *** */
+#if !defined (GROUP_EVENTS_ERROR_TRACK_ENABLE)
+  #define GROUP_EVENTS_ERROR_TRACK_ENABLE                             0
+#endif
+/* *** */
+#if !defined (GROUP_EVENTS_VERIFY_ENABLE)
+  #define GROUP_EVENTS_VERIFY_ENABLE                                  0
+#endif
 /**************************************************************************************************/
 
 
@@ -2338,6 +2396,20 @@ WARNING_CONTROL_START
 #endif
 #endif
 #endif /*MAKE_EVENT_PTRS_ENABLE*/
+/*
+                                               Default Definitions
+*/
+#if !defined (MAKE_EVENT_PTRS_DEBUG_ENABLE)
+  #define MAKE_EVENT_PTRS_DEBUG_ENABLE                                   0
+#endif
+/* *** */
+#if !defined (MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE)
+  #define MAKE_EVENT_PTRS_ERROR_TRACK_ENABLE                             0
+#endif
+/* *** */
+#if !defined (MAKE_EVENT_PTRS_VERIFY_ENABLE)
+  #define MAKE_EVENT_PTRS_VERIFY_ENABLE                                  0
+#endif
 /**************************************************************************************************/
 
 
@@ -2526,6 +2598,20 @@ WARNING_CONTROL_START
 #endif
 /* *** */
 #endif /*UPDATE_NEURONS_ENABLE*/
+/*
+                                               Default Definitions
+*/
+#if !defined (UPDATE_NEURONS_DEBUG_ENABLE)
+  #define UPDATE_NEURONS_DEBUG_ENABLE                                   0
+#endif
+/* *** */
+#if !defined (UPDATE_NEURONS_ERROR_TRACK_ENABLE)
+  #define UPDATE_NEURONS_ERROR_TRACK_ENABLE                             0
+#endif
+/* *** */
+#if !defined (UPDATE_NEURONS_VERIFY_ENABLE)
+  #define UPDATE_NEURONS_VERIFY_ENABLE                                  0
+#endif
 /**************************************************************************************************/
 
 
@@ -2545,87 +2631,166 @@ WARNING_CONTROL_START
 
 /*If both EXPAND_EVENTS_ENABLE and UPDATE_NEURONS_ENABLE_V00 are enabled*/
 #if EXPAND_EVENTS_ENABLE && (UPDATE_NEURONS_ENABLE_V00)
+/* *** */
 #if EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS != UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS
   #error (EXPAND_EVENTS_SPIKE_DATA_UNIT_SIZE_WORDS != UPDATE_NEURONS_SPIKE_DATA_UNIT_SIZE_WORDS)
 #endif
+/* *** */
 #if EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE != UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE
   #error (EXPAND_EVENTS_SPIKE_DATA_BUFFER_SIZE != UPDATE_NEURONS_SPIKE_DATA_BUFFER_SIZE)
 #endif
+/* *** */
 #if EXPAND_EVENTS_TOTAL_NEURONS != UPDATE_NEURONS_TOTAL_NEURONS
   #error (EXPAND_EVENTS_TOTAL_NEURONS != UPDATE_NEURONS_TOTAL_NEURONS)
 #endif
+/* *** */
 #if EXPAND_EVENTS_SPIKE_PACKETS != UPDATE_NEURONS_SPIKE_PACKETS_V00
   #error (EXPAND_EVENTS_SPIKE_PACKETS != UPDATE_NEURONS_SPIKE_PACKETS_V00)
 #endif
+/* *** */
 #if EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS != UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS
   #error (EXPAND_EVENTS_SPIKE_PACKET_SIZE_WORDS != UPDATE_NEURONS_SPIKE_PACKET_SIZE_WORDS)
 #endif
+/* *** */
 #endif
 
 /*If both EXPAND_EVENTS_ENABLE and GROUP_EVENTS_ENABLE_VXX are enabled*/
 #if (EXPAND_EVENTS_ENABLE && (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 ||\
     GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03))
+/* *** */
 #if (GROUP_EVENTS_TIME_SLOTS != EXPAND_EVENTS_TIME_SLOTS)
   #error (GROUP_EVENTS_TIME_SLOTS != EXPAND_EVENTS_TIME_SLOTS)
 #endif
+/* *** */
 #if (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
   #error (GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
 #endif
-#if (GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
-  #error (GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
+/* *** */
+#if (GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE != \
+     EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
+  #error (GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE != \
+          EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
 #endif
+/* *** */
 #if (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS != EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS)
   #error (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS != EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS)
 #endif
+/* *** */
 #if (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
   #error (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
 #endif
+/* *** */
 #if (GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS != EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
   #error (GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS != EXPAND_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
 #endif
+/* *** */
 #if (GROUP_EVENTS_TOTAL_NEURON_BITS && EXPAND_EVENTS_TOTAL_NEURON_BITS) &&\
     (GROUP_EVENTS_TOTAL_NEURON_BITS != EXPAND_EVENTS_TOTAL_NEURON_BITS)
   #error (GROUP_EVENTS_TOTAL_NEURON_BITS != EXPAND_EVENTS_TOTAL_NEURON_BITS)
 #endif
+/* *** */
 #endif
 
 /*If both SCAN_ENABLE_V00 and GROUP_EVENTS_ENABLE_VXX are enabled*/
 #if (SCAN_ENABLE_V00 && (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 ||\
     GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03))
+/* *** */
 #if (GROUP_EVENTS_TIME_SLOTS != SCAN_HISTOGRAM_TIME_SLOTS)
   #error (GROUP_EVENTS_TIME_SLOTS != SCAN_HISTOGRAM_TIME_SLOTS)
 #endif
+/* *** */
 #if (SCAN_SYNAPTIC_EVENT_BUFFERS != GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS)
   #error (SCAN_SYNAPTIC_EVENT_BUFFERS != GROUP_EVENTS_SYNAPTIC_EVENT_BUFFERS)
 #endif
+/* *** */
 #if (SCAN_EVENT_DATA_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE)
   #error (SCAN_EVENT_DATA_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_SRC_BUFFER_SIZE)
 #endif
+/* *** */
 #if (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
   #error (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
 #endif
+/* *** */
 #if (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V00)
   #error (GROUP_EVENTS_HISTOGRAM_BIN_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V00)
 #endif
+/* *** */
 #endif
 
 /*If both SCAN_ENABLE_V00 and EXPAND_EVENTS_ENABLE are enabled*/
 #if (SCAN_ENABLE_V00 && EXPAND_EVENTS_ENABLE)
+/* *** */
 #if (EXPAND_EVENTS_TIME_SLOTS != SCAN_HISTOGRAM_TIME_SLOTS)
   #error (EXPAND_EVENTS_TIME_SLOTS != SCAN_HISTOGRAM_TIME_SLOTS)
 #endif
+/* *** */
 #if (SCAN_SYNAPTIC_EVENT_BUFFERS != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
   #error (SCAN_SYNAPTIC_EVENT_BUFFERS != EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS)
 #endif
+/* *** */
 #if (SCAN_EVENT_DATA_MAX_SRC_BUFFER_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
   #error (SCAN_EVENT_DATA_MAX_SRC_BUFFER_SIZE != EXPAND_EVENTS_SYNAPTIC_EVENT_DATA_MAX_BUFFER_SIZE)
 #endif
+/* *** */
 #if (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
   #error (EXPAND_EVENTS_HISTOGRAM_TOTAL_BINS != SCAN_HISTOGRAM_TOTAL_BINS_V00)
 #endif
+/* *** */
 #if (EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS != SCAN_HISTOGRAM_BIN_SIZE_V00)
   #error (EXPAND_EVENTS_SYNAPTIC_EVENT_BUFFERS != SCAN_HISTOGRAM_BIN_SIZE_V00)
 #endif
+/* *** */
+#endif
+
+/*If both MAKE_EVENT_PTRS_ENABLE and GROUP_EVENTS_ENABLE_VXX are enabled*/
+#if (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
+    GROUP_EVENTS_ENABLE_V03) && MAKE_EVENT_PTRS_ENABLE
+/* *** */
+#if MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS
+  #error (MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
+#endif
+/* *** */
+#if GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE
+  #error (GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE)
+#endif
+/* *** */
+#if (MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET != \
+    (GROUP_EVENTS_HISTOGRAM_BIN_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS))
+  #error (MAKE_EVENT_PTRS_TOTAL_EVENTS_OFFSET != \
+         (GROUP_EVENTS_HISTOGRAM_BIN_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS))
+#endif
+/* *** */
+#if (MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
+  #error (MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
+#endif
+/* *** */
+#endif
+
+/*If both UPDATE_NEURONS_ENABLE_V00 and GROUP_EVENTS_ENABLE_VXX are enabled*/
+#if (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
+    GROUP_EVENTS_ENABLE_V03) && UPDATE_NEURONS_ENABLE_V00
+/* *** */
+#if UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS
+  #error (UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != GROUP_EVENTS_EVENT_DATA_UNIT_SIZE_WORDS)
+#endif
+/* *** */
+#if UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE
+  #error (UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != GROUP_EVENTS_EVENT_DATA_MAX_DST_BUFFER_SIZE)
+#endif
+/* *** */
+#endif
+
+/*If both UPDATE_NEURONS_ENABLE_V00 and MAKE_EVENT_PTRS_ENABLE are enabled*/
+#if MAKE_EVENT_PTRS_ENABLE && UPDATE_NEURONS_ENABLE_V00
+/* *** */
+#if UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS
+  #error (UPDATE_NEURONS_EVENT_DATA_PITCH_WORDS != MAKE_EVENT_PTRS_EVENT_DATA_PITCH_WORDS)
+#endif
+/* *** */
+#if UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE
+  #error (UPDATE_NEURONS_TEST_MAX_SRC_BUFFER_SIZE != MAKE_EVENT_PTRS_TEST_MAX_SRC_BUFFER_SIZE)
+#endif
+/* *** */
 #endif
 
 /*If both SCAN_ENABLE_V01 and GROUP_EVENTS_ENABLE_VXX are enabled*/
@@ -2633,15 +2798,32 @@ WARNING_CONTROL_START
      ((GROUP_EVENTS_ENABLE_V01) && SCAN_ENABLE_V01) ||\
      ((GROUP_EVENTS_ENABLE_V02) && SCAN_ENABLE_V01) ||\
      ((GROUP_EVENTS_ENABLE_V03) && SCAN_ENABLE_V01))
+/* *** */
 #if (GROUP_EVENTS_GRID_SIZE_WG != SCAN_HISTOGRAM_BIN_BACKETS)
   #error (GROUP_EVENTS_GRID_SIZE_WG != SCAN_HISTOGRAM_BIN_BACKETS)
 #endif
+/* *** */
 #if (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V01)
   #error (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE != SCAN_HISTOGRAM_BIN_SIZE_V01)
 #endif
+/* *** */
 #if (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT != SCAN_HISTOGRAM_TOTAL_BINS_V01)
   #error (GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT != SCAN_HISTOGRAM_TOTAL_BINS_V01)
 #endif
+/* *** */
+#endif
+
+/*Verification of sort*/
+#if SORT_VERIFY_ENABLE && \
+    !(GROUP_EVENTS_ENABLE_V03 && GROUP_EVENTS_ENABLE_V02 && GROUP_EVENTS_ENABLE_V01 && \
+     GROUP_EVENTS_ENABLE_V00 && SCAN_ENABLE_V01 && MAKE_EVENT_PTRS_ENABLE)
+  #undef SORT_VERIFY_ENABLE
+  #define SORT_VERIFY_ENABLE  0
+#endif
+
+/*Profiling mode*/
+#if (PROFILING_MODE == 1) && KERNEL_VERIFY_ENABLE
+  #error (cannot use (PROFILING_MODE = 1) if KERNEL_VERIFY_ENABLE is true)
 #endif
 
 
@@ -2662,9 +2844,12 @@ WARNING_CONTROL_START
 /*Enable Operator_Scan*/
 #define ENABLE_OPERATOR_SCAN              (SCAN_ENABLE_V00 || SCAN_ENABLE_V01)
 
-/*Enable Operator_Sort*/
-#define ENABLE_OPERATOR_SORT              (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || \
+/*Enable Operator_Scan*/
+#define ENABLE_OPERATOR_GROUP             (GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || \
                                            GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03)
+
+/*Enable Operator_Sort*/
+#define ENABLE_OPERATOR_SORT              (ENABLE_OPERATOR_SCAN || ENABLE_OPERATOR_GROUP)
 
 
 
@@ -2687,25 +2872,103 @@ WARNING_CONTROL_START
 #if (UNIT_TEST_MODE == 0)
   #define ENABLE_UNIT_TEST_EXPAND_EVENTS                    (EXPAND_EVENTS_ENABLE)
 #elif (UNIT_TEST_MODE == 1)
-  #define ENABLE_UNIT_TEST_EXPAND_EVENTS                    (EXPAND_EVENTS_ENABLE && (\
-                                                            !(UPDATE_NEURONS_ENABLE_V00)))
+  #define ENABLE_UNIT_TEST_EXPAND_EVENTS                    (EXPAND_EVENTS_ENABLE && \
+                                                            !UPDATE_NEURONS_ENABLE_V00)
 #elif (UNIT_TEST_MODE == 2)
-  #define ENABLE_UNIT_TEST_EXPAND_EVENTS                    (EXPAND_EVENTS_ENABLE && (\
-                                                            !(UPDATE_NEURONS_ENABLE_V00)))
+  #define ENABLE_UNIT_TEST_EXPAND_EVENTS                    (EXPAND_EVENTS_ENABLE && \
+                                                            !UPDATE_NEURONS_ENABLE_V00)
 #if ENABLE_UNIT_TEST_EXPAND_EVENTS
   #error (ENABLE_UNIT_TEST_EXPAND_EVENTS: cannot enable integration tests in this mode)
 #endif
 #endif
 
+/*Enable unit test for Operator_Group V00*/
+#if (UNIT_TEST_MODE == 0)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V00                 (GROUP_EVENTS_ENABLE_V00)
+#elif (UNIT_TEST_MODE == 1)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V00                 (GROUP_EVENTS_ENABLE_V00 && \
+                                                            (!EXPAND_EVENTS_ENABLE || \
+                                                            !SCAN_ENABLE_V00))
+#elif (UNIT_TEST_MODE == 2)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V00                 (GROUP_EVENTS_ENABLE_V00 && \
+                                                            (!EXPAND_EVENTS_ENABLE || \
+                                                            !SCAN_ENABLE_V00))
+#if ENABLE_UNIT_TEST_GROUP_EVENTS_V00
+  #error (ENABLE_UNIT_TEST_GROUP_EVENTS_V00: cannot enable integration tests in this mode)
+#endif
+#endif
+
+/*Enable unit test for Operator_Group V01*/
+#if (UNIT_TEST_MODE == 0)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V01                 (GROUP_EVENTS_ENABLE_V01)
+#elif (UNIT_TEST_MODE == 1)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V01                 (GROUP_EVENTS_ENABLE_V01 && \
+                                                            (!GROUP_EVENTS_ENABLE_V00 || \
+                                                            !SCAN_ENABLE_V01 || \
+                                                            !GROUP_EVENTS_ENABLE_V02))
+#elif (UNIT_TEST_MODE == 2)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V01                 (GROUP_EVENTS_ENABLE_V01 && \
+                                                            (!GROUP_EVENTS_ENABLE_V00 || \
+                                                            !SCAN_ENABLE_V01 || \
+                                                            !GROUP_EVENTS_ENABLE_V02))
+#if ENABLE_UNIT_TEST_GROUP_EVENTS_V01
+  #error (ENABLE_UNIT_TEST_GROUP_EVENTS_V01: cannot enable integration tests in this mode)
+#endif
+#endif
+
+/*Enable unit test for Operator_Group V02*/
+#if (UNIT_TEST_MODE == 0)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V02                 (GROUP_EVENTS_ENABLE_V02)
+#elif (UNIT_TEST_MODE == 1)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V02                 (GROUP_EVENTS_ENABLE_V02 && \
+                                                            (!GROUP_EVENTS_ENABLE_V00 || \
+                                                            !SCAN_ENABLE_V01 || \
+                                                            !GROUP_EVENTS_ENABLE_V01))
+#elif (UNIT_TEST_MODE == 2)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V02                 (GROUP_EVENTS_ENABLE_V02 && \
+                                                            (!GROUP_EVENTS_ENABLE_V00 || \
+                                                            !SCAN_ENABLE_V01 || \
+                                                            !GROUP_EVENTS_ENABLE_V01))
+#if ENABLE_UNIT_TEST_GROUP_EVENTS_V02
+  #error (ENABLE_UNIT_TEST_GROUP_EVENTS_V02: cannot enable integration tests in this mode)
+#endif
+#endif
+
+/*Enable unit test for Operator_Group V03*/
+#if (UNIT_TEST_MODE == 0)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V03                 (GROUP_EVENTS_ENABLE_V03)
+#elif (UNIT_TEST_MODE == 1)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V03                 (GROUP_EVENTS_ENABLE_V03 && \
+                                                            (!GROUP_EVENTS_ENABLE_V00 || \
+                                                            !GROUP_EVENTS_ENABLE_V01 || \
+                                                            !GROUP_EVENTS_ENABLE_V02 || \
+                                                            !SCAN_ENABLE_V01))
+#elif (UNIT_TEST_MODE == 2)
+  #define ENABLE_UNIT_TEST_GROUP_EVENTS_V03                 (GROUP_EVENTS_ENABLE_V03 && \
+                                                            (!GROUP_EVENTS_ENABLE_V00 || \
+                                                            !GROUP_EVENTS_ENABLE_V01 || \
+                                                            !GROUP_EVENTS_ENABLE_V02 || \
+                                                            !SCAN_ENABLE_V01))
+#if ENABLE_UNIT_TEST_GROUP_EVENTS_V03
+  #error (ENABLE_UNIT_TEST_GROUP_EVENTS_V03: cannot enable integration tests in this mode)
+#endif
+#endif
+
+/*Enable unit test for Operator_Group*/
+#define ENABLE_UNIT_TEST_GROUP_EVENTS                       (ENABLE_UNIT_TEST_GROUP_EVENTS_V00 || \
+                                                            ENABLE_UNIT_TEST_GROUP_EVENTS_V01 || \
+                                                            ENABLE_UNIT_TEST_GROUP_EVENTS_V02 || \
+                                                            ENABLE_UNIT_TEST_GROUP_EVENTS_V03)
+
 /*Enable unit test for Operator_Scan V00*/
 #if (UNIT_TEST_MODE == 0)
   #define ENABLE_UNIT_TEST_SCAN_V00                         (SCAN_ENABLE_V00)
 #elif (UNIT_TEST_MODE == 1)
-  #define ENABLE_UNIT_TEST_SCAN_V00                         (SCAN_ENABLE_V00 && (\
-                                                            !(EXPAND_EVENTS_ENABLE)))
+  #define ENABLE_UNIT_TEST_SCAN_V00                         (SCAN_ENABLE_V00 && \
+                                                            !EXPAND_EVENTS_ENABLE)
 #elif (UNIT_TEST_MODE == 2)
-  #define ENABLE_UNIT_TEST_SCAN_V00                         (SCAN_ENABLE_V00 && (\
-                                                            !(EXPAND_EVENTS_ENABLE)))
+  #define ENABLE_UNIT_TEST_SCAN_V00                         (SCAN_ENABLE_V00 && \
+                                                            !EXPAND_EVENTS_ENABLE)
 #if ENABLE_UNIT_TEST_SCAN_V00
   #error (ENABLE_UNIT_TEST_SCAN_V00: cannot enable integration tests in this mode)
 #endif

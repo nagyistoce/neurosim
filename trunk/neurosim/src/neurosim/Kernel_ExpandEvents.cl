@@ -13,26 +13,6 @@
   - Could benefit from replacing atomics with primitives like scan, sort etc
   - Consider redesigning the payload: only relocate arrival time and reference to synaptic structure.
   - Just-in-time delivery of events instead of circular buffer of time slots -> GM size reduction.
-  - Bug. The following combination results in device reset:
-    #define 	ENABLE_MASK	 	BIN_16(1000,0000,0000,0000)
-    #define 	TOTAL_NEURON_BITS	 	17
-    #define 	MAX_SYNAPSES_PER_NEURON	 	(24*64)
-    #define   SYNAPSE_DEVIATION_RATIO 0.5
-    #define 	EXPAND_EVENTS_TEST_MODE	 	5
-    #define 	SPIKE_PACKET_SIZE	 	128
-    #define 	SPIKE_PACKETS	 	512
-    #define 	EVENT_DATA_BUFFER_SIZE	 	(32*1024)
-    #define 	SYNAPTIC_EVENT_BUFFERS	 	64
-    #define 	EXPAND_EVENTS_WG_SIZE_WF	 	2
-    #define 	EXPAND_EVENTS_SPIKE_BUFFER_SIZE	 	128
-    #define 	EXPAND_EVENTS_INTER_WF_COOPERATION	 	0
-    #define 	PREINITIALIZE_NETWORK_STATE	 	0
-    #define 	TOLERANCE_MODE	 	0
-
-    #define 	SIMULATION_MODE	 	0
-    #define 	EXPAND_EVENTS_RESET_DATA_AT_TIME_SLOT	 	(16*2+2)
-    #define 	SIMULATION_TIME_STEPS	 	(16*2+1)
-
 */
 
 #undef GLOBAL_TOTAL_WFs
