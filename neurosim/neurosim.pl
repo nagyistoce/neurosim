@@ -118,6 +118,7 @@ our @APP_SRC_C =
     "Data_SpikeEvents.cpp", 
     "Data_SynapticEvents.cpp", 
     "Operator_Expand.cpp",
+    "Operator_Group.cpp",
     "Operator_Scan.cpp", 
     "Operator_Sort.cpp",
     "Neurosim.cpp"
@@ -132,6 +133,7 @@ our @APP_SRC_H =
     "Data_SpikeEvents.hpp", 
     "Data_SynapticEvents.hpp", 
     "Operator_Expand.hpp",
+    "Operator_Group.hpp",
     "Operator_Scan.hpp", 
     "Operator_Sort.hpp", 
     "Neurosim.hpp"
@@ -617,7 +619,7 @@ sub configureCompiler
     $LINK = "\"$compiler_dir/link.exe\"";
     
     my $commonCompilerOptions = "".
-      "/arch:SSE2 ".        # Minimum CPU Architecture: SSE, SSE2, AVX
+      #"/arch:SSE2 ".        # Minimum CPU Architecture: SSE, SSE2, AVX
       "/c ".                # Compile without linking
       "/EHa ".              # Exception handling: a,asynchronouse; s,sync (C++ only)
       "/errorReport:none ". # Error reports sent to MicroSoft
@@ -638,7 +640,7 @@ sub configureCompiler
       "/MP ".               # Multi-processor compiilation
       "/nologo ".           # Suppresses the display of the copyright banner informational messages.
       "/O2 ".               # Optimizations: 1,short code; 2,fast code
-      "/Op ".               # Improve Float Consistency
+      #"/Op ".               # Improve Float Consistency
       "/openmp- ".          # OpenMP pragmas: openmp,enable; openmp-,disable.
       "/TP ".               # Treat all files named on the command line as C++ source files
       #"/Wall ".             # Enable all warnings, including those disabled by default

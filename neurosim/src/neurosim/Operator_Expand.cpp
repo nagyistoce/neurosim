@@ -63,7 +63,6 @@ Operator_Expand::invalidateError
 
 
 
-#if EXPAND_EVENTS_ENABLE
 void 
 Operator_Expand::expand
 (
@@ -103,7 +102,7 @@ Operator_Expand::expand
 #endif
 
 #if (EXPAND_EVENTS_ENABLE_TARGET_HISTOGRAM)
-    SET_KERNEL_ARG(this->kernelExpandEvents, synapticEvents.dataHistogramBuffer, 
+    SET_KERNEL_ARG(this->kernelExpandEvents, synapticEvents.dataUnsortedEventsHistogramBuffer, 
       this->argNumExpandEvents++);
 #endif
 
@@ -136,7 +135,7 @@ Operator_Expand::expand
     "kernelExpandEvents");
 
 #if DEVICE_HOST_DATA_COHERENCE
-  synapticEvents.invalidateEvents();
+  synapticEvents.invalidateUnsortedEvents();
 #endif
 
 #if (EXPAND_EVENTS_DEBUG_ENABLE)
@@ -150,16 +149,14 @@ Operator_Expand::expand
     "Operator_Expand::expand:",
     currentTimeStep, 
     {this->invalidateError(); this->getData(queue, CL_TRUE, OPERATOR_EXPAND_VALID_ERROR);}, 
-    dataExpandEventsError
+    this->dataExpandEventsError
   );
 #endif
 }
 /**************************************************************************************************/
-#endif
 
 
 
-#if EXPAND_EVENTS_ENABLE
 void 
 Operator_Expand::expand
 (
@@ -212,7 +209,6 @@ Operator_Expand::expand
   );
 }
 /**************************************************************************************************/
-#endif
 
 
 
@@ -428,8 +424,15 @@ Operator_Expand::verifyExpand
       }
     }
     
-    memcpy(dataHistogramVerify, synapticEvents.dataHistogram, 
-      synapticEvents.dataHistogramSizeBytes);
+    synapticEvents.getHistogram
+    (
+      queue, 
+      &dataHistogramVerify,
+#if CLASS_VALIDATION_ENABLE
+      size,
+#endif
+      Data_SynapticEvents::PREVIOUS
+    );
   }
 
   /*Init verification data*/
@@ -706,7 +709,7 @@ Operator_Expand::verifyExpand
           j*eventBufferCount + k;
           /*Incr counter for a target neuron failing into slot/bin/WG specified by the offset.*/
           error_event_totals += 
-            (synapticEvents.getHistogramItem(queue, s, j, k, Data_SynapticEvents::RECENT) != 
+            (synapticEvents.getCurrentUnsortedHistogramItem(queue, s, j, k) != 
             dataHistogramVerify[offset]);
         }
       }
@@ -774,7 +777,6 @@ Operator_Expand::initialize
   QueryPerformanceFrequency((LARGE_INTEGER *)&(this->performanceFrequency));
 #endif
 
-#if EXPAND_EVENTS_ENABLE
   /* register device local memory buffer for stats */
   size_t lmExpandEvents = sizeof(cl_uint)*cacheSizeWords; 
   size_t lmExpandEventsSizeBytes = lmExpandEvents;
@@ -821,7 +823,6 @@ Operator_Expand::initialize
     this->blockSizeX_KernelExpandEvents,
     this->blockSizeY_KernelExpandEvents
   );
-#endif
 }
 /**************************************************************************************************/
 

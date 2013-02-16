@@ -60,6 +60,7 @@
 #include "Data_SpikeEvents.hpp"
 #include "Data_SynapticEvents.hpp"
 #include "Operator_Expand.hpp"
+#include "Operator_Group.hpp"
 #include "Operator_Scan.hpp"
 #include "Operator_Sort.hpp"
 

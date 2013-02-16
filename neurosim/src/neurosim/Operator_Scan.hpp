@@ -78,7 +78,6 @@ class Operator_Scan
 
 
 
-#if (SCAN_ENABLE_V00 || SCAN_ENABLE_V01)
 #if (SYSTEM_OS == SYSTEM_OS_WINDOWS)
   __int64 performanceCounter, performanceFrequency;
 #endif
@@ -139,15 +138,18 @@ class Operator_Scan
 #endif
 
 #if (ENABLE_UNIT_TEST_SCAN_V01)
-  cl_uint histogramBinBackets;
-  cl_uint histogramBinCount_v01;
-  cl_uint histogramBinSize_v01;
+  cl_uint histogramMaxCount;  
   size_t dataHistogramV01Size;
   size_t dataHistogramV01SizeBytes;
   cl_uint* dataHistogramV01;
   cl_uint* dataPastHistogramV01;
   cl::Buffer dataHistogramV01Buffer;
 #endif
+
+#if (ENABLE_UNIT_TEST_SCAN_V01 || (SCAN_ENABLE_V01 && SCAN_VERIFY_ENABLE))
+  cl_uint histogramBinBackets;
+  cl_uint histogramBinCount_v01;
+  cl_uint histogramBinSize_v01;
 #endif
 
   std::stringstream *dataToSimulationLogFile;
@@ -179,8 +181,6 @@ class Operator_Scan
     std::stringstream                   *dataToSimulationLogFile,
     std::stringstream                   *dataToReportLogFile
   ) : 
-#if (SCAN_ENABLE_V00 || SCAN_ENABLE_V01)
-    /* *** */
 #if (SYSTEM_OS == SYSTEM_OS_WINDOWS)
     performanceCounter(0),
     performanceFrequency(0),
@@ -241,9 +241,7 @@ class Operator_Scan
 #endif
     /* *** */
 #if (ENABLE_UNIT_TEST_SCAN_V01)
-    histogramBinBackets(SCAN_HISTOGRAM_BIN_BACKETS),
-    histogramBinCount_v01(SCAN_HISTOGRAM_TOTAL_BINS_V01),
-    histogramBinSize_v01(SCAN_HISTOGRAM_BIN_SIZE_V01),
+    histogramMaxCount(SCAN_HISTOGRAM_MAX_COUNT_FOR_TEST_V01),
     dataHistogramV01Size(0),
     dataHistogramV01SizeBytes(0),
     dataHistogramV01(NULL),
@@ -251,6 +249,10 @@ class Operator_Scan
     dataHistogramV01Buffer(),
 #endif
     /* *** */
+#if (ENABLE_UNIT_TEST_SCAN_V01 || (SCAN_ENABLE_V01 && SCAN_VERIFY_ENABLE))
+    histogramBinBackets(SCAN_HISTOGRAM_BIN_BACKETS),
+    histogramBinCount_v01(SCAN_HISTOGRAM_TOTAL_BINS_V01),
+    histogramBinSize_v01(SCAN_HISTOGRAM_BIN_SIZE_V01),
 #endif
     /* *** */
     dataToSimulationLogFile(dataToSimulationLogFile),
@@ -313,8 +315,6 @@ class Operator_Scan
   */
   ~Operator_Scan()
   {
-#if (SCAN_ENABLE_V00 || SCAN_ENABLE_V01)
-    /* *** */
 #if (SCAN_DEBUG_ENABLE)
     if(this->dataScanDebugHost)
     {
@@ -382,8 +382,6 @@ class Operator_Scan
       free(this->dataPastHistogramV01);
       this->dataPastHistogramV01 = NULL;
     }
-#endif
-    /* *** */
 #endif
     /* *** */
     this->dataToSimulationLogFile = NULL;
@@ -525,8 +523,7 @@ class Operator_Scan
     struct kernelStatistics&,
 #endif
     cl::CommandQueue&,
-    cl::Event&,
-    cl_uint
+    cl::Event&
   );
 #endif
 /**************************************************************************************************/
@@ -537,7 +534,7 @@ class Operator_Scan
   /**
     Verifies scan operation.
   */
-#if SCAN_VERIFY_ENABLE
+#if (SCAN_ENABLE_V00 && SCAN_VERIFY_ENABLE)
   void 
   verifyScan_v00
   (
@@ -559,17 +556,14 @@ class Operator_Scan
   /**
     Verifies scan operation.
   */
-#if SCAN_VERIFY_ENABLE
+#if (SCAN_ENABLE_V01 && SCAN_VERIFY_ENABLE)
   void 
   verifyScan_v01
   (
     cl::CommandQueue&,
     void*,
     cl_uint(*)(cl::CommandQueue &, cl_uint, cl_uint, cl_uint, void*),
-    cl_uint(*)(cl::CommandQueue &, cl_uint, cl_uint, cl_uint, void*),
-    cl_uint,
-    cl_uint,
-    cl_uint
+    cl_uint(*)(cl::CommandQueue &, cl_uint, cl_uint, cl_uint, void*)
   );
 #endif
 /**************************************************************************************************/
@@ -672,8 +666,7 @@ class Operator_Scan
   setUnitTestData_v01
   (
     cl::CommandQueue&,
-    cl_bool,
-    cl_uint
+    cl_bool
   );
 #endif
 /**************************************************************************************************/

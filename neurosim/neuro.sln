@@ -42,6 +42,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "cfg", "cfg", "{FE9F98A5-DE4
 		cfg\test_Kernel_Scan.xml = cfg\test_Kernel_Scan.xml
 		cfg\test_Kernel_Update.xml = cfg\test_Kernel_Update.xml
 		cfg\test_QA.xml = cfg\test_QA.xml
+		cfg\test_QA_quick.xml = cfg\test_QA_quick.xml
 		cfg\test_SNN.xml = cfg\test_SNN.xml
 	EndProjectSection
 EndProject

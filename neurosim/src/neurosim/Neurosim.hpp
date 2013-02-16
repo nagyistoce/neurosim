@@ -31,9 +31,14 @@ WARNING_CONTROL_START
 class Data_Connectome;
 class Data_SpikeEvents;
 class Data_SynapticEvents;
+
+#if ENABLE_OPERATOR_EXPAND
 class Operator_Expand;
-class Operator_Scan;
+#endif
+/* *** */
+#if ENABLE_OPERATOR_SORT
 class Operator_Sort;
+#endif
 
 /**************************************************************************************************/
 
@@ -62,94 +67,6 @@ class Neurosim
 
 
 
-/**************************************************************************************************/
-#if ((GROUP_EVENTS_ENABLE_V00) ||\
-   (GROUP_EVENTS_ENABLE_V01) ||\
-   (GROUP_EVENTS_ENABLE_V02) ||\
-   (GROUP_EVENTS_ENABLE_V03))
-  cl_uint dataHistogramGroupEventsVerifySize;
-  cl_uint dataHistogramGroupEventsVerifySizeBytes;
-  cl_uint* dataHistogramGroupEventsVerify;
-#endif
-/**************************************************************************************************/
-#if SORT_VERIFY_ENABLE
-  cl_uint dataUnsortedEventsSnapShotSize;
-  cl_uint dataUnsortedEventsSnapShotSizeBytes;
-  cl_uint* dataUnsortedEventsSnapShot;
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-  GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-  cl_uint dataGroupEventsTikSize;
-  cl_uint dataGroupEventsTikVerifySize;
-  cl_uint dataGroupEventsTikSizeBytes;
-  cl_uint dataGroupEventsTikVerifySizeBytes;
-  cl_uint* dataGroupEventsTik;
-  cl_uint* dataGroupEventsTikVerify;
-  cl::Buffer dataGroupEventsTikBuffer;
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-  GROUP_EVENTS_ENABLE_V03
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-  cl_uint dataDebugHostGroupEventsSize;
-  cl_uint dataDebugHostGroupEventsSizeBytes;
-  cl_uint* dataDebugHostGroupEvents;
-  cl::Buffer dataDebugHostGroupEventsBuffer;
-  cl_uint dataDebugDeviceGroupEventsSize;
-  cl_uint dataDebugDeviceGroupEventsSizeBytes;
-  cl_uint* dataDebugDeviceGroupEvents;
-  cl::Buffer dataDebugDeviceGroupEventsBuffer;
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-  cl_uint dataErrorGroupEventsSize;
-  cl_uint dataErrorGroupEventsSizeBytes;
-  cl_uint* dataErrorGroupEvents;
-  cl::Buffer dataErrorGroupEventsBuffer;
-#endif
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V00
-  cl::Kernel kernelGroupEventsV00;
-  size_t blockSizeX_kernelGroupEventsV00;
-  size_t blockSizeY_kernelGroupEventsV00;
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
-  MAKE_EVENT_PTRS_ENABLE
-  cl_uint dataHistogramGroupEventsTokSize;
-  cl_uint dataHistogramGroupEventsTokSizeBytes;
-  cl_uint* dataHistogramGroupEventsTok;
-  cl::Buffer dataHistogramGroupEventsTokBuffer;
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-  cl_uint dataGroupEventsTokSize;
-  cl_uint dataGroupEventsTokVerifySize;
-  cl_uint dataGroupEventsTokSizeBytes;
-  cl_uint dataGroupEventsTokVerifySizeBytes;
-  cl_uint* dataGroupEventsTok;
-  cl_uint* dataGroupEventsTokVerify;
-  cl::Buffer dataGroupEventsTokBuffer;
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V01
-  cl::Kernel kernelGroupEventsV01;
-  size_t blockSizeX_kernelGroupEventsV01;
-  size_t blockSizeY_kernelGroupEventsV01;
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V02
-  cl::Kernel kernelGroupEventsV02;
-  size_t blockSizeX_kernelGroupEventsV02;
-  size_t blockSizeY_kernelGroupEventsV02;
-#endif
-/**************************************************************************************************/
-#if GROUP_EVENTS_ENABLE_V03
-  cl::Kernel kernelGroupEventsV03;
-  size_t blockSizeX_kernelGroupEventsV03;
-  size_t blockSizeY_kernelGroupEventsV03;
-#endif
 /**************************************************************************************************/
 #if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   cl_uint dataMakeEventPtrsStructSize;
@@ -239,10 +156,6 @@ class Neurosim
 #endif
 #endif
 /**************************************************************************************************/
-#if ENABLE_OPERATOR_SCAN
-  Operator_Scan *operatorScan;
-#endif
-/**************************************************************************************************/
 #if ENABLE_OPERATOR_SORT
   Operator_Sort *operatorSort;
 #endif
@@ -297,7 +210,7 @@ class Neurosim
   vector<cl::Device> devices;
   vector<cl::Platform> platforms;
 /**************************************************************************************************/
-  cl_uint currentTimeStep;
+  cl_uint currentTimeStep; //TODO: convert to largerst positive int
   cl_uint currentTimeSlot;
   unsigned int srandSeed, srandCounter;
   std::string startTimeStamp;
@@ -317,93 +230,6 @@ class Neurosim
     Constructor.
   */
   Neurosim() :
-#if ((GROUP_EVENTS_ENABLE_V00) ||\
-   (GROUP_EVENTS_ENABLE_V01) ||\
-   (GROUP_EVENTS_ENABLE_V02) ||\
-   (GROUP_EVENTS_ENABLE_V03))
-    dataHistogramGroupEventsVerifySize(0),
-    dataHistogramGroupEventsVerifySizeBytes(0),
-    dataHistogramGroupEventsVerify(NULL),
-#endif
-    /* *** */
-#if SORT_VERIFY_ENABLE
-    dataUnsortedEventsSnapShotSize(0),
-    dataUnsortedEventsSnapShotSizeBytes(0),
-    dataUnsortedEventsSnapShot(NULL),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-  GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-    dataGroupEventsTikSize(0),
-    dataGroupEventsTikVerifySize(0),
-    dataGroupEventsTikSizeBytes(0),
-    dataGroupEventsTikVerifySizeBytes(0),
-    dataGroupEventsTik(NULL),
-    dataGroupEventsTikVerify(NULL),
-    dataGroupEventsTikBuffer(),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-  GROUP_EVENTS_ENABLE_V03
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    dataDebugHostGroupEventsSize(0),
-    dataDebugHostGroupEventsSizeBytes(0),
-    dataDebugHostGroupEvents(NULL),
-    dataDebugHostGroupEventsBuffer(),
-    dataDebugDeviceGroupEventsSize(0),
-    dataDebugDeviceGroupEventsSizeBytes(0),
-    dataDebugDeviceGroupEvents(NULL),
-    dataDebugDeviceGroupEventsBuffer(),
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-    dataErrorGroupEventsSize(0),
-    dataErrorGroupEventsSizeBytes(0),
-    dataErrorGroupEvents(NULL),
-    dataErrorGroupEventsBuffer(),
-#endif
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V00
-    kernelGroupEventsV00(),
-    blockSizeX_kernelGroupEventsV00(GROUP_EVENTS_WG_SIZE_WI),
-    blockSizeY_kernelGroupEventsV00(1),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
-MAKE_EVENT_PTRS_ENABLE
-    dataHistogramGroupEventsTokSize(0),
-    dataHistogramGroupEventsTokSizeBytes(0),
-    dataHistogramGroupEventsTok(NULL),
-    dataHistogramGroupEventsTokBuffer(),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-    dataGroupEventsTokSize(0),
-    dataGroupEventsTokVerifySize(0),
-    dataGroupEventsTokSizeBytes(0),
-    dataGroupEventsTokVerifySizeBytes(0),
-    dataGroupEventsTok(NULL),
-    dataGroupEventsTokVerify(NULL),
-    dataGroupEventsTokBuffer(),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V01
-    kernelGroupEventsV01(),
-    blockSizeX_kernelGroupEventsV01(GROUP_EVENTS_WG_SIZE_WI),
-    blockSizeY_kernelGroupEventsV01(1),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V02
-    kernelGroupEventsV02(),
-    blockSizeX_kernelGroupEventsV02(GROUP_EVENTS_WG_SIZE_WI),
-    blockSizeY_kernelGroupEventsV02(1),
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V03
-    kernelGroupEventsV03(),
-    blockSizeX_kernelGroupEventsV03(GROUP_EVENTS_WG_SIZE_WI),
-    blockSizeY_kernelGroupEventsV03(1),
-#endif
     /* *** */
 #if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
     dataMakeEventPtrsStructSize(0),
@@ -492,10 +318,6 @@ MAKE_EVENT_PTRS_ENABLE
     dataUpdateNeuronsError(NULL),
     dataUpdateNeuronsErrorBuffer(),
 #endif
-#endif
-    /* *** */
-#if ENABLE_OPERATOR_SCAN
-    operatorScan(NULL),
 #endif
     /* *** */
 #if ENABLE_OPERATOR_SORT
@@ -612,53 +434,6 @@ MAKE_EVENT_PTRS_ENABLE
   ~Neurosim()
 /**************************************************************************************************/
   {
-#if ((GROUP_EVENTS_ENABLE_V00) ||\
-     (GROUP_EVENTS_ENABLE_V01) ||\
-     (GROUP_EVENTS_ENABLE_V02) ||\
-     (GROUP_EVENTS_ENABLE_V03))
-    if(dataHistogramGroupEventsVerify)
-        free(dataHistogramGroupEventsVerify);
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
-    if(dataGroupEventsTik)
-        free(dataGroupEventsTik);
-    if(dataGroupEventsTikVerify)
-        free(dataGroupEventsTikVerify);
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03
-#if (GROUP_EVENTS_DEBUG_ENABLE)
-    if(dataDebugHostGroupEvents)
-        free(dataDebugHostGroupEvents);
-    if(dataDebugDeviceGroupEvents)
-        free(dataDebugDeviceGroupEvents);
-#endif
-#if (GROUP_EVENTS_ERROR_TRACK_ENABLE)
-    if(dataErrorGroupEvents)
-        free(dataErrorGroupEvents);
-#endif
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03 ||\
-    MAKE_EVENT_PTRS_ENABLE
-    if(dataHistogramGroupEventsTok)
-        free(dataHistogramGroupEventsTok);
-#endif
-    /* *** */
-#if GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-    if(dataGroupEventsTok)
-        free(dataGroupEventsTok);
-    if(dataGroupEventsTokVerify)
-        free(dataGroupEventsTokVerify);
-#endif
-    /* *** */
-#if SORT_VERIFY_ENABLE
-    if(dataUnsortedEventsSnapShot)
-        free(dataUnsortedEventsSnapShot);
-#endif
     /* *** */
 #if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
     if(dataMakeEventPtrsStruct)
@@ -721,13 +496,6 @@ MAKE_EVENT_PTRS_ENABLE
     /* *** */
 #if (SIMULATION_SNAPSHOT)
     snapshotLogFile.close();
-#endif
-    /* *** */
-#if ENABLE_OPERATOR_SCAN
-    if(this->operatorScan)
-    {
-      delete(this->operatorScan);
-    }
 #endif
     /* *** */
 #if ENABLE_OPERATOR_SORT
@@ -834,8 +602,7 @@ MAKE_EVENT_PTRS_ENABLE
   /**
     Allocates data structures.
   */
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+#if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   void
   allocateHostData
   (
@@ -850,8 +617,7 @@ MAKE_EVENT_PTRS_ENABLE
   /**
     Logs usage of local memory.
   */
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03 || MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
+#if MAKE_EVENT_PTRS_ENABLE || UPDATE_NEURONS_ENABLE_V00
   void 
   registerLocalMemory
   (
@@ -859,8 +625,8 @@ MAKE_EVENT_PTRS_ENABLE
   );
 #endif
 /**************************************************************************************************/
-  
-  
+
+
 
 /**************************************************************************************************/
   /**
@@ -889,146 +655,8 @@ MAKE_EVENT_PTRS_ENABLE
   /**
   * Verification/initialization methods for some kernel tests
   */
-#if GROUP_EVENTS_ENABLE_V00 || GROUP_EVENTS_ENABLE_V01 || GROUP_EVENTS_ENABLE_V02 ||\
-    GROUP_EVENTS_ENABLE_V03
-  int
-  initializeGrouppedEvents
-  (
-    cl_uint enableValues,
-    cl_uint totalBuffers,
-    cl_uint bufferSize,
-    cl_uint destinationBufferSize,
-    cl_uint histogramBinSize,
-    cl_uint histogramTotalBins,
-    cl_uint histogramBitMask,
-    cl_uint histogramBitShift,
-    cl_uint histogramOutBitShift,
-    cl_uint histogramOutTotalGroups,
-    cl_uint histogramOutBitMask,
-    size_t  histogramOutSize,
-    cl_uint keyOffset,
-    cl_uint *dataUnsortedEventCounts,
-    cl_uint *dataUnsortedEventTargets,
-    cl_uint *dataUnsortedEventDelays,
-    cl_uint *dataUnsortedEventWeights,
-    cl_uint *dataGroupedEvents,
-    cl_uint *dataHistogram,
-    cl_uint *dataHistogramOut
-  );
-#endif
 
-  int
-  initializeUnsortedEvents
-  (
-    cl_uint totalBuffers,
-    cl_uint bufferSize,
-    cl_uint totalNeurons,
-    cl_uint maxDelay,
-    cl_float minDelay,
-    cl_uint histogramBinSize,
-    cl_uint histogramBitMask,
-    cl_uint histogramBitShift,
-    cl_uint keyOffset,
-    cl_float percentInhibitory,
-    double   percentBufferSizeDeviation,
-    cl_uint *dataUnsortedEventCounts,
-    cl_uint *dataUnsortedEventTargets,
-    cl_uint *dataUnsortedEventDelays,
-    cl_uint *dataUnsortedEventWeights,
-    cl_uint *dataHistogram
-  );
-  
-  int 
-  verifyKernelGroupEvents
-  (
-    cl_uint verifyKeyBins,
-    cl_uint timeSlot,
-    cl_uint step,
-    cl_uint value1CarryEnable,
-    cl_uint value2CarryEnable,
-    cl_uint stepShiftEnable,
-    cl_uint destinationBufferSize,
-    cl_uint histogramBinSize,
-    cl_uint histogramTotalBins,
-    cl_uint histogramBitMask,
-    cl_uint histogramBitShift,
-    cl_uint histogramOutTotalBins,
-    cl_uint histogramOutTotalGroups,
-    cl_uint groupSize,
-    cl_uint *dataHistogram,
-    cl_uint *dataHistogramOut,
-    cl_uint *dataHistogramOutVerify,
-    cl_uint *dataGroupedEvents,
-    cl_uint *dataGroupedEventsVerify
-  );
-  
-#if SORT_VERIFY_ENABLE
-  int 
-  captureUnsortedEvents
-  (
-    cl_uint *unsortedEventCounts,
-    cl_uint *unsortedEventTargets,
-    cl_uint *unsortedEventDelays,
-    cl_uint *unsortedEventWeights
-  );
-#endif
-  
-#if SORT_VERIFY_ENABLE
-  int 
-  verifySortedEvents
-  (
-    cl_uint *sortedEvents, 
-    cl_uint *pointerStruct, 
-    cl_uint level
-  );
-#endif
-  
-  int 
-  verifyKernelGroupEventsV00
-  ();
-  
-#if GROUP_EVENTS_ENABLE_V01
-  int 
-  initializeDataForKernelGroupEventsV01
-  (
-    int step, 
-    cl_uint keyOffset,
-    double percentBufferSizeDeviation
-  );
-#endif
 
-#if GROUP_EVENTS_ENABLE_V01
-  int verifyKernelGroupEventsV01
-  (
-    cl_uint step
-  );
-#endif
-
-#if GROUP_EVENTS_ENABLE_V02 || GROUP_EVENTS_ENABLE_V03
-  int
-  initializeDataForKernelGroupEventsV02_V03
-  (
-    int,
-    cl_uint,
-    double
-  );
-#endif
-  
-#if GROUP_EVENTS_ENABLE_V02
-  int verifyKernelGroupEventsV02
-  (
-    cl_uint step, 
-    cl_uint keyOffset
-  );
-#endif
-  
-#if GROUP_EVENTS_ENABLE_V03
-  int verifyKernelGroupEventsV03
-  (
-    cl_uint step
-  );
-#endif
-  
   int 
   initializeSortedEvents
   (
@@ -1121,7 +749,7 @@ MAKE_EVENT_PTRS_ENABLE
     cl_uint       totalNeurons,
     cl_uint       eventQueueSize,
     cl_uint       pointersPitch,
-    cl_uint       sortedEventsSize,
+    size_t        sortedEventsSize,
     cl_uint       *sortedEvents,
     cl_uint       *pointersToEvents,
     neuron_iz_ps  *nrn
@@ -1192,7 +820,7 @@ MAKE_EVENT_PTRS_ENABLE
     bool,
     bool,
     cl_uint,
-    cl_uint,
+    size_t,
     unsigned int*,
     unsigned int*,
     DATA_TYPE*,
@@ -1210,7 +838,7 @@ MAKE_EVENT_PTRS_ENABLE
     bool          correctWeightPositionMismatch,
     unsigned int  totalNeurons,
     unsigned int  structElementSize,
-    unsigned int  sortedEventsSize,
+    size_t        sortedEventsSize,
     unsigned int  *pointerStruct,
     unsigned int  *sortedEvents,
     neuron_iz_ps  *nrn

@@ -10,7 +10,7 @@
     <!--  -->
     
     <test name="1" tag="general">
-      <id>skip</id>
+      <id>test_SNN</id>
       <path>cfg/test_SNN.xml</path>
     </test>
     
@@ -59,13 +59,20 @@
     <!--  -->
     
     <test name="8" tag="general">
-      <id>test_QA</id>
-      <path>cfg/test_QA.xml</path>
+      <id>skip</id>
+      <path>cfg/test_QA_quick.xml</path>
     </test>
     
     <!--  -->
     
     <test name="9" tag="general">
+      <id>skip</id>
+      <path>cfg/test_QA.xml</path>
+    </test>
+    
+    <!--  -->
+    
+    <test name="10" tag="general">
       <id>skip</id>
       <path>cfg/test_Debug.xml</path>
     </test>

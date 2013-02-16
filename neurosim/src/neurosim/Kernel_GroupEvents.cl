@@ -315,15 +315,15 @@ void group_events
   __global      uint          *gm_event_delays,
   __global      uint          *gm_event_weights,
 #endif
-#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
-	__global      uint          *gm_histogram_out,
-#endif
 #if (GROUP_EVENTS_SOURCE_EVENTS_DATA_STRUCTURE_TYPE == 0)
   __global      uint          *gm_source_event_counts,
 #endif
-  __global      uint          *gm_source_events,
+#if (GROUP_EVENTS_ENABLE_TARGET_HISTOGRAM_OUT)
+	__global      uint          *gm_destination_offsets,
+#endif
   __global      uint          *gm_destination_events,
-  __global      uint          *gm_offsets,
+  __global      uint          *gm_source_offsets,
+  __global      uint          *gm_source_events,
                 uint          step
 ){
   __local uint cache[GROUP_EVENTS_CACHE_SIZE_WORDS];
@@ -358,7 +358,7 @@ void group_events
     uint offset = 
       step*(GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE+1) + 
       GROUP_EVENTS_HISTOGRAM_TOTAL_BINS*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
-    cache[1] = gm_offsets[offset];
+    cache[1] = gm_source_offsets[offset];
 #endif
   }
 
@@ -374,7 +374,7 @@ void group_events
       /*WI pitch*/
       wi_id*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
 
-    lmlocalHistogramReference[wi_id] = gm_offsets[offset];
+    lmlocalHistogramReference[wi_id] = gm_source_offsets[offset];
 	}
 
   /*Init histogram for the next scan/sort depending where it is placed: LDS or GM/L1,L2*/
@@ -392,7 +392,7 @@ void group_events
       i += GROUP_EVENTS_WG_SIZE_WI
     ){
 #if !GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT
-      gm_histogram_out[ptr + i] = 0; 
+      gm_destination_offsets[ptr + i] = 0; 
 #else
       lmGroupEventsHistogramOut[i] = 0;
 #endif
@@ -402,7 +402,7 @@ void group_events
   if(wi_id < (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT))
   {
 #if !GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT
-    gm_histogram_out[wg_id*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
+    gm_destination_offsets[wg_id*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
       GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + wi_id] = 0; 
 #else
       lmGroupEventsHistogramOut[wi_id] = 0;
@@ -453,7 +453,8 @@ void group_events
   /* Get totals for the events in a temporary LM location*/
   if(wi_id == 0)
   {
-    cache[0] = *(gm_offsets + GROUP_EVENTS_HISTOGRAM_BIN_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS);
+    cache[0] = *(gm_source_offsets + 
+      GROUP_EVENTS_HISTOGRAM_BIN_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS);
   }
 
   /*Load global bin bit offsets for data allocated to this WG */
@@ -466,7 +467,7 @@ void group_events
     /*WI pitch*/
     wi_id*GROUP_EVENTS_HISTOGRAM_BIN_SIZE;
 
-    lmlocalHistogramReference[wi_id] = gm_offsets[offset];
+    lmlocalHistogramReference[wi_id] = gm_source_offsets[offset];
 	}
   
   /*Init histogram for the next scan/sort depending where it is placed: LDS or GM/L1,L2*/
@@ -484,7 +485,7 @@ void group_events
       i += GROUP_EVENTS_WG_SIZE_WI
     ){
 #if !GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT
-      gm_histogram_out[ptr + i] = 0; 
+      gm_destination_offsets[ptr + i] = 0; 
 #else
       lmGroupEventsHistogramOut[i] = 0;
 #endif
@@ -494,7 +495,7 @@ void group_events
   if(wi_id < (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT))
   {
 #if !GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT
-    gm_histogram_out[wg_id*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
+    gm_destination_offsets[wg_id*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
       GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + wi_id] = 0; 
 #else
       lmGroupEventsHistogramOut[wi_id] = 0;
@@ -940,7 +941,7 @@ void group_events
 #if GROUP_EVENTS_OPTIMIZATION_LDS_TARGET_HISTOGRAM_OUT
         atomic_inc(&lmGroupEventsHistogramOut[hist_out]);
 #else
-        atomic_inc(&gm_histogram_out[wg_id*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
+        atomic_inc(&gm_destination_offsets[wg_id*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
           GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + hist_out]);
 #endif
 #endif
@@ -981,13 +982,13 @@ void group_events
       i < (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT); 
       i += GROUP_EVENTS_WG_SIZE_WI
     ){
-        gm_histogram_out[ptr + i] = lmGroupEventsHistogramOut[i]; 
+        gm_destination_offsets[ptr + i] = lmGroupEventsHistogramOut[i]; 
     }
   }
 #else
   if(wi_id < (GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT))
   {
-    gm_histogram_out[wg_id*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
+    gm_destination_offsets[wg_id*(GROUP_EVENTS_HISTOGRAM_OUT_GRID_SIZE*
       GROUP_EVENTS_HISTOGRAM_TOTAL_BINS_OUT) + wi_id] = lmGroupEventsHistogramOut[wi_id]; 
   }
 #endif
